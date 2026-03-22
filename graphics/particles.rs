@@ -68,6 +68,9 @@ impl ParticleSystem {
         let active: Vec<&Particle> = self.get_active_particles().collect();
         if active.is_empty() { return; }
 
+        // TODO: Create and use a particle shader that accepts view_proj uniform
+        // For now, particles are rendered in clip-space without transformation
+        
         unsafe {
             let vao = gl.create_vertex_array().ok();
             let vbo = gl.create_buffer().ok();
@@ -100,6 +103,8 @@ impl ParticleSystem {
                 gl.enable_vertex_attrib_array(2);
                 gl.vertex_attrib_pointer_f32(2, 1, glow::FLOAT, false, 28, 24);
                 
+                // TODO: Pass view_proj to shader as u_view_proj uniform
+                
                 gl.draw_arrays(glow::POINTS, 0, active.len() as i32);
                 
                 gl.delete_vertex_array(vao);
@@ -110,6 +115,10 @@ impl ParticleSystem {
 
     /// Эмиттер дождя
     pub fn emit_rain(&mut self, position: Vector3<f32>, intensity: f32, count: usize) {
+        // TODO: Use intensity parameter to affect particle density/speed
+        // For now, intensity is ignored and rain is uniform
+        let _intensity_factor = intensity.clamp(0.0, 1.0);
+        
         let mut spawned = 0;
         for i in 0..self.particles.len() {
             if spawned >= count { break; }

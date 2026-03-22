@@ -108,12 +108,10 @@ impl GlContext {
         self.width = width;
         self.height = height;
 
-        // Изменяем размер поверхности
-        self.surface.resize(
-            &self.gl_context,
-            width.try_into().unwrap(),
-            height.try_into().unwrap()
-        );
+        // glutin 0.32: resize принимает NonZeroU32
+        let nz_w = NonZeroU32::new(width).unwrap_or(NonZeroU32::new(1).unwrap());
+        let nz_h = NonZeroU32::new(height).unwrap_or(NonZeroU32::new(1).unwrap());
+        self.surface.resize(&self.gl_context, nz_w, nz_h);
 
         // Обновляем viewport в OpenGL
         unsafe {
