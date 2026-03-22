@@ -1,0 +1,1098 @@
+    Checking rtgc v0.7.0 (C:\Users\mrkri\Documents\RTGC-0.7)
+warning: unused imports: `Gltf` and `buffer::Data`
+   --> src\assets\loader.rs:426:20
+    |
+426 |         use gltf::{Gltf, buffer::Data};
+    |                    ^^^^  ^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `WheelState`
+ --> src\assets\vehicle_loader.rs:9:37
+  |
+9 | use crate::vehicle::{VehicleConfig, WheelState};
+  |                                     ^^^^^^^^^^
+
+warning: unused import: `crate::config::AudioConfig`
+ --> src\audio\audio_module.rs:8:5
+  |
+8 | use crate::config::AudioConfig;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> src\ecs\world.rs:6:5
+  |
+6 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `std::fmt`
+ --> src\error.rs:5:5
+  |
+5 | use std::fmt;
+  |     ^^^^^^^^
+
+warning: unused import: `LodObject`
+ --> src\graphics\renderer.rs:7:47
+  |
+7 | use crate::graphics::lod_system::{LodManager, LodObject};
+  |                                               ^^^^^^^^^
+
+warning: unused import: `crate::ui::hud::HudFlashElement`
+   --> src\graphics\renderer.rs:676:13
+    |
+676 |         use crate::ui::hud::HudFlashElement;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Matrix4`
+ --> src\graphics\renderer_rhi.rs:6:25
+  |
+6 | use nalgebra::{Vector3, Matrix4, UnitQuaternion};
+  |                         ^^^^^^^
+
+warning: unused imports: `AddressMode`, `BufferDescription`, `BufferType`, `BufferUsage`, `ClearValue`, `ColorBlendState`, `CullMode`, `DepthState`, `FilterMode`, `FrontFace`, `InputLayout`, `LoadOp`, `PipelineStateObject`, `PrimitiveTopology`, `RasterizerState`, `RenderAttachment`, `RenderPassDescription`, `ResourceBarrier`, `RhiResult`, `SamplerDescription`, `ScissorRect`, `ShaderDescription`, `ShaderStage`, `StoreOp`, `VertexAttribute`, `VertexFormat`, and `Viewport`
+  --> src\graphics\renderer_rhi.rs:10:5
+   |
+10 |     BufferDescription, BufferType, BufferUsage,
+   |     ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^
+11 |     TextureDescription, TextureDimension, TextureFormat, TextureUsage,
+12 |     SamplerDescription, FilterMode, AddressMode,
+   |     ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^
+13 |     ShaderDescription, ShaderStage,
+   |     ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+14 |     PipelineStateObject, InputLayout, VertexAttribute, VertexFormat,
+   |     ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^
+15 |     PrimitiveTopology, ColorBlendState, DepthState, RasterizerState, CullMode, FrontFace,
+   |     ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^  ^^^^^^^^^
+16 |     RenderPassDescription, RenderAttachment, LoadOp, StoreOp, ClearValue,
+   |     ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^  ^^^^^^^  ^^^^^^^^^^
+17 |     Viewport, ScissorRect, ResourceState, ResourceBarrier,
+   |     ^^^^^^^^  ^^^^^^^^^^^                 ^^^^^^^^^^^^^^^
+18 |     RhiResult,
+   |     ^^^^^^^^^
+
+warning: unused import: `LodObject`
+  --> src\graphics\renderer_rhi.rs:23:47
+   |
+23 | use crate::graphics::lod_system::{LodManager, LodObject};
+   |                                               ^^^^^^^^^
+
+warning: unused import: `Quaternion`
+ --> src\graphics\camera.rs:1:50
+  |
+1 | use nalgebra::{Vector3, Matrix4, UnitQuaternion, Quaternion, Point3};
+  |                                                  ^^^^^^^^^^
+
+warning: unused import: `Matrix3`
+ --> src\graphics\lighting.rs:4:25
+  |
+4 | use nalgebra::{Vector3, Matrix3};
+  |                         ^^^^^^^
+
+warning: unused doc comment
+   --> src\graphics\rhi\types.rs:379:1
+    |
+379 | /// Texture usage flags
+    | ^^^^^^^^^^^^^^^^^^^^^^^ rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+    = note: `#[warn(unused_doc_comments)]` on by default
+
+warning: unused doc comment
+   --> src\graphics\rhi\types.rs:432:1
+    |
+432 | /// Buffer usage flags
+    | ^^^^^^^^^^^^^^^^^^^^^^ rustdoc does not generate documentation for macro invocations
+    |
+    = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+
+warning: unused import: `std::sync::Arc`
+ --> src\graphics\rhi\types.rs:5:5
+  |
+5 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `RhiError`
+  --> src\graphics\rhi\gl.rs:12:16
+   |
+12 |     RhiResult, RhiError, ShaderStage,
+   |                ^^^^^^^^
+
+warning: unused import: `std::path::Path`
+ --> src\graphics\material.rs:4:5
+  |
+4 | use std::path::Path;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `GlConfig`
+ --> src\graphics\gl_context.rs:5:37
+  |
+5 |     config::{ConfigTemplateBuilder, GlConfig},
+  |                                     ^^^^^^^^
+
+warning: unused import: `NamedKey`
+ --> src\input\mapping.rs:4:32
+  |
+4 | use winit::keyboard::{KeyCode, NamedKey};
+  |                                ^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src\physics\physics_module.rs:2:5
+  |
+2 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `AtomicBool`
+ --> src\physics\thread_pool.rs:5:25
+  |
+5 | use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+  |                         ^^^^^^^^^^
+
+warning: unused import: `UnitQuaternion`
+ --> src\physics\fracture_component.rs:1:34
+  |
+1 | use nalgebra::{Vector3, Matrix3, UnitQuaternion};
+  |                                  ^^^^^^^^^^^^^^
+
+warning: unused imports: `Point3` and `Quaternion`
+  --> src\physics\helicopter.rs:26:50
+   |
+26 | use nalgebra::{Vector3, UnitQuaternion, Matrix3, Quaternion, Point3};
+   |                                                  ^^^^^^^^^^  ^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> src\physics\helicopter.rs:28:5
+   |
+28 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused imports: `Matrix3` and `UnitQuaternion`
+ --> src\physics\advanced_vehicle.rs:1:25
+  |
+1 | use nalgebra::{Vector3, UnitQuaternion, Matrix3};
+  |                         ^^^^^^^^^^^^^^  ^^^^^^^
+
+warning: unused imports: `Matrix3`, `Quaternion`, and `UnitQuaternion`
+ --> src\physics\vehicle.rs:3:25
+  |
+3 | use nalgebra::{Vector3, Quaternion, Matrix3, UnitQuaternion};
+  |                         ^^^^^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused imports: `Matrix3` and `UnitQuaternion`
+ --> src\physics\deformable_terrain.rs:1:25
+  |
+1 | use nalgebra::{Vector3, Matrix3, UnitQuaternion};
+  |                         ^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `crate::physics::RigidBody`
+ --> src\physics\deformable_terrain.rs:2:5
+  |
+2 | use crate::physics::RigidBody;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::physics_module::Shape`
+ --> src\physics\deformable_terrain.rs:3:5
+  |
+3 | use crate::physics_module::Shape;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Point3`
+ --> src\physics\constraints.rs:4:25
+  |
+4 | use nalgebra::{Vector3, Point3};
+  |                         ^^^^^^
+
+warning: unused imports: `UnitQuaternion` and `Vector3`
+ --> src\ui\hud.rs:4:16
+  |
+4 | use nalgebra::{Vector3, UnitQuaternion};
+  |                ^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused imports: `KeyEvent` and `MouseButton`
+ --> src\engine.rs:2:40
+  |
+2 |     event::{WindowEvent, ElementState, KeyEvent, MouseButton},
+  |                                        ^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> src\engine.rs:5:5
+  |
+5 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `crate::graphics::mesh::Mesh`
+ --> src\engine.rs:8:5
+  |
+8 | use crate::graphics::mesh::Mesh;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::graphics::renderer::MenuState`
+  --> src\engine.rs:13:5
+   |
+13 | use crate::graphics::renderer::MenuState;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::profiler`
+  --> src\engine.rs:17:5
+   |
+17 | use crate::profiler;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::assets::VehicleLoader`
+  --> src\engine.rs:19:5
+   |
+19 | use crate::assets::VehicleLoader;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `CHUNK_SIZE` and `HEIGHTMAP_RESOLUTION`
+  --> src\engine.rs:20:31
+   |
+20 | use crate::world::{OpenWorld, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
+   |                               ^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ChunkId`, `TerrainVertex`, and `generate_chunk_mesh`
+  --> src\engine.rs:21:20
+   |
+21 | use crate::chunk::{ChunkId, generate_chunk_mesh, TerrainVertex};
+   |                    ^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `BuildingPlacer`
+  --> src\engine.rs:22:45
+   |
+22 | use crate::world::{Settlement, RoadNetwork, BuildingPlacer};
+   |                                             ^^^^^^^^^^^^^^
+
+warning: unused imports: `Matrix4`, `UnitQuaternion`, and `Vector3`
+  --> src\engine.rs:23:16
+   |
+23 | use nalgebra::{Vector3, UnitQuaternion, Matrix4};
+   |                ^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^
+
+warning: unused import: `crate::network::PlayerInput`
+  --> src\engine.rs:25:5
+   |
+25 | use crate::network::PlayerInput;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `warn`
+  --> src\world\world_module.rs:13:21
+   |
+13 | use tracing::{info, warn, debug};
+   |                     ^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> src\world\chunk.rs:4:5
+  |
+4 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `nalgebra::Vector3`
+ --> src\world\chunk_manager.rs:5:5
+  |
+5 | use nalgebra::Vector3;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Point3`
+ --> src\world\prop_spawner.rs:4:25
+  |
+4 | use nalgebra::{Vector3, Point3};
+  |                         ^^^^^^
+
+warning: unused import: `Chunk`
+ --> src\world\prop_spawner.rs:7:27
+  |
+7 | use crate::world::chunk::{Chunk, ChunkId, CHUNK_SIZE};
+  |                           ^^^^^
+
+warning: unused imports: `info` and `warn`
+  --> src\world\terrain_generator.rs:13:15
+   |
+13 | use tracing::{info, warn};
+   |               ^^^^  ^^^^
+
+warning: unused import: `VecDeque`
+  --> src\world\spatial_index.rs:10:33
+   |
+10 | use std::collections::{HashMap, VecDeque};
+   |                                 ^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> src\world\world_streaming.rs:10:5
+   |
+10 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `info`
+  --> src\world\world_streaming.rs:13:15
+   |
+13 | use tracing::{info, debug, warn, error};
+   |               ^^^^
+
+warning: unused import: `ChunkData`
+  --> src\world\world_streaming.rs:15:36
+   |
+15 | use super::chunk::{Chunk, ChunkId, ChunkData, generate_chunk_mesh, TerrainVertex};
+   |                                    ^^^^^^^^^
+
+warning: unused import: `UnitQuaternion`
+  --> src\world\day_night_cycle.rs:10:34
+   |
+10 | use nalgebra::{Vector3, Matrix4, UnitQuaternion};
+   |                                  ^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> src\world\settlement.rs:8:5
+  |
+8 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Vector3`
+ --> src\world\road_network.rs:9:25
+  |
+9 | use nalgebra::{Vector2, Vector3};
+  |                         ^^^^^^^
+
+warning: unused import: `BinaryHeap`
+  --> src\world\road_network.rs:13:42
+   |
+13 | use std::collections::{HashMap, HashSet, BinaryHeap};
+   |                                          ^^^^^^^^^^
+
+warning: unused import: `std::cmp::Ordering`
+  --> src\world\road_network.rs:14:5
+   |
+14 | use std::cmp::Ordering;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Path`
+  --> src\game\mission_save.rs:14:17
+   |
+14 | use std::path::{Path, PathBuf};
+   |                 ^^^^
+
+warning: unused import: `Point3`
+ --> src\game\winch.rs:1:25
+  |
+1 | use nalgebra::{Vector3, Point3};
+  |                         ^^^^^^
+
+warning: unused import: `Ray`
+ --> src\game\winch.rs:2:54
+  |
+2 | use crate::physics::{PhysicsWorld, SpringConstraint, Ray};
+  |                                                      ^^^
+
+warning: unused imports: `Quaternion` and `Vector3`
+ --> src\network\protocol.rs:6:16
+  |
+6 | use nalgebra::{Vector3, Quaternion};
+  |                ^^^^^^^  ^^^^^^^^^^
+
+warning: ambiguous glob re-exports
+  --> src\lib.rs:18:9
+   |
+18 | pub use config::*;
+   |         ^^^^^^^^^ the name `AudioConfig` in the type namespace is first re-exported here
+...
+23 | pub use audio::*;
+   |         -------- but the name `AudioConfig` in the type namespace is also re-exported here
+   |
+   = note: `#[warn(ambiguous_glob_reexports)]` on by default
+
+warning: ambiguous glob re-exports
+  --> src\lib.rs:22:9
+   |
+22 | pub use graphics::*;
+   |         ^^^^^^^^^^^ the name `lod_system` in the type namespace is first re-exported here
+...
+27 | pub use world::*;
+   |         -------- but the name `lod_system` in the type namespace is also re-exported here
+
+warning: ambiguous glob re-exports
+  --> src\lib.rs:27:9
+   |
+27 | pub use world::*;
+   |         ^^^^^^^^ the name `DayNightCycle` in the type namespace is first re-exported here
+28 | pub use game::*;
+   |         ------- but the name `DayNightCycle` in the type namespace is also re-exported here
+
+error[E0308]: mismatched types
+  --> src\graphics\gl_context.rs:42:20
+   |
+42 |             .build(event_loop, template_builder, |configs| {
+   |              ----- ^^^^^^^^^^ expected `&EventLoopWindowTarget<_>`, found `&EventLoop<()>`
+   |              |
+   |              arguments to this method are incorrect
+   |
+   = note: expected reference `&winit::event_loop::EventLoopWindowTarget<_>`
+              found reference `&EventLoop<()>`
+note: method defined here
+  --> C:\Users\mrkri\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\glutin-winit-0.4.2\src\lib.rs:89:12
+   |
+89 |     pub fn build<T, Picker>(
+   |            ^^^^^
+
+error[E0599]: no method named `set_inner_size` found for struct `winit::window::Window` in the current scope
+   --> src\graphics\gl_context.rs:50:16
+    |
+50  |         window.set_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0));
+    |                ^^^^^^^^^^^^^^
+    |
+help: there is a method `inner_size` with a similar name, but with different arguments
+   --> C:\Users\mrkri\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\winit-0.29.15\src\window.rs:746:5
+    |
+746 |     pub fn inner_size(&self) -> PhysicalSize<u32> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `window_handle` found for struct `winit::window::Window` in the current scope
+  --> src\graphics\gl_context.rs:53:40
+   |
+53 |         let raw_window_handle = window.window_handle().map_err(|e| format!("Failed to get window handle: {}", e))?.as_raw();
+   |                                        ^^^^^^^^^^^^^
+   |
+help: there is a method `raw_window_handle` with a similar name
+   |
+53 |         let raw_window_handle = window.raw_window_handle().map_err(|e| format!("Failed to get window handle: {}", e))?.as_raw();
+   |                                        ++++
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+  --> src\graphics\gl_context.rs:61:33
+   |
+61 |             gl_config.display().create_context(&context_attributes)
+   |                                 ^^^^^^^^^^^^^^ ------------------- argument #1 of type `&glutin::config::Config` is missing
+   |
+note: method defined here
+  --> C:\Users\mrkri\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\glutin-0.31.3\src\display.rs:74:15
+   |
+74 |     unsafe fn create_context(
+   |               ^^^^^^^^^^^^^^
+help: provide the argument
+   |
+61 |             gl_config.display().create_context(/* &glutin::config::Config */, &context_attributes)
+   |                                                ++++++++++++++++++++++++++++++
+
+error[E0308]: mismatched types
+  --> src\graphics\gl_context.rs:92:13
+   |
+92 |             window,
+   |             ^^^^^^ expected `winit::window::Window`, found a different `winit::window::Window`
+   |
+note: two different versions of crate `winit` are being used; two types coming from two different versions of the same crate are different types even if they look the same
+  --> C:\Users\mrkri\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\winit-0.30.13\src\window.rs:35:1
+   |
+35 | pub struct Window {
+   | ^^^^^^^^^^^^^^^^^ this is the expected type `winit::window::Window`
+   |
+  ::: C:\Users\mrkri\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\winit-0.29.15\src\window.rs:54:1
+   |
+54 | pub struct Window {
+   | ^^^^^^^^^^^^^^^^^ this is the found type `winit::window::Window`
+   |
+  ::: src\graphics\gl_context.rs:11:5
+   |
+11 | use glutin_winit::DisplayBuilder;
+   |     ------------ one version of crate `winit` used here, as a dependency of crate `glutin_winit`
+12 | use std::num::NonZeroU32;
+13 | use winit::{
+   |     ----- one version of crate `winit` used here, as a direct dependency of the current crate
+   = help: you can use `cargo tree` to explore your dependency tree
+
+error[E0599]: no method named `window_handle` found for struct `winit::window::Window` in the current scope
+   --> src\graphics\gl_context.rs:104:45
+    |
+104 |         let raw_window_handle = self.window.window_handle()
+    |                                             ^^^^^^^^^^^^^
+    |
+   ::: C:\Users\mrkri\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\raw-window-handle-0.6.2\src\borrowed.rs:163:8
+    |
+163 |     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError>;
+    |        ------------- the method is available for `winit::window::Window` here
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `HasWindowHandle` which provides `window_handle` is implemented but not in scope; perhaps you want to import it
+    |
+3   + use winit::raw_window_handle::HasWindowHandle;
+    |
+help: there is a method `raw_window_handle` with a similar name
+    |
+104 |         let raw_window_handle = self.window.raw_window_handle()
+    |                                             ++++
+
+error[E0308]: arguments to this method are incorrect
+   --> src\graphics\gl_context.rs:115:22
+    |
+115 |         self.surface.resize(&self.context, width, height);
+    |                      ^^^^^^
+    |
+note: expected `NonZero<u32>`, found `u32`
+   --> src\graphics\gl_context.rs:115:44
+    |
+115 |         self.surface.resize(&self.context, width, height);
+    |                                            ^^^^^
+    = note: expected struct `NonZero<u32>`
+                 found type `u32`
+note: expected `NonZero<u32>`, found `u32`
+   --> src\graphics\gl_context.rs:115:51
+    |
+115 |         self.surface.resize(&self.context, width, height);
+    |                                                   ^^^^^^
+    = note: expected struct `NonZero<u32>`
+                 found type `u32`
+note: method defined here
+   --> C:\Users\mrkri\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\glutin-0.31.3\src\surface.rs:90:8
+    |
+90  |     fn resize(&self, context: &Self::Context, width: NonZeroU32, height: NonZeroU32)
+    |        ^^^^^^
+help: consider calling `NonZero::new`
+    |
+115 |         self.surface.resize(&self.context, NonZero::new(width).unwrap(), height);
+    |                                            +++++++++++++     ++++++++++
+help: consider calling `NonZero::new`
+    |
+115 |         self.surface.resize(&self.context, width, NonZero::new(height).unwrap());
+    |                                                   +++++++++++++      ++++++++++
+
+warning: unused variable: `path`
+   --> src\assets\loader.rs:376:24
+    |
+376 |     fn load_wav(&self, path: &Path) -> Result<AssetData, AssetLoadError> {
+    |                        ^^^^ help: if this is intentional, prefix it with an underscore: `_path`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `asset_type`
+   --> src\assets\asset_loader.rs:464:31
+    |
+464 |     fn find_asset_file(&self, asset_type: &str, name: &str) -> Option<PathBuf> {
+    |                               ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_asset_type`
+
+warning: unused variable: `frequency`
+   --> src\audio\audio_module.rs:135:42
+    |
+135 |     pub fn absorption_coefficient(&self, frequency: f32) -> f32 {
+    |                                          ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_frequency`
+
+warning: unused variable: `elevation`
+   --> src\audio\audio_module.rs:373:61
+    |
+373 |     pub fn apply_hrtf(&self, samples: &[f32], azimuth: f32, elevation: f32) -> (Vec<f32>, Vec<f32>) {
+    |                                                             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_elevation`
+
+warning: unused variable: `index`
+   --> src\ecs\world.rs:268:39
+    |
+268 |     fn deallocate_by_index(&mut self, index: usize) {
+    |                                       ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `execution_time`
+   --> src\ecs\job_system.rs:239:21
+    |
+239 |                 let execution_time = start.elapsed();
+    |                     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_execution_time`
+
+warning: unused variable: `worker_id`
+   --> src\ecs\job_system.rs:224:27
+    |
+224 |     fn worker_loop(&self, worker_id: usize) {
+    |                           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_worker_id`
+
+warning: unused variable: `visible_objects`
+   --> src\graphics\renderer.rs:485:13
+    |
+485 |         let visible_objects = self.lod_manager.get_objects_in_view(&self.camera.position, 100.0);
+    |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_visible_objects`
+
+warning: unused variable: `speed_text`
+   --> src\graphics\renderer.rs:702:17
+    |
+702 |             let speed_text = format!("{:.0} km/h", hud_data.speed_kmh);
+    |                 ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_speed_text`
+
+warning: unused variable: `mesh`
+   --> src\graphics\renderer_rhi.rs:202:40
+    |
+202 |     pub fn set_terrain_mesh(&mut self, mesh: Mesh) {
+    |                                        ^^^^ help: if this is intentional, prefix it with an underscore: `_mesh`
+
+warning: unused variable: `cmd_list`
+   --> src\graphics\renderer_rhi.rs:234:13
+    |
+234 |         let cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Direct)?;
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cmd_list`
+
+warning: unused variable: `pos`
+  --> src\graphics\texture_streaming.rs:68:54
+   |
+68 |                         TextureCommand::UpdateCamera(pos) => {
+   |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_pos`
+
+warning: variable does not need to be mutable
+   --> src\graphics\rhi\factory.rs:172:13
+    |
+172 |         let mut backends = Vec::new();
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `enable_validation`
+  --> src\graphics\rhi\rhi_module.rs:21:52
+   |
+21 |     pub fn create_device(backend: GraphicsBackend, enable_validation: bool) -> RhiResult<Box<dyn IDevice>> {
+   |                                                    ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_enable_validation`
+
+warning: unused variable: `quality`
+   --> src\graphics\material.rs:100:9
+    |
+100 |         quality: TextureQuality,
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_quality`
+
+warning: unused variable: `loader`
+   --> src\graphics\material.rs:101:9
+    |
+101 |         loader: &mut AssetLoader,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_loader`
+
+warning: unused variable: `view_proj`
+  --> src\graphics\particles.rs:67:40
+   |
+67 |     pub fn render(&self, gl: &Context, view_proj: nalgebra::Matrix4<f32>) {
+   |                                        ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_view_proj`
+
+warning: unused variable: `intensity`
+   --> src\graphics\particles.rs:112:57
+    |
+112 |     pub fn emit_rain(&mut self, position: Vector3<f32>, intensity: f32, count: usize) {
+    |                                                         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_intensity`
+
+warning: unused variable: `t`
+   --> src\graphics\particles.rs:243:21
+    |
+243 |                 let t = p.lifetime / p.max_lifetime;
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_t`
+
+warning: unused variable: `view_proj`
+  --> src\graphics\debug_renderer.rs:35:49
+   |
+35 |     pub fn flush_to_gl(&mut self, gl: &Context, view_proj: Matrix4<f32>) {
+   |                                                 ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_view_proj`
+
+warning: unused variable: `box_in_capsule_space`
+    --> src\physics\physics_module.rs:1647:13
+     |
+1647 |         let box_in_capsule_space = inv_capsule_transform * box_transform;
+     |             ^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_box_in_capsule_space`
+
+warning: unused variable: `s`
+    --> src\physics\physics_module.rs:1777:17
+     |
+1777 |             let s = 0.0;
+     |                 ^ help: if this is intentional, prefix it with an underscore: `_s`
+
+warning: unused variable: `t`
+    --> src\physics\physics_module.rs:1782:17
+     |
+1782 |             let t = 0.0;
+     |                 ^ help: if this is intentional, prefix it with an underscore: `_t`
+
+warning: value assigned to `s` is never read
+    --> src\physics\physics_module.rs:1789:21
+     |
+1789 |             let mut s = 0.0;
+     |                     ^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` on by default
+
+warning: value assigned to `t` is never read
+    --> src\physics\physics_module.rs:1790:21
+     |
+1790 |             let mut t = 0.0;
+     |                     ^
+     |
+     = help: maybe it is overwritten before being read?
+
+warning: unused variable: `abs_z`
+    --> src\physics\physics_module.rs:1974:21
+     |
+1974 |                 let abs_z = hit_coords.z.abs();
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_abs_z`
+
+warning: variable `ray_t` is assigned to, but never used
+    --> src\physics\physics_module.rs:2020:17
+     |
+2020 |         let mut ray_t = 0.0;
+     |                 ^^^^^
+     |
+     = note: consider using `_ray_t` instead
+
+warning: value assigned to `seg_t` is never read
+    --> src\physics\physics_module.rs:2021:17
+     |
+2021 |         let mut seg_t = 0.0;
+     |                 ^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+
+warning: value assigned to `ray_t` is never read
+    --> src\physics\physics_module.rs:2025:13
+     |
+2025 |             ray_t = 0.0;
+     |             ^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+
+warning: value assigned to `ray_t` is never read
+    --> src\physics\physics_module.rs:2028:13
+     |
+2028 |             ray_t = (b * e - c * d) / denom;
+     |             ^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+
+warning: unused variable: `height_map`
+    --> src\physics\physics_module.rs:2071:42
+     |
+2071 |     fn raycast_terrain(&self, ray: &Ray, height_map: &[Vec<f32>], scale: &Vector3<f32>) -> Option<RaycastHit> {
+     |                                          ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_height_map`
+
+warning: unused variable: `sub_steps`
+  --> src\physics\async_physics.rs:50:51
+   |
+50 |                     Ok(PhysicsMessage::Step { dt, sub_steps }) => {
+   |                                                   ^^^^^^^^^ help: try ignoring the field: `sub_steps: _`
+
+warning: variable does not need to be mutable
+   --> src\physics\async_physics.rs:197:21
+    |
+197 |     pub fn shutdown(mut self) {
+    |                     ----^^^^
+    |                     |
+    |                     help: remove this `mut`
+
+warning: unused variable: `disk_loading`
+   --> src\physics\helicopter.rs:184:13
+    |
+184 |         let disk_loading = mass / rotor_disk_area;
+    |             ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_disk_loading`
+
+warning: variable `total_torque` is assigned to, but never used
+   --> src\physics\helicopter.rs:274:17
+    |
+274 |         let mut total_torque = 0.0;
+    |                 ^^^^^^^^^^^^
+    |
+    = note: consider using `_total_torque` instead
+
+warning: unused variable: `main_rotor_torque`
+   --> src\physics\helicopter.rs:408:54
+    |
+408 |     pub fn calculate_thrust(&self, air_density: f32, main_rotor_torque: f32) -> Vector3<f32> {
+    |                                                      ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_main_rotor_torque`
+
+warning: unused variable: `speed`
+   --> src\physics\helicopter.rs:760:13
+    |
+760 |         let speed = speed_squared.sqrt();
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_speed`
+
+warning: unused variable: `dt`
+   --> src\physics\advanced_vehicle.rs:120:44
+    |
+120 |     pub fn update_tire_pressure(&mut self, dt: f32) {
+    |                                            ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `contact_normal`
+   --> src\physics\advanced_vehicle.rs:289:9
+    |
+289 |         contact_normal: Vector3<f32>,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_contact_normal`
+
+warning: unused variable: `dt`
+   --> src\physics\advanced_vehicle.rs:291:9
+    |
+291 |         dt: f32,
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `vehicle_angular_velocity`
+   --> src\physics\advanced_vehicle.rs:399:9
+    |
+399 |         vehicle_angular_velocity: Vector3<f32>,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vehicle_angular_velocity`
+
+warning: unused variable: `lateral_force`
+   --> src\physics\advanced_vehicle.rs:424:56
+    |
+424 |     fn update_angular_velocity(&mut self, torque: f32, lateral_force: Vector3<f32>, normal_force: f32, dt: f32) {
+    |                                                        ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lateral_force`
+
+warning: unused variable: `normal_force`
+   --> src\physics\advanced_vehicle.rs:530:31
+    |
+530 |             let (wheel_force, normal_force) = wheel.update(
+    |                               ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_normal_force`
+
+warning: unused variable: `dt`
+   --> src\physics\advanced_vehicle.rs:551:37
+    |
+551 |     fn update_engine_rpm(&mut self, dt: f32) {
+    |                                     ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `wheel_steering`
+   --> src\physics\vehicle.rs:217:17
+    |
+217 |             let wheel_steering = self.wheels[i].steering_angle;
+    |                 ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wheel_steering`
+
+warning: unused variable: `wheel_contact`
+   --> src\physics\vehicle.rs:245:14
+    |
+245 |         let (wheel_contact, wheel_angular_vel, needs_tire_forces) = {
+    |              ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wheel_contact`
+
+warning: unused variable: `ray_origin`
+   --> src\physics\vehicle.rs:306:13
+    |
+306 |         let ray_origin = wheel_world_pos;
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ray_origin`
+
+warning: unused variable: `ray_direction`
+   --> src\physics\vehicle.rs:307:13
+    |
+307 |         let ray_direction = Vector3::new(0.0, -1.0, 0.0);
+    |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ray_direction`
+
+warning: unused variable: `ray_length`
+   --> src\physics\vehicle.rs:308:13
+    |
+308 |         let ray_length = self.config.wheel_radius + self.config.suspension_rest_length + self.config.max_suspension_travel;
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ray_length`
+
+warning: unused variable: `surface_friction`
+   --> src\physics\vehicle.rs:360:13
+    |
+360 |         let surface_friction = surface_type.friction_coefficient();
+    |             ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_surface_friction`
+
+warning: unused variable: `rolling_resistance`
+   --> src\physics\vehicle.rs:361:13
+    |
+361 |         let rolling_resistance = surface_type.rolling_resistance();
+    |             ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_rolling_resistance`
+
+warning: unused variable: `forward_vel`
+   --> src\physics\vehicle.rs:367:13
+    |
+367 |         let forward_vel = wheel_vel.dot(&forward);
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_forward_vel`
+
+warning: unused variable: `lateral_vel`
+   --> src\physics\vehicle.rs:368:13
+    |
+368 |         let lateral_vel = wheel_vel.dot(&lateral);
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lateral_vel`
+
+warning: unused variable: `dt`
+   --> src\physics\vehicle.rs:356:64
+    |
+356 |     fn apply_tire_forces_simple(&mut self, wheel_index: usize, dt: f32, ground_y: f32, surface_type: SurfaceType, wheel_world_pos: Vector...
+    |                                                                ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `ground_y`
+   --> src\physics\vehicle.rs:356:73
+    |
+356 | ...eel_index: usize, dt: f32, ground_y: f32, surface_type: SurfaceType, wheel_world_pos: Vector3<f32>, _wheel_angular_vel: f32) {
+    |                               ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ground_y`
+
+warning: unused variable: `surface_friction`
+   --> src\physics\vehicle.rs:415:13
+    |
+415 |         let surface_friction = surface_type.friction_coefficient();
+    |             ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_surface_friction`
+
+warning: unused variable: `rolling_resistance`
+   --> src\physics\vehicle.rs:416:13
+    |
+416 |         let rolling_resistance = surface_type.rolling_resistance();
+    |             ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_rolling_resistance`
+
+warning: unused variable: `forward_vel`
+   --> src\physics\vehicle.rs:422:13
+    |
+422 |         let forward_vel = wheel_vel.dot(&forward);
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_forward_vel`
+
+warning: unused variable: `lateral_vel`
+   --> src\physics\vehicle.rs:423:13
+    |
+423 |         let lateral_vel = wheel_vel.dot(&lateral);
+    |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_lateral_vel`
+
+warning: unused variable: `dt`
+   --> src\physics\vehicle.rs:406:77
+    |
+406 |     fn apply_tire_forces(&mut self, wheel: &WheelState, wheel_index: usize, dt: f32, ground_y: f32, surface_type: SurfaceType) {
+    |                                                                             ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `ground_y`
+   --> src\physics\vehicle.rs:406:86
+    |
+406 |     fn apply_tire_forces(&mut self, wheel: &WheelState, wheel_index: usize, dt: f32, ground_y: f32, surface_type: SurfaceType) {
+    |                                                                                      ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ground_y`
+
+warning: unused variable: `dt`
+   --> src\physics\vehicle.rs:473:38
+    |
+473 |     fn apply_aerodynamics(&mut self, dt: f32) {
+    |                                      ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `dt`
+   --> src\physics\constraints.rs:148:48
+    |
+148 |     pub fn solve_spring_constraints(&mut self, dt: f32) {
+    |                                                ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `event_loop`
+  --> src\engine.rs:71:16
+   |
+71 |     pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> Result<Self, Box<dyn std::error::Error>> {
+   |                ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_event_loop`
+
+warning: unused variable: `dt`
+  --> src\engine.rs:82:30
+   |
+82 |     pub fn update(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
+   |                              ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `dt`
+  --> src\world\world_module.rs:84:56
+   |
+84 |     pub fn update(&mut self, player_pos: Vector3<f32>, dt: f32) {
+   |                                                        ^^ help: if this is intentional, prefix it with an underscore: `_dt`
+
+warning: unused variable: `h_center`
+   --> src\world\prop_spawner.rs:146:13
+    |
+146 |         let h_center = get_height(x, z);
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_h_center`
+
+warning: unused variable: `props`
+   --> src\world\prop_spawner.rs:222:21
+    |
+222 |         if let Some(props) = self.chunk_props.remove(&chunk_id) {
+    |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_props`
+
+warning: unused variable: `moisture`
+   --> src\world\terrain_generator.rs:452:108
+    |
+452 |     fn generate_splatmap(&self, data: &mut super::chunk::ChunkData, idx: usize, biome: &Biome, slope: f32, moisture: f32) {
+    |                                                                                                            ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_moisture`
+
+warning: unused variable: `size`
+   --> src\world\spatial_index.rs:129:13
+    |
+129 |         let size = self.bounds.size() * 0.5;
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_size`
+
+warning: unused variable: `body`
+   --> src\world\day_night_cycle.rs:393:45
+    |
+393 |     pub fn get_celestial_view_matrix(&self, body: CelestialBody, distance: f32) -> Matrix4<f32> {
+    |                                             ^^^^ help: if this is intentional, prefix it with an underscore: `_body`
+
+warning: unused variable: `distance`
+   --> src\world\day_night_cycle.rs:393:66
+    |
+393 |     pub fn get_celestial_view_matrix(&self, body: CelestialBody, distance: f32) -> Matrix4<f32> {
+    |                                                                  ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_distance`
+
+warning: unused variable: `index`
+   --> src\world\settlement.rs:300:5
+    |
+300 |     index: usize,
+    |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `rng`
+  --> src\world\russian_names.rs:47:13
+   |
+47 |     let mut rng = ChaCha8Rng::seed_from_u64(seed);
+   |             ^^^ help: if this is intentional, prefix it with an underscore: `_rng`
+
+warning: variable does not need to be mutable
+  --> src\world\russian_names.rs:47:9
+   |
+47 |     let mut rng = ChaCha8Rng::seed_from_u64(seed);
+   |         ----^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src\world\road_network.rs:411:21
+    |
+411 |                 let mut candidates: Vec<_> = settlements.iter()
+    |                     ----^^^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+
+warning: unused variable: `terrain_getter`
+   --> src\world\road_network.rs:457:9
+    |
+457 |         terrain_getter: &dyn Fn(f32, f32) -> f32,
+    |         ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_terrain_getter`
+
+warning: variable does not need to be mutable
+   --> src\world\road_network.rs:493:17
+    |
+493 |             let mut x = base_x + offset_x;
+    |                 ----^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src\world\road_network.rs:494:17
+    |
+494 |             let mut z = base_z + offset_z;
+    |                 ----^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: unused variable: `chunk_size`
+   --> src\world\road_network.rs:598:13
+    |
+598 |         let chunk_size = crate::world::CHUNK_SIZE as f32;
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_chunk_size`
+
+warning: unused variable: `main_road_dir`
+   --> src\world\buildings.rs:290:9
+    |
+290 |         main_road_dir: &Vector3<f32>,
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_main_road_dir`
+
+warning: unused variable: `main_road_dir`
+   --> src\world\buildings.rs:358:9
+    |
+358 |         main_road_dir: &Vector3<f32>,
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_main_road_dir`
+
+warning: unused variable: `main_road_dir`
+   --> src\world\buildings.rs:434:9
+    |
+434 |         main_road_dir: &Vector3<f32>,
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_main_road_dir`
+
+warning: unused variable: `rng`
+   --> src\world\buildings.rs:525:9
+    |
+525 |         rng: &mut ChaCha8Rng,
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_rng`
+
+warning: unused variable: `direction`
+  --> src\game\winch.rs:31:51
+   |
+31 |     pub fn shoot(&mut self, origin: Vector3<f32>, direction: Vector3<f32>, _physics_world: &PhysicsWorld) -> bool {
+   |                                                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_direction`
+
+Some errors have detailed explanations: E0061, E0308, E0599.
+For more information about an error, try `rustc --explain E0061`.
+warning: `rtgc` (lib) generated 149 warnings
+error: could not compile `rtgc` (lib) due to 7 previous errors; 149 warnings emitted

@@ -1,0 +1,103 @@
+[package]
+name = "rtgc"
+version = "0.7.0"
+edition = "2021"
+authors = ["RTGC Team"]
+description = "Russian Technological Game Core"
+
+[dependencies]
+# Window & Input
+winit = "0.30"
+raw-window-handle = "0.6"
+
+# Math (nalgebra for all linear algebra)
+nalgebra = "0.32"
+
+# Math (glam for audio and other systems)
+glam = "0.25"
+
+# Lazy initialization
+once_cell = "1.19"
+
+# DX12 (Windows)
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_System_Threading",
+]}
+
+# Vulkan (Cross-platform)
+ash = "0.38"
+
+# Threading
+rayon = "1.10"
+tokio = { version = "1", features = ["full"] }
+parking_lot = "0.12"
+num_cpus = "1.16"
+crossbeam-channel = "0.5"
+
+# Audio
+cpal = "0.15"
+rodio = "0.19"
+
+# Assets
+image = "0.25"
+ddsfile = "0.5"
+ktx2 = "0.3"
+gltf = "1.4"
+
+# Logging & Profiling
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracy-client = { version = "0.17", optional = true }
+log = "0.4"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Audio decoding
+symphonia = { version = "0.5", features = ["ogg", "vorbis", "wav", "pcm"] }
+
+# Error Handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Utilities
+bytemuck = "1.18"
+bitflags = "2.6"
+
+# Time
+chrono = "0.4"
+
+# Graphics (OpenGL)
+glow = "0.13"
+glutin = "0.32"
+glutin-winit = "0.5"
+
+# Random number generation
+rand = "0.8"
+rand_chacha = "0.3"
+
+# Testing utilities
+tempfile = "3"
+
+[features]
+default = ["profiling"]
+profiling = ["tracy-client"]
+dx12 = []
+vulkan = []
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = false
