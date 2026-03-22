@@ -79,13 +79,12 @@ impl App {
                 gl.enable_vertex_attrib_array(0);
                 gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 0, 0);
 
-                // Простой шейдер
-                let shader_src = r#"
+                // --- VERTEX SHADER ---
+                let vert_src = r#"
                     #version 330 core
                     layout(location = 0) in vec3 aPos;
                     uniform float u_rotation;
-                    uniform vec3 u_color;
-                    
+
                     void main() {
                         float c = cos(u_rotation);
                         float s = sin(u_rotation);
@@ -95,28 +94,68 @@ impl App {
                     }
                 "#;
 
-                let shader = gl.create_shader(glow::VERTEX_SHADER).ok();
-                if let Some(shader) = shader {
-                    gl.shader_source(shader, shader_src);
-                    gl.compile_shader(shader);
-                    
+                // --- FRAGMENT SHADER ---
+                let frag_src = r#"
+                    #version 330 core
+                    out vec4 FragColor;
+                    uniform vec3 u_color;
+
+                    void main() {
+                        FragColor = vec4(u_color, 1.0);
+                    }
+                "#;
+
+                // Компилируем vertex и fragment шейдеры
+                let vert_shader = gl.create_shader(glow::VERTEX_SHADER).ok();
+                let frag_shader = gl.create_shader(glow::FRAGMENT_SHADER).ok();
+
+                if let (Some(vs), Some(fs)) = (vert_shader, frag_shader) {
+                    gl.shader_source(vs, vert_src);
+                    gl.compile_shader(vs);
+
+                    // Проверка ошибок vertex shader
+                    if !gl.get_shader_compile_status(vs) {
+                        eprintln!("Vertex shader error: {}", gl.get_shader_info_log(vs));
+                    }
+
+                    gl.shader_source(fs, frag_src);
+                    gl.compile_shader(fs);
+
+                    // Проверка ошибок fragment shader
+                    if !gl.get_shader_compile_status(fs) {
+                        eprintln!("Fragment shader error: {}", gl.get_shader_info_log(fs));
+                    }
+
                     let program = gl.create_program().ok();
                     if let Some(program) = program {
-                        gl.attach_shader(program, shader);
+                        gl.attach_shader(program, vs);
+                        gl.attach_shader(program, fs);
                         gl.link_program(program);
+
+                        // Проверка ошибок линковки
+                        if !gl.get_program_link_status(program) {
+                            eprintln!("Program link error: {}", gl.get_program_info_log(program));
+                        }
+
                         gl.use_program(Some(program));
 
+                        // Uniforms
                         let rotation_loc = gl.get_uniform_location(program, "u_rotation");
                         let color_loc = gl.get_uniform_location(program, "u_color");
-                        
+
                         let r = ((self.rotation.sin() + 1.0) * 0.5) as f32;
                         let g = ((self.rotation.cos() + 1.0) * 0.5) as f32;
                         let b = (((self.rotation * 0.5).sin() + 1.0) * 0.5) as f32;
-                        
+
                         gl.uniform_1_f32(rotation_loc.as_ref(), self.rotation);
                         gl.uniform_3_f32(color_loc.as_ref(), r, g, b);
 
                         gl.draw_arrays(glow::TRIANGLES, 0, 3);
+
+                        // Удаляем шейдеры (программа уже слинкована)
+                        gl.delete_shader(vs);
+                        gl.delete_shader(fs);
+                        gl.delete_program(program);
                     }
                 }
 

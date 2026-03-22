@@ -1,9 +1,9 @@
 //! OpenGL RHI Backend для RTGC-0.7 - Минимальная заглушка
 
 use super::device::{
-    IDevice, ICommandList, ICommandQueue, IFence, ISemaphore, ISwapChain,
-    TextureViewDescription, DescriptorHeapDescription,
-    RenderPassDescription, DeviceFeatures, DeviceLimits, MemoryStats, IndexFormat,
+    IDevice, ICommandList, ICommandQueue, IFence, ISemaphore, ISwapChain, ResourceBarrier,
+    TextureViewDescription, DescriptorHeapDescription, RenderPassDescription,
+    DeviceFeatures, DeviceLimits, MemoryStats, IndexFormat,
 };
 use super::types::{
     ResourceHandle, BufferDescription, TextureDescription,
@@ -155,7 +155,7 @@ impl ICommandList for GlCommandList {
     fn insert_debug_marker(&mut self, _name: &str) {}
     fn begin_debug_group(&mut self, _name: &str) {}
     fn end_debug_group(&mut self) {}
-    fn resource_barrier(&mut self, _barriers: &[super::device::ResourceBarrier]) {}
+    fn resource_barrier(&mut self, _barriers: &[ResourceBarrier]) {}
 }
 
 impl ICommandQueue for GlCommandQueueInternal {

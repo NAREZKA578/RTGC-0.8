@@ -62,13 +62,17 @@ impl GlContext {
         };
 
         // Создаём поверхность для рендеринга в окно
-        let (width, height): (u32, u32) = window.inner_size().into();
+        let (raw_width, raw_height): (u32, u32) = window.inner_size().into();
+        
+        // NonZeroU32 требует значение > 0; при первом создании окно может иметь размер 0
+        let nz_width  = NonZeroU32::new(raw_width).unwrap_or(NonZeroU32::new(1280).unwrap());
+        let nz_height = NonZeroU32::new(raw_height).unwrap_or(NonZeroU32::new(720).unwrap());
         
         // Используем SurfaceAttributesBuilder вместо default()
         let surface_attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
-            NonZeroU32::new(width).unwrap(),
-            NonZeroU32::new(height).unwrap(),
+            nz_width,
+            nz_height,
         );
 
         let surface = unsafe {
@@ -92,8 +96,8 @@ impl GlContext {
         Ok(Self {
             gl,
             window,
-            width,
-            height,
+            width: nz_width.get(),
+            height: nz_height.get(),
             gl_context,
             surface,
         })
