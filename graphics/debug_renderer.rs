@@ -35,6 +35,9 @@ impl DebugRenderer {
     pub fn flush_to_gl(&mut self, gl: &Context, view_proj: Matrix4<f32>) {
         if self.line_vertices.is_empty() { return; }
         
+        // TODO: Create and use a debug line shader that accepts view_proj uniform
+        // For now, lines are rendered in clip-space without transformation
+        
         unsafe {
             let vao = gl.create_vertex_array().ok();
             let vbo = gl.create_buffer().ok();
@@ -54,6 +57,9 @@ impl DebugRenderer {
                 // Color attribute (location 1) - 3 floats
                 gl.enable_vertex_attrib_array(1);
                 gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 24, 12);
+                
+                // TODO: Pass view_proj to shader as u_view_proj uniform
+                // gl.uniform_matrix_4_f32_slice(Some(&u_vp), false, view_proj.as_slice());
                 
                 gl.draw_arrays(glow::LINES, 0, (self.line_vertices.len() / 6) as i32);
                 

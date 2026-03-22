@@ -483,6 +483,7 @@ impl Renderer {
         
         // Get visible objects from LOD system
         let visible_objects = self.lod_manager.get_objects_in_view(&self.camera.position, 100.0);
+        // TODO: Use visible_objects for LOD-based culling instead of rendering all objects
 
         // Use the shader
         self.shader.bind(&self.gl);
@@ -701,6 +702,7 @@ impl Renderer {
             // Draw speed value (simple representation)
             let speed_text = format!("{:.0} km/h", hud_data.speed_kmh);
             // Text rendering will be added later with bitmap font
+            self.draw_text(&speed_text, 15.0, self.height as f32 - 55.0, 1.5, [1.0, 1.0, 1.0, 1.0]);
             
             // Draw RPM bar
             let rpm_ratio = (hud_data.engine_rpm / hud_data.engine_rpm_max).min(1.0);

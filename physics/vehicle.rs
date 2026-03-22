@@ -366,6 +366,9 @@ impl Vehicle {
 
         let forward_vel = wheel_vel.dot(&forward);
         let lateral_vel = wheel_vel.dot(&lateral);
+        
+        // TODO: Apply surface_friction to drive_force_magnitude and lateral/longitudinal forces
+        // TODO: Apply rolling_resistance to slow down the vehicle
 
         // Apply driving/braking force with low range multiplier
         let torque_multiplier = if self.controls.low_range && self.config.low_range_enabled {
@@ -421,6 +424,9 @@ impl Vehicle {
         
         let forward_vel = wheel_vel.dot(&forward);
         let lateral_vel = wheel_vel.dot(&lateral);
+        
+        // TODO: Apply surface_friction to tire forces
+        // TODO: Apply rolling_resistance to slow down the vehicle
         
         // Apply driving/braking force with low range multiplier
         let torque_multiplier = if self.controls.low_range && self.config.low_range_enabled {

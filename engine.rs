@@ -17,8 +17,7 @@ use crate::graphics::debug_renderer::DebugRenderer;
 use crate::profiler;
 use crate::ui::HudManager;
 use crate::assets::VehicleLoader;
-use crate::world::{OpenWorld, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
-use crate::chunk::{ChunkId, generate_chunk_mesh, TerrainVertex};
+use crate::world::{OpenWorld, CHUNK_SIZE, HEIGHTMAP_RESOLUTION, ChunkId, generate_chunk_mesh, TerrainVertex};
 use crate::world::{Settlement, RoadNetwork, BuildingPlacer};
 use nalgebra::{Vector3, UnitQuaternion, Matrix4};
 use crate::physics::Vehicle;
@@ -33,7 +32,6 @@ pub struct Engine {
     pub audio_system: AudioSystem,
     pub ecs_manager: EcsManager,
     pub physics_world: physics::PhysicsWorld,
-    gl_context: GlContext,
     last_frame_time: std::time::Instant,
     physics_accumulator: f32,
     physics_timestep: f32,

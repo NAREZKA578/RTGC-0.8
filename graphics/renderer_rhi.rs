@@ -231,7 +231,10 @@ impl RendererRhi {
     
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Begin frame
-        let cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Direct)?;
+        let _cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Direct)?;
+        
+        // TODO: Use cmd_list to record and submit rendering commands
+        // For now, rendering is done via immediate OpenGL calls in other methods
         
         // Clear screen
         // TODO: Implement render pass
