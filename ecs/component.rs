@@ -2,7 +2,7 @@
 
 use nalgebra::{Vector3, Quaternion, UnitQuaternion};
 use crate::physics::RigidBody;
-use crate::graphics::mesh::MeshHandle;
+use crate::graphics::MeshHandle;
 
 /// Trait for all components that can be attached to entities
 pub trait Component: Send + Sync + 'static {
