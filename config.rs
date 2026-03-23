@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use log::{warn, info};
 
 /// Main configuration structure containing all subsystem configs
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +32,7 @@ impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         let config: Config = serde_json::from_str(&content)?;
+        info!("Configuration loaded successfully");
         Ok(config)
     }
 
@@ -38,6 +40,7 @@ impl Config {
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let content = serde_json::to_string_pretty(self)?;
         std::fs::write(path, content)?;
+        info!("Configuration saved to {:?}", path.as_ref());
         Ok(())
     }
 }
@@ -49,6 +52,7 @@ pub struct GraphicsConfig {
     pub window_height: u32,
     pub fullscreen: bool,
     pub vsync: bool,
+    pub max_fps: Option<u32>,
     pub msaa_samples: u32,
     pub shadow_resolution: u32,
     pub max_anisotropy: f32,
@@ -65,6 +69,7 @@ impl Default for GraphicsConfig {
             window_height: 1080,
             fullscreen: false,
             vsync: true,
+            max_fps: Some(60),
             msaa_samples: 4,
             shadow_resolution: 2048,
             max_anisotropy: 16.0,
@@ -193,8 +198,8 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = Config::default();
-        let json = serde_json::to_string(&config).unwrap();
-        let loaded: Config = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&config).expect("Failed to serialize config");
+        let loaded: Config = serde_json::from_str(&json).expect("Failed to deserialize config");
         assert_eq!(config.graphics.window_width, loaded.graphics.window_width);
     }
 }

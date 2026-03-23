@@ -6,6 +6,7 @@ use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Textu
 // use crate::graphics::models::{Model as ModelGen, Vertex as ModelVertex}; // нет такого модуля
 use crate::graphics::lod_system::{LodManager, LodObject};
 use crate::graphics::texture_streaming::TextureStreamingSystem;
+use log::warn;
 
 #[derive(Debug, Clone)]
 pub struct Vertex {
@@ -262,8 +263,12 @@ impl Renderer {
         }
         
         let texture = Texture::from_rgba8(gl, 128, 128, &pixels).unwrap_or_else(|_| {
-            // Fallback: создать пустую текстуру
-            Texture::from_rgba8(gl, 1, 1, &[255, 255, 255, 255]).unwrap()
+            // Fallback: создать пустую текстуру с предупреждением
+            warn!("Failed to create font texture, using fallback");
+            Texture::from_rgba8(gl, 1, 1, &[255, 255, 255, 255]).unwrap_or_else(|e| {
+                warn!("Failed to create fallback texture: {}", e);
+                panic!("Cannot create even fallback texture - critical graphics error")
+            })
         });
         
         (texture, font_chars)
@@ -496,8 +501,10 @@ impl Renderer {
                         let vert_data: Vec<f32> = vertices.iter()
                             .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
                             .collect();
-                        let mesh = Mesh::new_with_normals(&self.gl, &vert_data, &indices).unwrap_or_else(|_| Mesh::new(&self.gl, &[], &[]).unwrap());
-                        mesh.draw(&self.gl);
+                        match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
+                            Ok(mesh) => mesh.draw(&self.gl),
+                            Err(e) => warn!("Failed to create HighPoly mesh: {}", e),
+                        }
                     }
                 },
                 crate::graphics::lod_system::LodModel::MediumPoly { vertices, indices } => {
@@ -505,8 +512,10 @@ impl Renderer {
                         let vert_data: Vec<f32> = vertices.iter()
                             .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
                             .collect();
-                        let mesh = Mesh::new_with_normals(&self.gl, &vert_data, &indices).unwrap_or_else(|_| Mesh::new(&self.gl, &[], &[]).unwrap());
-                        mesh.draw(&self.gl);
+                        match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
+                            Ok(mesh) => mesh.draw(&self.gl),
+                            Err(e) => warn!("Failed to create MediumPoly mesh: {}", e),
+                        }
                     }
                 },
                 crate::graphics::lod_system::LodModel::LowPoly { vertices, indices } => {
@@ -514,8 +523,10 @@ impl Renderer {
                         let vert_data: Vec<f32> = vertices.iter()
                             .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
                             .collect();
-                        let mesh = Mesh::new_with_normals(&self.gl, &vert_data, &indices).unwrap_or_else(|_| Mesh::new(&self.gl, &[], &[]).unwrap());
-                        mesh.draw(&self.gl);
+                        match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
+                            Ok(mesh) => mesh.draw(&self.gl),
+                            Err(e) => warn!("Failed to create LowPoly mesh: {}", e),
+                        }
                     }
                 },
                 crate::graphics::lod_system::LodModel::Billboard { texture_id, size } => {

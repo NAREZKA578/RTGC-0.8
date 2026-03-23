@@ -150,7 +150,8 @@ impl<T: Component> ConcreteComponentStorage<T> {
     }
 
     // Получение сырого указателя на данные для unsafe доступа
-    // Используется в get_component_mut для обхода borrow checker
+    // Удалено: этот метод больше не используется после перехода на безопасный get_mut
+    #[deprecated(note = "Используйте get_mut() вместо unsafe указателей")]
     pub fn get_mut_ptr(&mut self, entity_index: usize) -> Option<*mut T> {
         self.data.get_mut(entity_index).and_then(|opt| opt.as_mut()).map(|c| c as *mut T)
     }
@@ -166,23 +167,15 @@ impl<T: Component> ConcreteComponentStorage<T> {
         items.into_iter()
     }
 
-    // Исправлено: собираем данные в Vec для корректного времени жизни
+    // Безопасная мутабельная итерация через безопасный метод get_mut
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
-        let items: Vec<(usize, *mut T)> = self.dense_indices
-            .iter()
-            .filter_map(|&idx| {
-                self.data.get_mut(idx).and_then(|opt| opt.as_mut()).map(|c| (idx, c as *mut T))
-            })
-            .collect();
-        
-        // Преобразуем сырые указатели обратно в ссылки
-        items.into_iter().filter_map(|(idx, ptr)| {
-            if !ptr.is_null() {
-                // SAFETY: указатель был получен из валидной ссылки и ещё действителен
-                Some((idx, unsafe { &mut *ptr }))
-            } else {
-                None
-            }
+        // Используем безопасный подход с разделением заимствований
+        // вместо сырых указателей для избежания потенциального UB
+        let indices = self.dense_indices.clone();
+        indices.into_iter().filter_map(move |idx| {
+            self.data.get_mut(idx)
+                .and_then(|opt| opt.as_mut())
+                .map(|component| (idx, component))
         })
     }
 }
@@ -405,11 +398,7 @@ impl EcsManager {
     }
 
     // Получение компонента (mutable)
-    // Исправлено: используем unsafe для возврата ссылки с правильным временем жизни
-    // Это безопасно потому что:
-    // 1. Мы держим &mut self, что гарантирует эксклюзивный доступ
-    // 2. Ссылка живёт не дольше чем &mut self
-    // 3. Нет других ссылок на эти данные пока существует возвращённая ссылка
+    // Используем безопасный подход с разделением заимствований
     pub fn get_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
         if entity.is_null() || entity.index() >= self.entities.read().len() {
             return None;
@@ -430,15 +419,8 @@ impl EcsManager {
 
         let concrete_storage = storage.as_any_mut().downcast_mut::<ConcreteComponentStorage<T>>()?;
         
-        // Получаем сырой указатель на данные
-        let ptr = concrete_storage.get_mut_ptr(entity_index)?;
-        
-        // SAFETY:
-        // 1. Указатель получен из валидной ссылки на данные в хранилище
-        // 2. &mut self гарантирует что нет других ссылок на эти данные
-        // 3. Данные в хранилище не перемещаются и не удаляются пока живёт &mut self
-        // 4. Время жизни возвращённой ссылки ограничено временем жизни &mut self
-        Some(unsafe { &mut *ptr })
+        // Безопасно получаем мутабельную ссылку через метод хранилища
+        concrete_storage.get_mut(entity_index)
     }
     
     // Удаление компонента
