@@ -69,6 +69,10 @@ unsafe fn compile_shader(
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        // Resources cleaned up with context
+        // Note: Shader program deletion requires GL context which is not available here.
+        // In a real application, you would need to call explicit cleanup methods before dropping
+        // or use a resource manager that tracks the GL context lifetime.
+        // For now, resources are cleaned up when GL context is destroyed.
+        // If explicit cleanup is needed, add a delete(&self, gl: &Context) method and call it manually.
     }
 }
