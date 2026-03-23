@@ -4,8 +4,12 @@
 use crate::graphics::rhi::{
     types::*,
     device::*,
+    resource_manager::{ResourceManager, BufferHandle},
 };
 use std::sync::Arc;
+
+static RESOURCE_MANAGER: once_cell::sync::Lazy<Arc<ResourceManager>> = 
+    once_cell::sync::Lazy::new(|| Arc::new(ResourceManager::new()));
 
 #[cfg(target_os = "windows")]
 use windows::{
@@ -265,7 +269,21 @@ impl IDevice for Dx12Device {
         let handle = self.generate_handle();
         let buffer = Dx12Buffer::new(&self.device, desc, handle)?;
         
-        // Store buffer in resource manager (TODO: implement proper resource tracking)
+        // Store buffer in resource manager for tracking
+        unsafe {
+            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
+                let buffer_handle = BufferHandle {
+                    handle,
+                    size: desc.size,
+                    buffer_type: desc.buffer_type,
+                    state: desc.initial_state,
+                    dx12_resource: Some(buffer.resource().clone()),
+                    vulkan_buffer: None,
+                    vulkan_allocation: None,
+                };
+                manager.register_buffer(buffer_handle);
+            }
+        }
         Ok(handle)
     }
     
@@ -295,8 +313,61 @@ impl IDevice for Dx12Device {
         texture: ResourceHandle,
         desc: &TextureViewDescription,
     ) -> RhiResult<ResourceHandle> {
+        use windows::Win32::Graphics::Direct3D12::*;
+        
         let handle = self.generate_handle();
-        // TODO: Implement texture view creation
+        
+        // Get texture from resource manager
+        unsafe {
+            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
+                if let Some(tex) = manager.get_texture(texture) {
+                    if let Some(dx12_resource) = tex.dx12_resource {
+                        // Create SRV descriptor in heap
+                        let srv_heap = self.descriptor_srv_heap.as_ref()
+                            .ok_or_else(|| RhiError::ResourceCreationFailed("No SRV descriptor heap".to_string()))?;
+                        
+                        let srv_handle = srv_heap.GetCPUDescriptorHandleForHeapStart();
+                        let handle_size = unsafe { 
+                            self.device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) 
+                        };
+                        let next_handle = D3D12_CPU_DESCRIPTOR_HANDLE {
+                            ptr: srv_handle.ptr + (handle_size as usize) * (handle.0 as usize),
+                        };
+                        
+                        let srv_desc = D3D12_SHADER_RESOURCE_VIEW_DESC {
+                            Format: match desc.format {
+                                TextureFormat::RGBA8Unorm => DXGI_FORMAT_R8G8B8A8_UNORM,
+                                TextureFormat::RGBA16Float => DXGI_FORMAT_R16G16B16A16_FLOAT,
+                                TextureFormat::RGBA32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
+                                TextureFormat::Depth32Float => DXGI_FORMAT_D32_FLOAT,
+                                _ => DXGI_FORMAT_UNKNOWN,
+                            },
+                            ViewDimension: match desc.view_type {
+                                TextureViewType::D2 => D3D12_SRV_DIMENSION_TEXTURE2D,
+                                TextureViewType::D2Array => D3D12_SRV_DIMENSION_TEXTURE2DARRAY,
+                                TextureViewType::Cube => D3D12_SRV_DIMENSION_TEXTURECUBE,
+                                TextureViewType::D3 => D3D12_SRV_DIMENSION_TEXTURE3D,
+                                _ => D3D12_SRV_DIMENSION_TEXTURE2D,
+                            },
+                            Shader4ComponentMapping: D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                            ..Default::default()
+                        };
+                        
+                        unsafe {
+                            self.device.CreateShaderResourceView(
+                                &dx12_resource,
+                                &srv_desc,
+                                next_handle,
+                            );
+                        }
+                        
+                        // Store SRV handle in resource manager
+                        manager.set_texture_srv(handle, next_handle.ptr as u64);
+                    }
+                }
+            }
+        }
+        
         Ok(handle)
     }
     
@@ -314,7 +385,84 @@ impl IDevice for Dx12Device {
         use windows::Win32::Graphics::Direct3D12::*;
         
         let handle = self.generate_handle();
-        // TODO: Implement sampler creation using descriptor heap
+        
+        // Create sampler descriptor in heap
+        let srv_heap = self.descriptor_srv_heap.as_ref()
+            .ok_or_else(|| RhiError::ResourceCreationFailed("No SRV descriptor heap".to_string()))?;
+        
+        let srv_handle = srv_heap.GetCPUDescriptorHandleForHeapStart();
+        let handle_size = unsafe { 
+            self.device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) 
+        };
+        let sampler_handle = D3D12_CPU_DESCRIPTOR_HANDLE {
+            ptr: srv_handle.ptr + (handle_size as usize) * (handle.0 as usize),
+        };
+        
+        let sampler_desc = D3D12_SAMPLER_DESC {
+            Filter: match (desc.min_filter, desc.mag_filter, desc.mip_filter) {
+                (FilterMode::Nearest, FilterMode::Nearest, FilterMode::Nearest) => D3D12_FILTER_MIN_MAG_MIP_POINT,
+                (FilterMode::Nearest, FilterMode::Nearest, FilterMode::Linear) => D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+                (FilterMode::Nearest, FilterMode::Linear, FilterMode::Nearest) => D3D12_FILTER_MIN_MIP_POINT_MAG_LINEAR,
+                (FilterMode::Nearest, FilterMode::Linear, FilterMode::Linear) => D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT,
+                (FilterMode::Linear, FilterMode::Nearest, FilterMode::Nearest) => D3D12_FILTER_MAG_MIP_POINT_MIN_LINEAR,
+                (FilterMode::Linear, FilterMode::Nearest, FilterMode::Linear) => D3D12_FILTER_MAG_POINT_MIN_MIP_LINEAR,
+                (FilterMode::Linear, FilterMode::Linear, FilterMode::Nearest) => D3D12_FILTER_MIP_POINT_MIN_MAG_LINEAR,
+                (FilterMode::Linear, FilterMode::Linear, FilterMode::Linear) => D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+                _ => D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+            },
+            AddressU: match desc.address_mode_u {
+                AddressMode::ClampToEdge => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                AddressMode::Repeat => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+                AddressMode::MirrorRepeat => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
+                AddressMode::ClampToBorder => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            },
+            AddressV: match desc.address_mode_v {
+                AddressMode::ClampToEdge => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                AddressMode::Repeat => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+                AddressMode::MirrorRepeat => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
+                AddressMode::ClampToBorder => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            },
+            AddressW: match desc.address_mode_w {
+                AddressMode::ClampToEdge => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                AddressMode::Repeat => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+                AddressMode::MirrorRepeat => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
+                AddressMode::ClampToBorder => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            },
+            MipLODBias: desc.lod_bias,
+            MaxAnisotropy: desc.anisotropy.clamp(0, 16) as u32,
+            ComparisonFunc: match desc.compare_op {
+                CompareOp::Never => D3D12_COMPARISON_FUNC_NEVER,
+                CompareOp::Less => D3D12_COMPARISON_FUNC_LESS,
+                CompareOp::Equal => D3D12_COMPARISON_FUNC_EQUAL,
+                CompareOp::LessEqual => D3D12_COMPARISON_FUNC_LESS_EQUAL,
+                CompareOp::Greater => D3D12_COMPARISON_FUNC_GREATER,
+                CompareOp::NotEqual => D3D12_COMPARISON_FUNC_NOT_EQUAL,
+                CompareOp::GreaterEqual => D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+                CompareOp::Always => D3D12_COMPARISON_FUNC_ALWAYS,
+            },
+            BorderColor: [desc.border_color[0], desc.border_color[1], desc.border_color[2], desc.border_color[3]],
+            MinLOD: desc.min_lod,
+            MaxLOD: desc.max_lod,
+        };
+        
+        unsafe {
+            self.device.CreateSampler(&sampler_desc, sampler_handle);
+        }
+        
+        // Store sampler handle in resource manager
+        unsafe {
+            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
+                use crate::graphics::rhi::resource_manager::SamplerHandle;
+                let sampler_handle_struct = SamplerHandle {
+                    handle,
+                    desc: desc.clone(),
+                    dx12_handle: Some(sampler_handle.ptr as u64),
+                    vulkan_sampler: None,
+                };
+                manager.register_sampler(sampler_handle_struct);
+            }
+        }
+        
         Ok(handle)
     }
     
@@ -490,7 +638,32 @@ impl IDevice for Dx12Device {
         offset: u64,
         data: &[u8],
     ) -> RhiResult<()> {
-        // TODO: Implement buffer update via upload heap
+        use windows::Win32::Graphics::Direct3D12::*;
+        
+        // Get buffer from resource manager
+        unsafe {
+            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
+                if let Some(buf_handle) = manager.get_buffer(buffer) {
+                    if let Some(dx12_resource) = buf_handle.dx12_resource {
+                        // Map the upload heap buffer and copy data
+                        let ptr = dx12_resource.Map(0, None::<*const D3D12_RANGE>)
+                            .map_err(|e| RhiError::InvalidParameter(format!("Failed to map buffer: {:?}", e)))?;
+                        
+                        if !ptr.is_null() {
+                            std::ptr::copy_nonoverlapping(
+                                data.as_ptr(),
+                                (ptr as *mut u8).add(offset as usize),
+                                data.len(),
+                            );
+                            dx12_resource.Unmap(0, None::<*const D3D12_RANGE>);
+                        } else {
+                            return Err(RhiError::InvalidParameter("Map returned null pointer".to_string()));
+                        }
+                    }
+                }
+            }
+        }
+        
         Ok(())
     }
     
@@ -505,9 +678,28 @@ impl IDevice for Dx12Device {
     }
     
     #[cfg(target_os = "windows")]
-    fn map_buffer(&self, _buffer: ResourceHandle) -> RhiResult<*mut u8> {
-        // TODO: Implement buffer mapping
-        Err(RhiError::Unsupported("Buffer mapping requires upload heap".to_string()))
+    fn map_buffer(&self, buffer: ResourceHandle) -> RhiResult<*mut u8> {
+        use windows::Win32::Graphics::Direct3D12::*;
+        
+        // Get buffer from resource manager
+        unsafe {
+            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
+                if let Some(buf_handle) = manager.get_buffer(buffer) {
+                    if let Some(dx12_resource) = buf_handle.dx12_resource {
+                        let ptr = dx12_resource.Map(0, None::<*const D3D12_RANGE>)
+                            .map_err(|e| RhiError::InvalidParameter(format!("Failed to map buffer: {:?}", e)))?;
+                        
+                        if ptr.is_null() {
+                            return Err(RhiError::InvalidParameter("Map returned null pointer".to_string()));
+                        }
+                        
+                        return Ok(ptr as *mut u8);
+                    }
+                }
+            }
+        }
+        
+        Err(RhiError::InvalidParameter("Buffer not found or not mappable".to_string()))
     }
     
     #[cfg(not(target_os = "windows"))]
@@ -516,8 +708,19 @@ impl IDevice for Dx12Device {
     }
     
     #[cfg(target_os = "windows")]
-    fn unmap_buffer(&self, _buffer: ResourceHandle) {
-        // TODO: Implement buffer unmapping
+    fn unmap_buffer(&self, buffer: ResourceHandle) {
+        use windows::Win32::Graphics::Direct3D12::*;
+        
+        // Get buffer from resource manager and unmap
+        unsafe {
+            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
+                if let Some(buf_handle) = manager.get_buffer(buffer) {
+                    if let Some(dx12_resource) = buf_handle.dx12_resource {
+                        dx12_resource.Unmap(0, None::<*const D3D12_RANGE>);
+                    }
+                }
+            }
+        }
     }
     
     #[cfg(not(target_os = "windows"))]
@@ -535,7 +738,18 @@ impl IDevice for Dx12Device {
     
     #[cfg(target_os = "windows")]
     fn destroy_resource(&self, handle: ResourceHandle) {
-        // TODO: Implement proper resource destruction with reference counting
+        // Remove from resource manager - resources are released when handles are dropped
+        unsafe {
+            if let Some(manager) = RESOURCE_MANAGER.as_ref() {
+                // Try to remove from all resource types
+                manager.remove_buffer(handle);
+                manager.remove_texture(handle);
+                manager.remove_sampler(handle);
+                manager.remove_pipeline(handle);
+                manager.remove_shader(handle);
+                manager.remove_swapchain(handle);
+            }
+        }
     }
     
     #[cfg(not(target_os = "windows"))]
@@ -564,7 +778,31 @@ impl IDevice for Dx12Device {
     
     #[cfg(target_os = "windows")]
     fn get_memory_stats(&self) -> MemoryStats {
-        // TODO: Query actual memory stats from DXGI
+        use windows::Win32::Graphics::Dxgi::*;
+        
+        // Query DXGI adapter for memory stats
+        unsafe {
+            let factory: IDXGIFactory4 = CreateDXGIFactory1()
+                .unwrap_or_else(|_| std::mem::zeroed());
+            
+            if factory.is_err() {
+                return MemoryStats::default();
+            }
+            
+            let adapter = self.find_adapter(&factory.unwrap());
+            if let Ok(adapter) = adapter {
+                let mut desc = DXGI_ADAPTER_DESC1::default();
+                if adapter.GetDesc1(&mut desc).is_ok() {
+                    return MemoryStats {
+                        dedicated_video_memory: desc.DedicatedVideoMemory as usize,
+                        dedicated_system_memory: desc.DedicatedSystemMemory as usize,
+                        shared_system_memory: desc.SharedSystemMemory as usize,
+                        used_memory: 0, // DX12 doesn't provide direct usage stats
+                    };
+                }
+            }
+        }
+        
         MemoryStats::default()
     }
     

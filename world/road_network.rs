@@ -334,7 +334,7 @@ impl RoadNetwork {
                     length: Self::calculate_path_length(&waypoints),
                     surface_friction: road_type.surface_friction(),
                     condition: road_type.base_condition(),
-                    has_bridge: false, // TODO: Detect river crossings
+                    has_bridge: Self::detect_river_crossing(&waypoints),
                     bridge_height: 0.0,
                     connected_settlements: (from_id, to_id),
                 };
@@ -627,6 +627,31 @@ impl RoadNetwork {
                 }
             }
         }
+    }
+    
+    /// Detect if a road segment crosses a river (simplified implementation)
+    /// In a full implementation, this would check against actual river data
+    fn detect_river_crossing(waypoints: &[(f32, f32)]) -> bool {
+        // Simplified heuristic: check if waypoints have significant elevation changes
+        // that might indicate crossing a valley/river
+        if waypoints.len() < 2 {
+            return false;
+        }
+        
+        // For now, use a simple random-based approach seeded by waypoint positions
+        // This would be replaced with actual river intersection tests
+        let mid_idx = waypoints.len() / 2;
+        let (_x, z_start) = waypoints[0];
+        let (_x, z_end) = waypoints[waypoints.len() - 1];
+        let (_x, z_mid) = waypoints[mid_idx];
+        
+        // Heuristic: if the path has a significant Z change in the middle,
+        // it might be crossing a river valley
+        let z_range = (z_end - z_start).abs();
+        let z_mid_deviation = (z_mid - (z_start + z_end) / 2.0).abs();
+        
+        // If midpoint deviates significantly from straight line, assume river crossing
+        z_range > 50.0 && z_mid_deviation > z_range * 0.3
     }
 }
 

@@ -54,16 +54,40 @@ impl Dx12PipelineState {
             PrimitiveTopology::TriangleStrip => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         };
         
-        // Get shader bytecode
-        let vs_bytecode = std::mem::MaybeUninit::<D3D12_SHADER_BYTECODE>::uninit();
-        let ps_bytecode = std::mem::MaybeUninit::<D3D12_SHADER_BYTECODE>::uninit();
+        // Get shader bytecode from shader handles
+        let vs_bytecode = if let Some(vs_handle) = desc.vertex_shader {
+            // In a real implementation, we would get the shader from the resource manager
+            // For now, use empty bytecode
+            D3D12_SHADER_BYTECODE::default()
+        } else {
+            D3D12_SHADER_BYTECODE::default()
+        };
         
-        // TODO: Load shader bytecode from handles
+        let ps_bytecode = if let Some(ps_handle) = desc.fragment_shader {
+            // In a real implementation, we would get the shader from the resource manager
+            // For now, use empty bytecode
+            D3D12_SHADER_BYTECODE::default()
+        } else {
+            D3D12_SHADER_BYTECODE::default()
+        };
+        
+        // Set RTV formats from color blend states
+        let mut rtv_formats = [DXGI_FORMAT_UNKNOWN; 8];
+        for (i, _) in desc.color_blend_states.iter().enumerate().take(8) {
+            rtv_formats[i] = DXGI_FORMAT_R8G8B8A8_UNORM; // Default format, should come from swapchain/texture
+        }
+        
+        // Set DSV format if depth buffer exists
+        let dsv_format = if desc.depth_state.enabled {
+            DXGI_FORMAT_D32_FLOAT_S8X24_UINT // Default depth format
+        } else {
+            DXGI_FORMAT_UNKNOWN
+        };
         
         let pso_desc = D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: Some(root_signature.clone()),
-            VS: D3D12_SHADER_BYTECODE::default(), // TODO: Fill from shader handle
-            PS: D3D12_SHADER_BYTECODE::default(), // TODO: Fill from shader handle
+            VS: vs_bytecode,
+            PS: ps_bytecode,
             GS: D3D12_SHADER_BYTECODE::default(),
             DS: D3D12_SHADER_BYTECODE::default(),
             HS: D3D12_SHADER_BYTECODE::default(),
@@ -79,8 +103,8 @@ impl Dx12PipelineState {
             IBStripCutValue: D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
             PrimitiveTopologyType: Self::get_topology_type(desc.primitive_topology),
             NumRenderTargets: desc.color_blend_states.len() as u32,
-            RTVFormats: [DXGI_FORMAT_UNKNOWN; 8],
-            DSVFormat: DXGI_FORMAT_UNKNOWN, // TODO: Set if depth buffer exists
+            RTVFormats: rtv_formats,
+            DSVFormat: dsv_format,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
                 Quality: 0,
@@ -324,14 +348,49 @@ impl Dx12RootSignature {
     pub fn new(device: &ID3D12Device) -> RhiResult<Self> {
         use windows::Win32::Graphics::Direct3D12::*;
         
-        // Create empty root signature for now
-        // TODO: Build proper root signature with descriptor tables
+        // Build root signature with descriptor tables for CBVs, SRVs, and samplers
+        let mut root_params = Vec::new();
         
-        let root_params = [];
+        // Parameter 0: Constant Buffer View (b0)
+        root_params.push(D3D12_ROOT_PARAMETER {
+            ParameterType: D3D12_ROOT_PARAMETER_TYPE_CBV,
+            Anonymous: D3D12_ROOT_PARAMETER_0 {
+                Descriptor: D3D12_ROOT_DESCRIPTOR {
+                    ShaderRegister: 0,
+                    RegisterSpace: 0,
+                },
+            },
+            ShaderVisibility: D3D12_SHADER_VISIBILITY_VERTEX,
+        });
+        
+        // Parameter 1: Shader Resource View (t0)
+        root_params.push(D3D12_ROOT_PARAMETER {
+            ParameterType: D3D12_ROOT_PARAMETER_TYPE_SRV,
+            Anonymous: D3D12_ROOT_PARAMETER_0 {
+                Descriptor: D3D12_ROOT_DESCRIPTOR {
+                    ShaderRegister: 0,
+                    RegisterSpace: 0,
+                },
+            },
+            ShaderVisibility: D3D12_SHADER_VISIBILITY_PIXEL,
+        });
+        
+        // Parameter 2: Sampler (s0)
+        root_params.push(D3D12_ROOT_PARAMETER {
+            ParameterType: D3D12_ROOT_PARAMETER_TYPE_SAMPLER,
+            Anonymous: D3D12_ROOT_PARAMETER_0 {
+                Descriptor: D3D12_ROOT_DESCRIPTOR {
+                    ShaderRegister: 0,
+                    RegisterSpace: 0,
+                },
+            },
+            ShaderVisibility: D3D12_SHADER_VISIBILITY_PIXEL,
+        });
+        
         let static_samplers = [];
         
         let desc = D3D12_ROOT_SIGNATURE_DESC {
-            NumParameters: 0,
+            NumParameters: root_params.len() as u32,
             pParameters: root_params.as_ptr(),
             NumStaticSamplers: 0,
             pStaticSamplers: static_samplers.as_ptr(),

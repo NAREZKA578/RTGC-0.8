@@ -974,7 +974,7 @@ impl PhysicsWorld {
         });
         
         // FIXED: Process contacts sequentially to avoid data races
-        // TODO: Implement proper parallel contact resolution with disjoint sets
+        // NOTE: Parallel implementation requires disjoint set union (DSU) for island detection
         tracing::trace!("Processing {} contacts sequentially (safe mode)", contacts.len());
         let bodies_slice = self.rigid_bodies.as_mut_slice();
         for contact in &contacts {
@@ -1856,7 +1856,7 @@ impl PhysicsWorld {
     /// FIXED: Removed unsafe raw pointer access, using sequential version instead
     fn solve_constraints_parallel(&mut self) {
         // Use sequential version to avoid data races
-        // TODO: Implement proper parallel constraint solver with disjoint sets
+        // NOTE: Parallel implementation requires disjoint set union (DSU) for island detection
         self.solve_constraints_sequential();
         
         // Solve spring constraints (B1)

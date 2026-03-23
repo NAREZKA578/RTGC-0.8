@@ -28,7 +28,7 @@ pub struct Renderer {
     pub menu_state: MenuState,
     pub lod_manager: LodManager,
     pub texture_streaming: TextureStreamingSystem,
-    // SPRINT 1: Terrain & Vehicle rendering
+    // Terrain & Vehicle rendering
     terrain_mesh: Option<Mesh>,
     vehicle_box_mesh: Option<Mesh>,
     vehicle_transform: Option<(Vector3<f32>, UnitQuaternion<f32>)>,
@@ -37,7 +37,7 @@ pub struct Renderer {
     height: u32,
     // HUD Manager reference for rendering
     hud_data: Option<crate::ui::hud::VehicleHudData>,
-    // SPRINT 5: Weather and Day/Night cycle support
+    // Weather and Day/Night cycle support
     sky_color_top: Vector3<f32>,
     sky_color_horizon: Vector3<f32>,
     sun_direction: Vector3<f32>,
@@ -176,12 +176,12 @@ impl Renderer {
             menu_state: MenuState::Loading,
             lod_manager: LodManager::new(),
             texture_streaming: TextureStreamingSystem::new(128, 10.0, 5),
-            // SPRINT 1: Initialize terrain & vehicle mesh placeholders
+            // Terrain & vehicle mesh placeholders (initialized on demand)
             terrain_mesh: None,
             vehicle_box_mesh: None,
             vehicle_transform: None,
             hud_data: None,
-            // SPRINT 5: Weather and Day/Night defaults
+            // Weather and Day/Night defaults
             sky_color_top: Vector3::new(0.4, 0.6, 0.9),
             sky_color_horizon: Vector3::new(0.7, 0.8, 0.9),
             sun_direction: Vector3::y(),
@@ -284,11 +284,10 @@ impl Renderer {
         self.hud_data = Some(data);
     }
 
-    // SPRINT 5: Weather and Day/Night cycle methods
+    // Weather and Day/Night cycle methods
     pub fn set_sky_color(&mut self, top: Vector3<f32>, horizon: Vector3<f32>) {
         self.sky_color_top = top;
         self.sky_color_horizon = horizon;
-        // Граф-4: Обновить VAO неба с новыми цветами
         self.update_sky_colors(top, horizon);
     }
 
@@ -486,7 +485,45 @@ impl Renderer {
         
         // Get visible objects from LOD system
         let visible_objects = self.lod_manager.get_objects_in_view(&self.camera.position, 100.0);
-        // TODO: Use visible_objects for LOD-based culling instead of rendering all objects
+        
+        // Use visible_objects for LOD-based culling instead of rendering all objects
+        // Render each visible object using appropriate LOD model
+        for (_index, lod_model) in visible_objects {
+            match lod_model {
+                crate::graphics::lod_system::LodModel::HighPoly { vertices, indices } => {
+                    if !vertices.is_empty() && !indices.is_empty() {
+                        // Convert vertices to proper format for mesh creation
+                        let vert_data: Vec<f32> = vertices.iter()
+                            .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
+                            .collect();
+                        let mesh = Mesh::new_with_normals(&self.gl, &vert_data, &indices).unwrap_or_else(|_| Mesh::new(&self.gl, &[], &[]).unwrap());
+                        mesh.draw(&self.gl);
+                    }
+                },
+                crate::graphics::lod_system::LodModel::MediumPoly { vertices, indices } => {
+                    if !vertices.is_empty() && !indices.is_empty() {
+                        let vert_data: Vec<f32> = vertices.iter()
+                            .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
+                            .collect();
+                        let mesh = Mesh::new_with_normals(&self.gl, &vert_data, &indices).unwrap_or_else(|_| Mesh::new(&self.gl, &[], &[]).unwrap());
+                        mesh.draw(&self.gl);
+                    }
+                },
+                crate::graphics::lod_system::LodModel::LowPoly { vertices, indices } => {
+                    if !vertices.is_empty() && !indices.is_empty() {
+                        let vert_data: Vec<f32> = vertices.iter()
+                            .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
+                            .collect();
+                        let mesh = Mesh::new_with_normals(&self.gl, &vert_data, &indices).unwrap_or_else(|_| Mesh::new(&self.gl, &[], &[]).unwrap());
+                        mesh.draw(&self.gl);
+                    }
+                },
+                crate::graphics::lod_system::LodModel::Billboard { texture_id, size } => {
+                    // Render billboards as simple quads facing the camera
+                    self.render_billboard(texture_id, size);
+                },
+            }
+        }
 
         // Use the shader
         self.shader.bind(&self.gl);
@@ -579,28 +616,6 @@ impl Renderer {
                 box_mesh.draw(&self.gl);
             }
         }
-        
-        // Render each visible object using appropriate LOD model
-        // TODO: Fix LOD rendering - vertices type mismatch
-        // for (_index, lod_model) in visible_objects {
-        //     match lod_model {
-        //         crate::graphics::lod_system::LodModel::HighPoly { vertices, indices } => {
-        //             let mesh = Mesh::new(&self.gl, &vertices, &indices)?;
-        //             mesh.draw();
-        //         },
-        //         crate::graphics::lod_system::LodModel::MediumPoly { vertices, indices } => {
-        //             let mesh = Mesh::new(&self.gl, &vertices, &indices)?;
-        //             mesh.draw();
-        //         },
-        //         crate::graphics::lod_system::LodModel::LowPoly { vertices, indices } => {
-        //             let mesh = Mesh::new(&self.gl, &vertices, &indices)?;
-        //             mesh.draw();
-        //         },
-        //         crate::graphics::lod_system::LodModel::Billboard { texture_id, size } => {
-        //             // Skip billboards for now
-        //         },
-        //     }
-        // }
         
         // Also render models from the traditional model system
         for (_, model) in &self.models {
