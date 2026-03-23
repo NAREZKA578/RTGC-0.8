@@ -6,6 +6,8 @@ pub struct DebugRenderer {
     line_vertices: Vec<f32>,
     point_vertices: Vec<f32>,
     enabled: bool,
+    // Internal shader for debug rendering
+    shader: Option<glow::Program>,
 }
 
 impl DebugRenderer {
@@ -14,7 +16,74 @@ impl DebugRenderer {
             line_vertices: Vec::with_capacity(1024),
             point_vertices: Vec::with_capacity(256),
             enabled: true,
+            shader: None,
         }
+    }
+    
+    /// Initialize the debug renderer shader
+    pub fn init_gl(&mut self, gl: &Context) -> Result<(), String> {
+        if self.shader.is_some() {
+            return Ok(());
+        }
+        
+        let vert_src = r#"#version 330 core
+layout (location = 0) in vec3 a_position;
+layout (location = 1) in vec3 a_color;
+out vec3 v_color;
+uniform mat4 u_view_proj;
+void main() {
+    v_color = a_color;
+    gl_Position = u_view_proj * vec4(a_position, 1.0);
+}"#;
+        
+        let frag_src = r#"#version 330 core
+in vec3 v_color;
+out vec4 FragColor;
+void main() {
+    FragColor = vec4(v_color, 1.0);
+}"#;
+        
+        unsafe {
+            let program = gl.create_program().ok_or("Failed to create program")?;
+            
+            let vert_shader = gl.create_shader(glow::VERTEX_SHADER).ok_or("Failed to create vertex shader")?;
+            gl.shader_source(vert_shader, vert_src);
+            gl.compile_shader(vert_shader);
+            if !gl.get_shader_compile_status(vert_shader) {
+                let log = gl.get_shader_info_log(vert_shader);
+                gl.delete_shader(vert_shader);
+                return Err(format!("Vertex shader compile error: {}", log));
+            }
+            gl.attach_shader(program, vert_shader);
+            
+            let frag_shader = gl.create_shader(glow::FRAGMENT_SHADER).ok_or("Failed to create fragment shader")?;
+            gl.shader_source(frag_shader, frag_src);
+            gl.compile_shader(frag_shader);
+            if !gl.get_shader_compile_status(frag_shader) {
+                let log = gl.get_shader_info_log(frag_shader);
+                gl.delete_shader(frag_shader);
+                gl.delete_shader(vert_shader);
+                return Err(format!("Fragment shader compile error: {}", log));
+            }
+            gl.attach_shader(program, frag_shader);
+            
+            gl.link_program(program);
+            if !gl.get_program_link_status(program) {
+                let log = gl.get_program_info_log(program);
+                gl.delete_shader(vert_shader);
+                gl.delete_shader(frag_shader);
+                return Err(format!("Program link error: {}", log));
+            }
+            
+            gl.detach_shader(program, vert_shader);
+            gl.detach_shader(program, frag_shader);
+            gl.delete_shader(vert_shader);
+            gl.delete_shader(frag_shader);
+            
+            self.shader = Some(program);
+        }
+        
+        Ok(())
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
@@ -35,8 +104,13 @@ impl DebugRenderer {
     pub fn flush_to_gl(&mut self, gl: &Context, view_proj: Matrix4<f32>) {
         if self.line_vertices.is_empty() { return; }
         
-        // TODO: Create and use a debug line shader that accepts view_proj uniform
-        // For now, lines are rendered in clip-space without transformation
+        // Ensure shader is initialized
+        if self.shader.is_none() {
+            if let Err(e) = self.init_gl(gl) {
+                log::error!("Failed to initialize debug renderer shader: {}", e);
+                return;
+            }
+        }
         
         unsafe {
             let vao = gl.create_vertex_array().ok();
@@ -58,8 +132,12 @@ impl DebugRenderer {
                 gl.enable_vertex_attrib_array(1);
                 gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 24, 12);
                 
-                // TODO: Pass view_proj to shader as u_view_proj uniform
-                // gl.uniform_matrix_4_f32_slice(Some(&u_vp), false, view_proj.as_slice());
+                // Use the debug shader and pass view_proj
+                if let Some(shader) = self.shader {
+                    gl.use_program(Some(shader));
+                    let u_view_proj = gl.get_uniform_location(shader, "u_view_proj");
+                    gl.uniform_matrix_4_f32_slice(Some(&u_view_proj), false, view_proj.as_slice());
+                }
                 
                 gl.draw_arrays(glow::LINES, 0, (self.line_vertices.len() / 6) as i32);
                 

@@ -297,18 +297,21 @@ impl Renderer {
         unsafe {
             if let Some(vao) = self.sky_vao {
                 self.gl.bind_vertex_array(Some(vao));
-                // Обновить вершины с новыми цветами через buffer_sub_data
-                let verts: [f32; 30] = [
-                   -1.0, -1.0,  horizon.x, horizon.y, horizon.z,  // bottom-left horizon
-                    1.0, -1.0,  horizon.x, horizon.y, horizon.z,  // bottom-right horizon
-                    1.0,  1.0,  top.x, top.y, top.z,              // top-right top
-                   -1.0, -1.0,  horizon.x, horizon.y, horizon.z,
-                    1.0,  1.0,  top.x, top.y, top.z,
-                   -1.0,  1.0,  top.x, top.y, top.z,              // top-left top
-                ];
-                if let Some(_vbo) = self.sky_vbo {
+                // Bind the buffer before updating
+                if let Some(vbo) = self.sky_vbo {
+                    self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+                    // Обновить вершины с новыми цветами через buffer_sub_data
+                    let verts: [f32; 30] = [
+                       -1.0, -1.0,  horizon.x, horizon.y, horizon.z,  // bottom-left horizon
+                        1.0, -1.0,  horizon.x, horizon.y, horizon.z,  // bottom-right horizon
+                        1.0,  1.0,  top.x, top.y, top.z,              // top-right top
+                       -1.0, -1.0,  horizon.x, horizon.y, horizon.z,
+                        1.0,  1.0,  top.x, top.y, top.z,
+                       -1.0,  1.0,  top.x, top.y, top.z,              // top-left top
+                    ];
                     // Используем buffer_sub_data для обновления без пересоздания
                     self.gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytemuck::cast_slice(&verts));
+                    self.gl.bind_buffer(glow::ARRAY_BUFFER, None);
                 }
             }
         }

@@ -6,18 +6,19 @@ use crate::graphics::rhi::{RhiFactory, RhiConfig, IDevice, GraphicsBackend};
 
 pub struct GraphicsContext {
     pub renderer: Renderer,
-    gl: Context,
+    gl: Arc<Context>,
     window: Arc<Window>,
     rhi_config: RhiConfig,
 }
 
 impl GraphicsContext {
     pub fn new(window: Arc<Window>, gl: Context) -> Result<Self, Box<dyn std::error::Error>> {
-        let renderer = Renderer::new(gl.clone())?;
+        let gl_arc = Arc::new(gl);
+        let renderer = Renderer::new(Arc::clone(&gl_arc))?;
         
         Ok(Self {
             renderer,
-            gl,
+            gl: gl_arc,
             window,
             rhi_config: RhiConfig::default(),
         })
@@ -42,11 +43,7 @@ impl GraphicsContext {
     }
     
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        unsafe {
-            self.gl.clear_color(0.1, 0.2, 0.3, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-        }
-        
+        // Renderer handles its own clearing, don't double-clear
         self.renderer.render()?;
         
         Ok(())

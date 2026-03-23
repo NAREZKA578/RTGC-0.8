@@ -7,6 +7,7 @@
 //! - Multiple controller support
 
 use std::collections::HashMap;
+use log::info;
 
 /// Gamepad button enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
