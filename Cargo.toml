@@ -10,11 +10,11 @@ description = "Russian Technological Game Core"
 winit = "0.30"
 raw-window-handle = "0.6"
 
-# Math (nalgebra for all linear algebra)
+# Math (nalgebra for all linear algebra - единый стек математики)
 nalgebra = "0.32"
 
-# Math (glam for audio and other systems)
-glam = "0.25"
+# glam удалён: используем только nalgebra для избежания лишних конверсий
+# glam = "0.25"
 
 # Lazy initialization
 once_cell = "1.19"

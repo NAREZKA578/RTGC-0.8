@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::{Read, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use log::warn;
 
 /// Handle to a loaded asset
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -94,6 +95,7 @@ pub struct AssetMetadata {
 pub enum AssetLoadError {
     IoError(std::io::Error),
     InvalidFormat(String),
+    InvalidData(String),
     NotFound(String),
     UnsupportedType(String),
     DecodeError(String),
@@ -111,6 +113,7 @@ impl std::fmt::Display for AssetLoadError {
         match self {
             AssetLoadError::IoError(e) => write!(f, "IO error: {}", e),
             AssetLoadError::InvalidFormat(msg) => write!(f, "Invalid format: {}", msg),
+            AssetLoadError::InvalidData(msg) => write!(f, "Invalid data: {}", msg),
             AssetLoadError::NotFound(path) => write!(f, "Asset not found: {}", path),
             AssetLoadError::UnsupportedType(ty) => write!(f, "Unsupported type: {}", ty),
             AssetLoadError::DecodeError(msg) => write!(f, "Decode error: {}", msg),
@@ -207,7 +210,7 @@ impl AssetLoader {
         let handle = self.generate_handle();
         let name = path.file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
+            .unwrap_or("unknown") // Безопасно: fallback для некорректных имён файлов
             .to_string();
 
         let metadata = AssetMetadata {
@@ -312,10 +315,9 @@ impl AssetLoader {
 
     /// Loads a mesh (OBJ, FBX, glTF, etc.)
     fn load_mesh(&self, path: &Path) -> Result<AssetData, AssetLoadError> {
-        // Placeholder - would use a mesh loading library
         let extension = path.extension()
             .and_then(|e| e.to_str())
-            .unwrap_or("");
+            .unwrap_or(""); // Безопасно: пустая строка для файлов без расширения
 
         match extension.to_lowercase().as_str() {
             "obj" => self.load_obj(path),
@@ -425,7 +427,7 @@ impl AssetLoader {
 
         let extension = path.extension()
             .and_then(|e| e.to_str())
-            .unwrap_or("");
+            .unwrap_or(""); // Безопасно: пустая строка для файлов без расширения
 
         let shader_type = match extension.to_lowercase().as_str() {
             "vert" | "glslv" => ShaderStage::Vertex,
@@ -445,7 +447,7 @@ impl AssetLoader {
         // Placeholder - would use hound or ogg crate
         let extension = path.extension()
             .and_then(|e| e.to_str())
-            .unwrap_or("");
+            .unwrap_or(""); // Безопасно: пустая строка для файлов без расширения
 
         match extension.to_lowercase().as_str() {
             "wav" => self.load_wav(path),
@@ -471,7 +473,7 @@ impl AssetLoader {
 
         let name = path.file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("font")
+            .unwrap_or("font") // Безопасно: fallback для некорректных имён файлов
             .to_string();
 
         Ok(AssetData::Font {
@@ -494,7 +496,7 @@ impl AssetLoader {
     fn load_model(&self, path: &Path) -> Result<AssetData, AssetLoadError> {
         let extension = path.extension()
             .and_then(|e| e.to_str())
-            .unwrap_or("");
+            .unwrap_or(""); // Безопасно: пустая строка для файлов без расширения
 
         match extension.to_lowercase().as_str() {
             "gltf" | "glb" => self.load_gltf(path),
@@ -533,19 +535,19 @@ impl AssetLoader {
                 let normals: Vec<[f32; 3]> = reader
                     .read_normals()
                     .map(|n| n.collect())
-                    .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; positions.len()]);
+                    .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; positions.len()]); // Безопасно: дефолтные нормали
                 
                 // Read UVs (or default to 0,0)
                 let uvs: Vec<[f32; 2]> = reader
                     .read_tex_coords(0)
                     .map(|t| t.into_f32().collect())
-                    .unwrap_or_else(|| vec![[0.0, 0.0]; positions.len()]);
+                    .unwrap_or_else(|| vec![[0.0, 0.0]; positions.len()]); // Безопасно: дефолтные UV
                 
                 // Read indices
                 let indices: Vec<u32> = reader
                     .read_indices()
                     .map(|i| i.into_u32().collect())
-                    .unwrap_or_else(|| (0..positions.len() as u32).collect());
+                    .unwrap_or_else(|| (0..positions.len() as u32).collect()); // Безопасно: последовательные индексы
                 
                 // Build interleaved vertex buffer: pos(3) + normal(3) + uv(2) = 8 floats per vertex
                 let vertices: Vec<f32> = positions.iter()

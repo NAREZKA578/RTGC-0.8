@@ -4,8 +4,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::Mutex;
-use glam::Vec3;
+use nalgebra::Vector3;
 use crate::config::AudioConfig;
+
+/// Тип для 3D вектора (единый стек с nalgebra)
+pub type Vec3 = Vector3<f32>;
 
 /// 3D аудио источник с позиционированием
 #[derive(Debug, Clone)]
