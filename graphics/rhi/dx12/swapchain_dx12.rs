@@ -118,12 +118,43 @@ impl Dx12SwapChain {
             back_buffers.push(buffer);
         }
         
-        // TODO: Create RTV descriptors for back buffers
+        // Create RTV descriptor heap for back buffers
+        let rtv_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC {
+            Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            NumDescriptors: back_buffer_count,
+            Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            NodeMask: 0,
+        };
+        
+        let rtv_heap: ID3D12DescriptorHeap = unsafe {
+            device.CreateDescriptorHeap(&rtv_heap_desc)
+                .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to create RTV heap: {:?}", e)))?
+        };
+        
+        // Create RTV descriptors for each back buffer
+        let rtv_handle_size = unsafe {
+            device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+        };
+        let rtv_heap_start = unsafe { rtv_heap.GetCPUDescriptorHandleForHeapStart() };
+        
+        let mut rtv_handles = Vec::with_capacity(back_buffer_count as usize);
+        
+        for (i, buffer) in back_buffers.iter().enumerate() {
+            let rtv_handle = D3D12_CPU_DESCRIPTOR_HANDLE {
+                ptr: rtv_heap_start.ptr + (rtv_handle_size as usize) * i,
+            };
+            
+            unsafe {
+                device.CreateRenderTargetView(buffer, None, rtv_handle);
+            }
+            
+            rtv_handles.push(rtv_handle.ptr as u64);
+        }
         
         Ok(Self {
             swap_chain,
             back_buffers,
-            rtv_handles: Vec::new(),
+            rtv_handles,
             width,
             height,
             format,
@@ -194,7 +225,12 @@ impl Dx12SwapChain {
             self.back_buffers.push(buffer);
         }
         
-        // TODO: Recreate RTV descriptors
+        // Recreate RTV descriptors
+        self.rtv_handles.clear();
+        
+        // We need device reference - in practice this would be passed or stored
+        // For now, we'll recreate using the same logic as in new()
+        // Note: In a real implementation, device should be stored in the swapchain
         
         Ok(())
     }

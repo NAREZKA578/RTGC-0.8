@@ -1,5 +1,4 @@
 //! Audio engine based on cpal and symphonia for decoding
-//! Заглушка для компиляции - упрощенная версия
 
 use std::collections::HashMap;
 use nalgebra::Vector3;
@@ -93,19 +92,170 @@ impl AudioEngine {
         })
     }
 
-    /// Loads a sound from file - заглушка
-    pub fn load_sound(&mut self, _path: &str) -> Result<SoundHandle, String> {
-        // Заглушка - возвращаем пустой звук
+    /// Loads a sound from file
+    pub fn load_sound(&mut self, path: &str) -> Result<SoundHandle, String> {
         let handle = SoundHandle(self.next_handle_id);
         self.next_handle_id += 1;
 
-        self.loaded_sounds.insert(handle, LoadedSound {
-            samples: vec![0.0f32; 1024],
-            sample_rate: 44100,
-            channels: 2,
-        });
+        // Attempt to load the actual sound file
+        match self.load_sound_file(path) {
+            Ok(loaded_sound) => {
+                self.loaded_sounds.insert(handle, loaded_sound);
+                Ok(handle)
+            }
+            Err(e) => {
+                log::warn!("Failed to load sound '{}': {}. Creating silent placeholder.", path, e);
+                // If loading fails, create a silent placeholder
+                self.loaded_sounds.insert(handle, LoadedSound {
+                    samples: vec![0.0f32; 1024],
+                    sample_rate: 44100,
+                    channels: 2,
+                });
+                Ok(handle)
+            }
+        }
+    }
 
-        Ok(handle)
+    /// Internal method to load sound file
+    fn load_sound_file(&self, path: &str) -> Result<LoadedSound, String> {
+        use std::fs::File;
+        use std::io::BufReader;
+
+        // Try to detect format from extension
+        let ext = std::path::Path::new(path).extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        match ext.as_str() {
+            "wav" => self.load_wav_file(path),
+            "ogg" => self.load_ogg_stub(path),
+            "mp3" => self.load_mp3_stub(path),
+            _ => Err(format!("Unsupported audio format: {}", ext)),
+        }
+    }
+
+    /// Load WAV file (simple PCM decoder)
+    fn load_wav_file(&self, path: &str) -> Result<LoadedSound, String> {
+        use std::fs::File;
+        use std::io::{Read, Seek, SeekFrom};
+
+        let file = File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
+        let mut reader = BufReader::new(file);
+
+        // Read RIFF header
+        let mut riff = [0u8; 4];
+        reader.read_exact(&mut riff).map_err(|e| format!("Read error: {}", e))?;
+        if &riff != b"RIFF" {
+            return Err("Not a valid WAV file: missing RIFF header".to_string());
+        }
+
+        // Skip file size
+        let mut size_buf = [0u8; 4];
+        reader.read_exact(&mut size_buf).map_err(|e| format!("Read error: {}", e))?;
+
+        // Read WAVE header
+        let mut wave = [0u8; 4];
+        reader.read_exact(&mut wave).map_err(|e| format!("Read error: {}", e))?;
+        if &wave != b"WAVE" {
+            return Err("Not a valid WAV file: missing WAVE header".to_string());
+        }
+
+        // Find fmt and data chunks
+        let mut fmt_chunk = None;
+        let mut data_offset = None;
+        let mut data_size = None;
+
+        loop {
+            let mut chunk_id = [0u8; 4];
+            if reader.read_exact(&mut chunk_id).is_err() {
+                break;
+            }
+
+            let mut chunk_size_buf = [0u8; 4];
+            reader.read_exact(&mut chunk_size_buf).map_err(|e| format!("Read error: {}", e))?;
+            let chunk_size = u32::from_le_bytes(chunk_size_buf);
+
+            let chunk_id_str = String::from_utf8_lossy(&chunk_id);
+            match chunk_id_str.as_ref() {
+                "fmt " => {
+                    let mut fmt_data = vec![0u8; chunk_size as usize];
+                    reader.read_exact(&mut fmt_data).map_err(|e| format!("Read error: {}", e))?;
+                    
+                    if fmt_data.len() >= 16 {
+                        let audio_format = u16::from_le_bytes([fmt_data[0], fmt_data[1]]);
+                        let num_channels = u16::from_le_bytes([fmt_data[2], fmt_data[3]]);
+                        let sample_rate = u32::from_le_bytes([fmt_data[4], fmt_data[5], fmt_data[6], fmt_data[7]]);
+                        let bits_per_sample = u16::from_le_bytes([fmt_data[14], fmt_data[15]]);
+                        
+                        if audio_format != 1 {
+                            return Err(format!("Unsupported WAV format: {} (only PCM supported)", audio_format));
+                        }
+                        
+                        fmt_chunk = Some((num_channels, sample_rate, bits_per_sample));
+                    }
+                }
+                "data" => {
+                    data_offset = Some(reader.stream_position().map_err(|e| format!("Seek error: {}", e))?);
+                    data_size = Some(chunk_size);
+                    break;
+                }
+                _ => {
+                    // Skip unknown chunk
+                    reader.seek(SeekFrom::Current(chunk_size as i64)).map_err(|e| format!("Seek error: {}", e))?;
+                }
+            }
+        }
+
+        let (num_channels, sample_rate, bits_per_sample) = fmt_chunk.ok_or("Missing fmt chunk in WAV file")?;
+        let data_offset = data_offset.ok_or("Missing data chunk in WAV file")?;
+        let data_size = data_size.ok_or("Missing data size in WAV file")?;
+
+        // Read audio data
+        reader.seek(SeekFrom::Start(data_offset)).map_err(|e| format!("Seek error: {}", e))?;
+        
+        let num_samples = (data_size as usize) / (bits_per_sample as usize / 8);
+        let mut samples = Vec::with_capacity(num_samples);
+
+        if bits_per_sample == 16 {
+            for _ in 0..(num_samples / num_channels as usize) {
+                let mut sample_buf = vec![0u8; 2 * num_channels as usize];
+                if reader.read_exact(&mut sample_buf).is_ok() {
+                    for ch in 0..num_channels as usize {
+                        let sample = i16::from_le_bytes([sample_buf[ch * 2], sample_buf[ch * 2 + 1]]);
+                        samples.push(sample as f32 / 32768.0);
+                    }
+                }
+            }
+        } else if bits_per_sample == 8 {
+            for _ in 0..(num_samples / num_channels as usize) {
+                let mut sample_buf = vec![0u8; num_channels as usize];
+                if reader.read_exact(&mut sample_buf).is_ok() {
+                    for ch in 0..num_channels as usize {
+                        let sample = sample_buf[ch] as f32 / 128.0 - 1.0;
+                        samples.push(sample);
+                    }
+                }
+            }
+        } else {
+            return Err(format!("Unsupported bits per sample: {}", bits_per_sample));
+        }
+
+        Ok(LoadedSound {
+            samples,
+            sample_rate,
+            channels: num_channels as u32,
+        })
+    }
+
+    /// Stub for OGG loading (returns error with helpful message)
+    fn load_ogg_stub(&self, _path: &str) -> Result<LoadedSound, String> {
+        Err("OGG decoding requires ogg/vorbis crate. Install with: cargo add ogg vorbis".to_string())
+    }
+
+    /// Stub for MP3 loading (returns error with helpful message)
+    fn load_mp3_stub(&self, _path: &str) -> Result<LoadedSound, String> {
+        Err("MP3 decoding requires mp3decode or symphonia-mp3 crate".to_string())
     }
 
     /// Plays a loaded sound and returns a source handle
@@ -201,7 +351,16 @@ impl AudioEngine {
 
     /// Updates all audio sources
     pub fn update(&mut self) {
-        // Заглушка
+        // Update all active sound sources
+        self.sources.retain_mut(|source| {
+            source.update();
+            !source.is_finished()
+        });
+        
+        // Update 3D audio positions based on listener position
+        for source in &mut self.sources {
+            source.update_3d_position(&self.listener_position, self.listener_orientation);
+        }
     }
 
     /// Returns the number of active sound sources

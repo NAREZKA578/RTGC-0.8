@@ -306,8 +306,20 @@ impl VkPipelineState {
         shader_handle: &ResourceHandle,
         stage: vk::ShaderStageFlags,
     ) -> Option<vk::PipelineShaderStageCreateInfo> {
-        // TODO: Get shader module from handle
-        // For now, return None as placeholder
+        // Получаем SPIR-V байткод из ResourceManager
+        // В реальном использовании здесь должен быть доступ к ResourceManager
+        // Для демонстрации создаем заглушку с правильными полями
+        
+        use crate::graphics::rhi::resource_manager::ResourceManager;
+        use std::sync::{Arc, Mutex};
+        
+        // NOTE: В production коде здесь нужно получить ResourceManager из контекста устройства
+        // и извлечь spirv_bytecode по shader_handle
+        // Пример: let shader_data = resource_manager.get_shader(*shader_handle)?;
+        //         let spirv_code = shader_data.spirv_bytecode;
+        
+        // Для текущей реализации возвращаем None, так как нет доступа к ResourceManager
+        // Это требует рефакторинга передачи ResourceManager в pipeline creation
         None
     }
     

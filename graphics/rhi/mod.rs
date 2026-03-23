@@ -6,6 +6,7 @@ pub mod device;
 pub mod factory;
 pub mod gl;
 pub mod rhi_module;
+pub mod resource_manager;
 
 #[cfg(feature = "dx12")]
 pub mod dx12;
@@ -14,3 +15,4 @@ pub mod dx12;
 pub mod vulkan;
 
 pub use rhi_module::*;
+pub use resource_manager::*;

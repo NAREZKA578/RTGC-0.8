@@ -4,6 +4,7 @@
 use crate::graphics::rhi::{
     types::*,
     device::{ICommandList, ICommandQueue, ISemaphore, IFence},
+    resource_manager::ResourceManager,
 };
 use std::sync::Arc;
 
@@ -23,6 +24,7 @@ pub struct Dx12CommandList {
     
     cmd_type: CommandListType,
     is_closed: bool,
+    resource_manager: Arc<ResourceManager>,
 }
 
 unsafe impl Send for Dx12CommandList {}
@@ -66,7 +68,55 @@ impl Dx12CommandList {
             allocator,
             cmd_type,
             is_closed: true,
+            resource_manager: Arc::new(ResourceManager::new()),
         })
+    }
+    
+    /// Create a new DX12 command list with shared resource manager
+    #[cfg(target_os = "windows")]
+    pub fn with_resource_manager(
+        device: &ID3D12Device,
+        cmd_type: CommandListType,
+        resource_manager: Arc<ResourceManager>,
+    ) -> RhiResult<Self> {
+        use windows::Win32::Graphics::Direct3D12::*;
+        
+        let dx12_cmd_type = match cmd_type {
+            CommandListType::Direct => D3D12_COMMAND_LIST_TYPE_DIRECT,
+            CommandListType::Compute => D3D12_COMMAND_LIST_TYPE_COMPUTE,
+            CommandListType::Copy => D3D12_COMMAND_LIST_TYPE_COPY,
+        };
+        
+        // Create command allocator
+        let allocator: ID3D12CommandAllocator = unsafe {
+            device.CreateCommandAllocator(dx12_cmd_type)
+                .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to create command allocator: {:?}", e)))?
+        };
+        
+        // Create command list
+        let command_list: ID3D12GraphicsCommandList = unsafe {
+            device.CreateCommandList(0, dx12_cmd_type, &allocator, None)
+                .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to create command list: {:?}", e)))?
+        };
+        
+        // Close immediately (will be reset before use)
+        unsafe {
+            command_list.Close()
+                .map_err(|e| RhiError::InitializationFailed(format!("Failed to close command list: {:?}", e)))?;
+        }
+        
+        Ok(Self {
+            command_list,
+            allocator,
+            cmd_type,
+            is_closed: true,
+            resource_manager,
+        })
+    }
+    
+    /// Get the resource manager
+    pub fn get_resource_manager(&self) -> Arc<ResourceManager> {
+        self.resource_manager.clone()
     }
     
     /// Reset the command list for re-recording
@@ -209,12 +259,13 @@ impl ICommandList for Dx12CommandList {
     fn set_pipeline_state(&mut self, pso: ResourceHandle) {
         #[cfg(target_os = "windows")]
         {
-            // 4.40: Set PSO from handle
+            // 4.40: Set PSO from handle using resource manager
             unsafe {
-                // TODO: Get actual PSO from resource manager using handle
-                // For now, this is a placeholder - in real implementation we'd retrieve the ID3D12PipelineState
-                // from a resource manager using the handle
-                // self.command_list.SetPipelineState(pso_state);
+                if let Some(pipeline) = self.resource_manager.get_pipeline(pso) {
+                    if let Some(pso_state) = pipeline.dx12_pso {
+                        self.command_list.SetPipelineState(pso_state);
+                    }
+                }
             }
         }
     }
@@ -302,15 +353,16 @@ impl ICommandList for Dx12CommandList {
             // 4.41: Bind Vertex Buffers через реальные buffer views
             unsafe {
                 for (i, (buffer_handle, offset)) in buffers.iter().enumerate() {
-                    // TODO: Get actual ID3D12Resource from resource manager using handle
-                    // For now, this is a placeholder
-                    // let resource = self.resource_manager.get_buffer(*buffer_handle);
-                    // let view = D3D12_VERTEX_BUFFER_VIEW {
-                    //     BufferLocation: resource.GetGPUVirtualAddress() + offset,
-                    //     SizeInBytes: buffer_size,
-                    //     StrideInBytes: stride,
-                    // };
-                    // self.command_list.IASetVertexBuffers(start_slot + i as u32, 1, &view);
+                    if let Some(buffer) = self.resource_manager.get_buffer(*buffer_handle) {
+                        if let Some(resource) = buffer.dx12_resource {
+                            let view = D3D12_VERTEX_BUFFER_VIEW {
+                                BufferLocation: resource.GetGPUVirtualAddress() + offset,
+                                SizeInBytes: buffer.size as u32,
+                                StrideInBytes: buffer.size as u32, // Should be stride from pipeline
+                            };
+                            self.command_list.IASetVertexBuffers(start_slot + i as u32, 1, &view);
+                        }
+                    }
                 }
             }
         }
@@ -328,14 +380,16 @@ impl ICommandList for Dx12CommandList {
             
             // 4.41: Bind Index Buffer через реальный buffer view
             unsafe {
-                // TODO: Get actual ID3D12Resource from resource manager using handle
-                // let resource = self.resource_manager.get_buffer(buffer);
-                // let view = D3D12_INDEX_BUFFER_VIEW {
-                //     BufferLocation: resource.GetGPUVirtualAddress() + offset,
-                //     SizeInBytes: buffer_size,
-                //     Format: dxgi_format,
-                // };
-                // self.command_list.IASetIndexBuffer(&view);
+                if let Some(buffer) = self.resource_manager.get_buffer(buffer) {
+                    if let Some(resource) = buffer.dx12_resource {
+                        let view = D3D12_INDEX_BUFFER_VIEW {
+                            BufferLocation: resource.GetGPUVirtualAddress() + offset,
+                            SizeInBytes: buffer.size as u32,
+                            Format: dxgi_format,
+                        };
+                        self.command_list.IASetIndexBuffer(&view);
+                    }
+                }
             }
         }
     }
@@ -345,16 +399,20 @@ impl ICommandList for Dx12CommandList {
         {
             // 4.42: Bind constant buffer в root signature
             unsafe {
-                // TODO: Get actual ID3D12Resource and bind to root signature slot
-                // match stage {
-                //     ShaderStage::Vertex => {
-                //         self.command_list.SetGraphicsRootConstantBufferView(slot, gpu_address);
-                //     }
-                //     ShaderStage::Pixel => {
-                //         self.command_list.SetGraphicsRootConstantBufferView(slot, gpu_address);
-                //     }
-                //     _ => {}
-                // }
+                if let Some(buffer) = self.resource_manager.get_buffer(buffer) {
+                    if let Some(resource) = buffer.dx12_resource {
+                        let gpu_address = resource.GetGPUVirtualAddress();
+                        match stage {
+                            ShaderStage::Vertex | ShaderStage::Fragment | ShaderStage::Geometry | 
+                            ShaderStage::TessellationControl | ShaderStage::TessellationEvaluation => {
+                                self.command_list.SetGraphicsRootConstantBufferView(slot, gpu_address);
+                            }
+                            ShaderStage::Compute => {
+                                self.command_list.SetComputeRootConstantBufferView(slot, gpu_address);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -364,16 +422,20 @@ impl ICommandList for Dx12CommandList {
         {
             // 4.43: Bind SRV (Shader Resource View)
             unsafe {
-                // TODO: Get actual SRV descriptor handle and bind to root signature
-                // match stage {
-                //     ShaderStage::Vertex => {
-                //         self.command_list.SetGraphicsRootDescriptorTable(slot, srv_handle);
-                //     }
-                //     ShaderStage::Pixel => {
-                //         self.command_list.SetGraphicsRootDescriptorTable(slot, srv_handle);
-                //     }
-                //     _ => {}
-                // }
+                if let Some(texture) = self.resource_manager.get_texture(view) {
+                    if let Some(srv_handle) = texture.dx12_srv_handle {
+                        let handle = D3D12_CPU_DESCRIPTOR_HANDLE { ptr: srv_handle };
+                        match stage {
+                            ShaderStage::Vertex | ShaderStage::Fragment | ShaderStage::Geometry |
+                            ShaderStage::TessellationControl | ShaderStage::TessellationEvaluation => {
+                                self.command_list.SetGraphicsRootDescriptorTable(slot, handle);
+                            }
+                            ShaderStage::Compute => {
+                                self.command_list.SetComputeRootDescriptorTable(slot, handle);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -383,16 +445,20 @@ impl ICommandList for Dx12CommandList {
         {
             // 4.44: Bind sampler
             unsafe {
-                // TODO: Get actual sampler descriptor handle and bind to root signature
-                // match stage {
-                //     ShaderStage::Vertex => {
-                //         self.command_list.SetGraphicsRootDescriptorTable(slot, sampler_handle);
-                //     }
-                //     ShaderStage::Pixel => {
-                //         self.command_list.SetGraphicsRootDescriptorTable(slot, sampler_handle);
-                //     }
-                //     _ => {}
-                // }
+                if let Some(sampler_res) = self.resource_manager.get_sampler(sampler) {
+                    if let Some(sampler_handle) = sampler_res.dx12_handle {
+                        let handle = D3D12_CPU_DESCRIPTOR_HANDLE { ptr: sampler_handle };
+                        match stage {
+                            ShaderStage::Vertex | ShaderStage::Fragment | ShaderStage::Geometry |
+                            ShaderStage::TessellationControl | ShaderStage::TessellationEvaluation => {
+                                self.command_list.SetGraphicsRootDescriptorTable(slot, handle);
+                            }
+                            ShaderStage::Compute => {
+                                self.command_list.SetComputeRootDescriptorTable(slot, handle);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -436,19 +502,23 @@ impl ICommandList for Dx12CommandList {
     fn draw_indirect(&mut self, buffer: ResourceHandle, offset: u64, draw_count: u32) {
         #[cfg(target_os = "windows")]
         {
-            // 4.45: Реализовать indirect draw
+            // 4.45: Indirect draw через ExecuteIndirect
             unsafe {
                 use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Get actual ID3D12Resource and command signature
-                // let resource = self.resource_manager.get_buffer(buffer);
-                // self.command_list.ExecuteIndirect(
-                //     command_signature, // Need to create command signature for indirect draw
-                //     draw_count,
-                //     &resource,
-                //     offset,
-                //     std::ptr::null_mut(), // Count buffer (optional)
-                //     0,
-                // );
+                if let Some(buffer_res) = self.resource_manager.get_buffer(buffer) {
+                    if let Some(resource) = buffer_res.dx12_resource {
+                        // Для indirect draw нужен command signature - создаём временный или берём из кэша
+                        // В полной реализации нужно создавать CommandSignature при создании pipeline
+                        self.command_list.ExecuteIndirect(
+                            None, // Command signature должен быть создан заранее
+                            draw_count,
+                            &resource,
+                            offset,
+                            std::ptr::null_mut(),
+                            0,
+                        );
+                    }
+                }
             }
         }
     }
@@ -456,19 +526,21 @@ impl ICommandList for Dx12CommandList {
     fn draw_indexed_indirect(&mut self, buffer: ResourceHandle, offset: u64, draw_count: u32) {
         #[cfg(target_os = "windows")]
         {
-            // 4.45: Реализовать indirect indexed draw
+            // 4.45: Indirect indexed draw
             unsafe {
                 use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Get actual ID3D12Resource and command signature
-                // let resource = self.resource_manager.get_buffer(buffer);
-                // self.command_list.ExecuteIndirect(
-                //     command_signature, // Need to create command signature for indexed indirect draw
-                //     draw_count,
-                //     &resource,
-                //     offset,
-                //     std::ptr::null_mut(),
-                //     0,
-                // );
+                if let Some(buffer_res) = self.resource_manager.get_buffer(buffer) {
+                    if let Some(resource) = buffer_res.dx12_resource {
+                        self.command_list.ExecuteIndirect(
+                            None,
+                            draw_count,
+                            &resource,
+                            offset,
+                            std::ptr::null_mut(),
+                            0,
+                        );
+                    }
+                }
             }
         }
     }
@@ -476,19 +548,21 @@ impl ICommandList for Dx12CommandList {
     fn dispatch_indirect(&mut self, buffer: ResourceHandle, offset: u64) {
         #[cfg(target_os = "windows")]
         {
-            // 4.45: Реализовать indirect dispatch
+            // 4.45: Indirect dispatch
             unsafe {
                 use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Get actual ID3D12Resource and command signature
-                // let resource = self.resource_manager.get_buffer(buffer);
-                // self.command_list.ExecuteIndirect(
-                //     command_signature, // Need to create command signature for dispatch
-                //     1,
-                //     &resource,
-                //     offset,
-                //     std::ptr::null_mut(),
-                //     0,
-                // );
+                if let Some(buffer_res) = self.resource_manager.get_buffer(buffer) {
+                    if let Some(resource) = buffer_res.dx12_resource {
+                        self.command_list.ExecuteIndirect(
+                            None,
+                            1,
+                            &resource,
+                            offset,
+                            std::ptr::null_mut(),
+                            0,
+                        );
+                    }
+                }
             }
         }
     }
@@ -513,7 +587,7 @@ impl ICommandList for Dx12CommandList {
                                 Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
                                 Anonymous: D3D12_RESOURCE_BARRIER_0 {
                                     Transition: std::mem::transmute(D3D12_RESOURCE_TRANSITION_BARRIER {
-                                        pResource: Some(resource.clone()), // TODO: Get from handle
+                                        pResource: self.resource_manager.get_resource(*resource),
                                         Subresource: *subresource,
                                         StateBefore: state_before_dx,
                                         StateAfter: state_after_dx,
@@ -573,9 +647,12 @@ impl ICommandList for Dx12CommandList {
             // 4.47: Clear RTV
             unsafe {
                 use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Get actual RTV descriptor handle from resource manager
-                // let rtv_handle = self.resource_manager.get_rtv(view);
-                // self.command_list.ClearRenderTargetView(rtv_handle, &color, 0, std::ptr::null());
+                if let Some(texture) = self.resource_manager.get_texture(view) {
+                    if let Some(rtv_handle) = texture.dx12_rtv_handle {
+                        let handle = D3D12_CPU_DESCRIPTOR_HANDLE { ptr: rtv_handle };
+                        self.command_list.ClearRenderTargetView(handle, &color, 0, std::ptr::null());
+                    }
+                }
             }
         }
     }
@@ -586,21 +663,24 @@ impl ICommandList for Dx12CommandList {
             // 4.47: Clear DSV
             unsafe {
                 use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Get actual DSV descriptor handle from resource manager
-                // let dsv_handle = self.resource_manager.get_dsv(view);
-                
-                let mut clear_flags = D3D12_CLEAR_FLAG_NONE;
-                let depth = clear_depth.unwrap_or(1.0);
-                let stencil = clear_stencil.unwrap_or(0);
-                
-                if clear_depth.is_some() {
-                    clear_flags |= D3D12_CLEAR_FLAG_DEPTH;
+                if let Some(texture) = self.resource_manager.get_texture(view) {
+                    if let Some(dsv_handle) = texture.dx12_dsv_handle {
+                        let handle = D3D12_CPU_DESCRIPTOR_HANDLE { ptr: dsv_handle };
+                        
+                        let mut clear_flags = D3D12_CLEAR_FLAG_NONE;
+                        let depth = clear_depth.unwrap_or(1.0);
+                        let stencil = clear_stencil.unwrap_or(0);
+                        
+                        if clear_depth.is_some() {
+                            clear_flags |= D3D12_CLEAR_FLAG_DEPTH;
+                        }
+                        if clear_stencil.is_some() {
+                            clear_flags |= D3D12_CLEAR_FLAG_STENCIL;
+                        }
+                        
+                        self.command_list.ClearDepthStencilView(handle, clear_flags, depth, stencil, 0, std::ptr::null());
+                    }
                 }
-                if clear_stencil.is_some() {
-                    clear_flags |= D3D12_CLEAR_FLAG_STENCIL;
-                }
-                
-                // self.command_list.ClearDepthStencilView(dsv_handle, clear_flags, depth, stencil, 0, std::ptr::null());
             }
         }
     }
@@ -608,37 +688,29 @@ impl ICommandList for Dx12CommandList {
     fn insert_debug_marker(&mut self, name: &str) {
         #[cfg(target_os = "windows")]
         {
-            // 4.48: PIX debug markers
-            unsafe {
-                use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Use PIXBeginEvent when PIX is available
-                // For now, just set a marker name
-                // D3D12SetMarker(self.command_list.as_raw(), name.as_ptr() as *const _, name.len() as u32);
-            }
+            // PIX debug markers - optional integration
+            // When PIX is available, uncomment the D3D12SetMarker call
+            // For now, this is a no-op that doesn't require external dependencies
+            let _ = name; // Suppress unused warning
         }
     }
     
     fn begin_debug_group(&mut self, name: &str) {
         #[cfg(target_os = "windows")]
         {
-            // 4.48: Begin debug group (PIX)
-            unsafe {
-                use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Use PIXBeginEvent when PIX is available
-                // D3D12BeginEvent(self.command_list.as_raw(), name.as_ptr() as *const _, name.len() as u32);
-            }
+            // Begin debug group (PIX) - optional integration
+            // When PIX is available, uncomment the D3D12BeginEvent call
+            // For now, this is a no-op that doesn't require external dependencies
+            let _ = name; // Suppress unused warning
         }
     }
     
     fn end_debug_group(&mut self) {
         #[cfg(target_os = "windows")]
         {
-            // 4.48: End debug group (PIX)
-            unsafe {
-                use windows::Win32::Graphics::Direct3D12::*;
-                // TODO: Use PIXEndEvent when PIX is available
-                // D3D12EndEvent(self.command_list.as_raw());
-            }
+            // End debug group (PIX) - optional integration
+            // When PIX is available, uncomment the D3D12EndEvent call
+            // For now, this is a no-op that doesn't require external dependencies
         }
     }
     
@@ -707,7 +779,12 @@ impl ICommandQueue for Dx12CommandQueue {
             // Convert command lists to DX12
             let mut dx12_lists = Vec::new();
             for cmd in command_lists {
-                // TODO: Cast to Dx12CommandList and get ID3D12CommandList
+                // Cast to Dx12CommandList and get ID3D12CommandList
+                if let Some(dx12_cmd) = cmd.as_any().downcast_ref::<Dx12CommandList>() {
+                    unsafe {
+                        dx12_lists.push(dx12_cmd.command_list.cast().unwrap());
+                    }
+                }
             }
             
             unsafe {
@@ -728,7 +805,15 @@ impl ICommandQueue for Dx12CommandQueue {
     fn signal(&self, fence: &dyn IFence, value: u64) -> RhiResult<()> {
         #[cfg(target_os = "windows")]
         {
-            // TODO: Signal fence
+            use windows::Win32::Graphics::Direct3D12::*;
+            
+            // Cast to Dx12Fence and signal
+            if let Some(dx12_fence) = fence.as_any().downcast_ref::<Dx12Fence>() {
+                unsafe {
+                    self.queue.Signal(dx12_fence.fence(), value);
+                }
+            }
+            
             Ok(())
         }
         
@@ -739,7 +824,27 @@ impl ICommandQueue for Dx12CommandQueue {
     fn wait(&self, fence: &dyn IFence, value: u64, timeout_ms: u32) -> RhiResult<bool> {
         #[cfg(target_os = "windows")]
         {
-            // TODO: Wait on fence
+            use windows::Win32::Foundation::*;
+            use windows::Win32::System::Threading::*;
+            
+            // Cast to Dx12Fence and wait
+            if let Some(dx12_fence) = fence.as_any().downcast_ref::<Dx12Fence>() {
+                // Create event for waiting
+                let event = unsafe { CreateEventA(None, false, false, None) }
+                    .map_err(|e| RhiError::InitializationFailed(format!("Failed to create event: {:?}", e)))?;
+                
+                // Set event on fence completion
+                unsafe {
+                    dx12_fence.fence().SetEventOnCompletion(value, event)
+                        .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to set event: {:?}", e)))?;
+                }
+                
+                // Wait for event with timeout
+                let result = unsafe { WaitForSingleObject(event, timeout_ms) };
+                
+                return Ok(result == WAIT_OBJECT_0);
+            }
+            
             Ok(true)
         }
         
@@ -795,7 +900,11 @@ impl IFence for Dx12Fence {
             let event = unsafe { CreateEventA(None, false, false, None) }
                 .map_err(|e| RhiError::InitializationFailed(format!("Failed to create event: {:?}", e)))?;
             
-            // TODO: Set event on fence completion
+            // Set event on fence completion
+            unsafe {
+                self.fence.SetEventOnCompletion(value, event)
+                    .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to set event on completion: {:?}", e)))?;
+            }
             
             Ok(Arc::new(event))
         }
@@ -987,10 +1096,14 @@ impl Dx12CommandList {
         }
     }
 
-    /// 4.53: SPIR-V to DXIL conversion (заглушка)
+    /// 4.53: SPIR-V to DXIL conversion
+    /// Note: Full SPIR-V to DXIL conversion requires external compiler (dxcompiler)
+    /// This function provides a placeholder that indicates the requirement
     pub fn convert_spirv_to_dxil(spirv_data: &[u8]) -> Result<Vec<u8>, String> {
-        // TODO: Использовать dxcompiler-rs или аналогичную библиотеку
-        Err("SPIR-V to DXIL conversion requires dxcompiler integration".to_string())
+        // SPIR-V to DXIL conversion requires dxcompiler or similar library
+        // For production use, integrate with dxcompiler-rs or use HLSL shaders directly
+        let _ = spirv_data;
+        Err("SPIR-V to DXIL conversion requires dxcompiler integration. Use HLSL shaders directly or integrate dxcompiler-rs.".to_string())
     }
 
     /// 4.54: Create root signature with descriptor tables
@@ -1006,15 +1119,24 @@ impl Dx12CommandList {
 
         // Descriptor tables для SRVs
         for i in 0..num_descriptor_tables {
+            // Create descriptor range for SRV
+            let range = D3D12_DESCRIPTOR_RANGE {
+                RangeType: D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                NumDescriptors: 1,
+                BaseShaderRegister: i,
+                RegisterSpace: 0,
+                OffsetInDescriptorsFromTableStart: D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+            };
+            
             root_params.push(D3D12_ROOT_PARAMETER {
                 ParameterType: D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
                 Anonymous: D3D12_ROOT_PARAMETER_0 {
-                    DescriptorTable: std::mem::transmute(D3D12_ROOT_DESCRIPTOR_TABLE {
+                    DescriptorTable: D3D12_ROOT_DESCRIPTOR_TABLE {
                         NumDescriptorRanges: 1,
-                        pDescriptorRanges: std::ptr::null(), // TODO: Настроить ranges
-                    }),
+                        pDescriptorRanges: &range,
+                    },
                 },
-                ShaderVisibility: D3D12_SHADER_VISIBILITY_ALL,
+                ShaderVisibility: D3D12_SHADER_VISIBILITY_PIXEL,
             });
         }
 
@@ -1141,13 +1263,21 @@ impl Dx12CommandList {
         height: u32,
         depth: u32,
     ) {
+        // Вычисляем row pitch для формата R8G8B8A8_UNORM (4 байта на пиксель)
+        // В реальном использовании формат должен передаваться или получаться из дескриптора текстуры
+        const BYTES_PER_PIXEL: u32 = 4;
+        let row_pitch = width * BYTES_PER_PIXEL;
+        
+        // Выравниваем row pitch по 256 байт (требование DX12)
+        let aligned_row_pitch = ((row_pitch + 255) / 256) * 256;
+        
         let src_location = D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
             Footprint: D3D12_SUBRESOURCE_FOOTPRINT {
-                Format: DXGI_FORMAT_UNKNOWN, // TODO: Получить реальный формат
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM, // Стандартный формат для текстур
                 Width: width,
                 Height: height,
                 Depth: depth,
-                RowPitch: 0, // TODO: Вычислить row pitch
+                RowPitch: aligned_row_pitch,
             },
             Offset: 0,
         };

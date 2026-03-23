@@ -33,8 +33,11 @@ impl Dx12Shader {
         let bytecode = if Self::is_dxil(&desc.source) {
             desc.source.clone()
         } else if Self::is_spirv(&desc.source) {
-            // TODO: Convert SPIR-V to DXIL using dxcompiler
-            return Err(RhiError::Unsupported("SPIR-V to DXIL conversion not yet implemented".to_string()));
+            // SPIR-V не поддерживается напрямую в DX12 без конвертации
+            // Для кросс-платформенной совместимости рекомендуется использовать HLSL или DXIL
+            return Err(RhiError::Unsupported(
+                "SPIR-V shaders require conversion to DXIL. Please use HLSL source or pre-compiled DXIL for DX12 backend.".to_string()
+            ));
         } else {
             // Assume HLSL source, compile it
             Self::compile_hlsl(&desc.source, &desc.entry_point, desc.stage)?

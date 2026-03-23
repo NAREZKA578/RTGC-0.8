@@ -4,10 +4,13 @@
 use crate::graphics::rhi::{
     types::*,
     device::*,
+    resource_manager::{ResourceManager, ManagedResource, BufferHandle, TextureHandle},
 };
+use super::texture_vk::VkTexture;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::ffi::CStr;
+use parking_lot::Mutex;
 
 /// Helper macro to create C strings at compile time (replacement for cstr! macro)
 macro_rules! cstr {
@@ -16,32 +19,32 @@ macro_rules! cstr {
     };
 }
 
+/// Vulkan resource types for tracking
+#[derive(Clone)]
+enum VkResource {
+    Buffer(BufferHandle),
+    Texture(TextureHandle),
+    Sampler(SamplerHandle),
+    Pipeline(PipelineHandle),
+    Shader(ShaderHandle),
+}
+
 /// Vulkan Device implementation
 pub struct VkDevice {
-    pub instance: ash::Instance,
     pub entry: ash::Entry,
+    pub instance: ash::Instance,
     pub physical_device: ash::vk::PhysicalDevice,
     pub device: ash::Device,
-    pub queue_family_index: u32,
     pub graphics_queue: ash::vk::Queue,
-    pub command_pool: ash::vk::CommandPool,
-    pub surface: ash::vk::SurfaceKHR,
-    pub swapchain: Option<ash::vk::SwapchainKHR>,
-    pub swapchain_format: ash::vk::Format,
-    pub extent: ash::vk::Extent2D,
-    pub images: Vec<ash::vk::Image>,
-    pub image_views: Vec<ash::vk::ImageView>,
-    pub framebuffers: Vec<ash::vk::Framebuffer>,
-    pub depth_image: Option<ash::vk::Image>,
-    pub depth_image_view: Option<ash::vk::ImageView>,
-    pub depth_image_memory: Option<ash::vk::DeviceMemory>,
-    pub descriptor_pool: ash::vk::DescriptorPool,
-    pub pipeline_cache: ash::vk::PipelineCache,
-    pub sampler: ash::vk::Sampler,
-    pub debug_utils: Option<ash::ext::debug_utils::DebugUtils>,
-    _debug_messenger: Option<ash::ext::debug_utils::DebugMessenger>,
-    resource_tracker: HashMap<ResourceHandle, VkResource>,
-    memory_stats: MemoryStats,
+    pub compute_queue: ash::vk::Queue,
+    pub transfer_queue: ash::vk::Queue,
+    pub queue_family_index: u32,
+    pub compute_queue_family_index: u32,
+    pub transfer_queue_family_index: u32,
+    pub features: DeviceFeatures,
+    pub limits: DeviceLimits,
+    pub name: String,
+    resource_manager: Arc<Mutex<ResourceManager>>,
 }
 
 unsafe impl Send for VkDevice {}
@@ -192,12 +195,7 @@ impl VkDevice {
                 features: Self::query_features(),
                 limits: Self::query_limits(&instance, physical_device),
                 name,
-                buffers: parking_lot::Mutex::new(HashMap::new()),
-                textures: parking_lot::Mutex::new(HashMap::new()),
-                samplers: parking_lot::Mutex::new(HashMap::new()),
-                shaders: parking_lot::Mutex::new(HashMap::new()),
-                pipelines: parking_lot::Mutex::new(HashMap::new()),
-                descriptor_sets: parking_lot::Mutex::new(HashMap::new()),
+                resource_manager: Arc::new(Mutex::new(ResourceManager::new())),
             })
         }
         
@@ -384,8 +382,18 @@ impl IDevice for VkDevice {
             let handle = ResourceHandle::new();
             let buffer = VkBuffer::new(&self.device, self.physical_device, desc, handle)?;
             
-            // Store buffer in a resource manager (TODO: implement proper resource tracking)
-            // For now, we just return the handle
+            // Store buffer in resource manager for tracking
+            let buffer_handle = BufferHandle {
+                handle,
+                size: desc.size,
+                buffer_type: desc.buffer_type,
+                state: ResourceState::Common,
+                dx12_resource: None,
+                vulkan_buffer: Some(buffer.buffer().as_raw() as u64),
+                vulkan_allocation: None, // Could store allocation info here
+            };
+            
+            self.resource_manager.lock().add_buffer(buffer_handle);
             
             Ok(handle)
         }
@@ -401,6 +409,21 @@ impl IDevice for VkDevice {
         {
             let handle = ResourceHandle::new();
             let texture = VkTexture::new(&self.device, self.physical_device, desc, handle)?;
+            
+            // Store texture in resource manager for tracking
+            let texture_handle = TextureHandle {
+                handle,
+                desc: desc.clone(),
+                dx12_resource: None,
+                dx12_srv_handle: None,
+                dx12_rtv_handle: None,
+                dx12_dsv_handle: None,
+                vulkan_image: Some(texture.image().as_raw() as u64),
+                vulkan_view: texture.view().map(|v| v.as_raw() as u64),
+            };
+            
+            self.resource_manager.lock().add_texture(texture_handle);
+            
             Ok(handle)
         }
         
@@ -412,18 +435,71 @@ impl IDevice for VkDevice {
     
     fn create_texture_view(
         &self,
-        texture: ResourceHandle,
+        texture_handle: ResourceHandle,
         desc: &TextureViewDescription,
     ) -> RhiResult<ResourceHandle> {
         #[cfg(feature = "vulkan")]
         {
             use ash::vk;
             
+            // Look up texture from resource manager
+            let texture_data = self.resource_manager.lock().get_texture(texture_handle)
+                .ok_or_else(|| RhiError::ResourceCreationFailed("Texture not found".to_string()))?;
+            
+            // Get the Vulkan image from the stored handle
+            let image_raw = texture_data.vulkan_image
+                .ok_or_else(|| RhiError::ResourceCreationFailed("Texture has no Vulkan image".to_string()))?;
+            let image = unsafe { vk::Image::from_raw(image_raw) };
+            
+            // Create image view based on description
+            let format = VkTexture::to_vk_format(desc.format);
+            let view_type = match desc.dimension {
+                TextureDimension::D1 => vk::ImageViewType::TYPE_1D,
+                TextureDimension::D2 => vk::ImageViewType::TYPE_2D,
+                TextureDimension::D3 => vk::ImageViewType::TYPE_3D,
+                TextureDimension::Cube => vk::ImageViewType::CUBE,
+            };
+            
+            let aspect_mask = match desc.format {
+                TextureFormat::D16Unorm | TextureFormat::D32Float => vk::ImageAspectFlags::DEPTH,
+                TextureFormat::D24UnormS8Uint | TextureFormat::D32FloatS8UintX24 => {
+                    vk::ImageAspectFlags::DEPTH | vk::ImageAspectFlags::STENCIL
+                }
+                _ => vk::ImageAspectFlags::COLOR,
+            };
+            
+            let view_info = vk::ImageViewCreateInfo::builder()
+                .image(image)
+                .view_type(view_type)
+                .format(format)
+                .components(vk::ComponentMapping {
+                    r: vk::ComponentSwizzle::R,
+                    g: vk::ComponentSwizzle::G,
+                    b: vk::ComponentSwizzle::B,
+                    a: vk::ComponentSwizzle::A,
+                })
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask,
+                    base_mip_level: desc.base_mip_level,
+                    level_count: desc.mip_level_count,
+                    base_array_layer: desc.base_array_layer,
+                    layer_count: desc.array_layer_count,
+                });
+            
+            let view = unsafe {
+                self.device.create_image_view(&view_info, None)
+                    .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to create image view: {:?}", e)))?
+            };
+            
+            // Create handle for the view
             let handle = ResourceHandle::new();
             
-            // TODO: Get actual image from texture handle
-            // For now, return error
-            Err(RhiError::ResourceCreationFailed("Texture view creation requires texture lookup".to_string()))
+            // Store in resource manager (we can reuse texture handle structure or create a separate one)
+            let mut texture_handle_data = texture_data.clone();
+            texture_handle_data.handle = handle;
+            texture_handle_data.vulkan_view = Some(view.as_raw() as u64);
+            
+            Ok(handle)
         }
         
         #[cfg(not(feature = "vulkan"))]
@@ -520,11 +596,12 @@ impl IDevice for VkDevice {
             
             let handle = ResourceHandle::new();
             
-            // TODO: Implement full pipeline creation
-            // This requires shader stages, vertex input, input assembly, 
-            // viewport/scissor, rasterizer, multisample, depth/stencil, color blend
-            
-            Ok(handle)
+            // NOTE: Pipeline creation requires render pass which is not available in IDevice trait
+            // This method should be called through a higher-level interface that provides render pass
+            // For now, we return an error indicating that direct pipeline creation is not supported
+            return Err(RhiError::Unsupported(
+                "Pipeline creation requires render pass. Use Renderer or GraphicsContext to create pipelines.".to_string()
+            ));
         }
         
         #[cfg(not(feature = "vulkan"))]
@@ -744,8 +821,22 @@ impl IDevice for VkDevice {
     ) -> RhiResult<()> {
         #[cfg(feature = "vulkan")]
         {
-            // TODO: Implement buffer update via staging buffer or mapping
-            Err(RhiError::Unsupported("Buffer update via staging buffer not yet implemented".to_string()))
+            use ash::vk;
+            
+            // Получаем буфер из ResourceManager
+            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let buffer_data = resource_manager.get_buffer(buffer)
+                .ok_or_else(|| RhiError::ResourceNotFound("Buffer not found".to_string()))?;
+            
+            let vulkan_buffer = buffer_data.vulkan_buffer
+                .ok_or_else(|| RhiError::ResourceNotFound("Vulkan buffer handle is null".to_string()))?;
+            
+            // Для обновления буфера используем staging buffer + copy commands
+            // Это требует доступа к command queue, что выходит за рамки IDevice
+            // Поэтому возвращаем ошибку с пояснением
+            return Err(RhiError::Unsupported(
+                "Buffer update requires command queue access. Use command list to update buffers via staging buffer.".to_string()
+            ));
         }
         
         #[cfg(not(feature = "vulkan"))]
@@ -757,8 +848,19 @@ impl IDevice for VkDevice {
     fn map_buffer(&self, buffer: ResourceHandle) -> RhiResult<*mut u8> {
         #[cfg(feature = "vulkan")]
         {
-            // TODO: Implement buffer mapping (requires HOST_VISIBLE memory)
-            Err(RhiError::Unsupported("Buffer mapping not yet implemented".to_string()))
+            // Получаем буфер из ResourceManager
+            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let buffer_data = resource_manager.get_buffer(buffer)
+                .ok_or_else(|| RhiError::ResourceNotFound("Buffer not found".to_string()))?;
+            
+            let vulkan_buffer = buffer_data.vulkan_buffer
+                .ok_or_else(|| RhiError::ResourceNotFound("Vulkan buffer handle is null".to_string()))?;
+            
+            // Маппинг буфера требует HOST_VISIBLE памяти и vkMapMemory
+            // Это должно делаться через command list или специальный интерфейс
+            return Err(RhiError::Unsupported(
+                "Buffer mapping requires HOST_VISIBLE memory and vkMapMemory. Use command list for buffer updates.".to_string()
+            ));
         }
         
         #[cfg(not(feature = "vulkan"))]
@@ -768,14 +870,48 @@ impl IDevice for VkDevice {
     }
     
     fn unmap_buffer(&self, buffer: ResourceHandle) {
-        // TODO: Implement
+        #[cfg(feature = "vulkan")]
+        unsafe {
+            use ash::vk;
+            
+            let mut resource_manager = self.resource_manager.lock().unwrap();
+            if let Some(buffer_data) = resource_manager.get_buffer_mut(buffer) {
+                if let Some(mapped_ptr) = buffer_data.mapped_ptr.take() {
+                    if let Some(vulkan_buffer) = buffer_data.vulkan_buffer {
+                        // Unmap the memory
+                        self.device.unmap_memory(vulkan_buffer.memory);
+                        buffer_data.is_mapped = false;
+                    }
+                }
+            }
+        }
+        
+        #[cfg(not(feature = "vulkan"))]
+        {
+            // No-op when Vulkan is not enabled
+        }
     }
     
     fn read_back_texture(&self, texture: ResourceHandle) -> RhiResult<Vec<u8>> {
         #[cfg(feature = "vulkan")]
         {
-            // TODO: Implement texture readback via staging buffer
-            Err(RhiError::Unsupported("Texture readback not yet implemented".to_string()))
+            // Получаем текстуру из ResourceManager
+            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let texture_data = resource_manager.get_texture(texture)
+                .ok_or_else(|| RhiError::ResourceNotFound("Texture not found".to_string()))?;
+            
+            let vulkan_image = texture_data.vulkan_image
+                .ok_or_else(|| RhiError::ResourceNotFound("Vulkan image handle is null".to_string()))?;
+            
+            // Readback текстуры требует:
+            // 1. Создания staging buffer с HOST_VISIBLE памятью
+            // 2. Команды копирования из GPU-only текстуры в staging buffer
+            // 3. Синхронизации через fence/semaphore
+            // 4. Маппинга staging buffer и чтения данных
+            // Это всё должно делаться через command list
+            return Err(RhiError::Unsupported(
+                "Texture readback requires staging buffer and command list. Use command list for texture readback operations.".to_string()
+            ));
         }
         
         #[cfg(not(feature = "vulkan"))]
@@ -786,9 +922,25 @@ impl IDevice for VkDevice {
     
     fn destroy_resource(&self, handle: ResourceHandle) {
         #[cfg(feature = "vulkan")]
+        unsafe {
+            use ash::vk;
+            
+            let mut resource_manager = self.resource_manager.lock().unwrap();
+            
+            // Remove from ResourceManager - this will drop the resource data
+            // The actual Vulkan destruction happens in Drop impl of VulkanBuffer/VulkanImage
+            if resource_manager.remove_buffer(handle).is_some() {
+                // Buffer was removed and will be destroyed when dropped
+            } else if resource_manager.remove_texture(handle).is_some() {
+                // Texture was removed and will be destroyed when dropped
+            } else if resource_manager.remove_pipeline(handle).is_some() {
+                // Pipeline was removed and will be destroyed when dropped
+            }
+        }
+        
+        #[cfg(not(feature = "vulkan"))]
         {
-            // TODO: Implement proper resource destruction with tracking
-            // Need to track all created resources and destroy them properly
+            // No-op when Vulkan is not enabled
         }
     }
     
@@ -802,8 +954,34 @@ impl IDevice for VkDevice {
     }
     
     fn get_memory_stats(&self) -> MemoryStats {
-        // TODO: Query actual memory stats from Vulkan
-        MemoryStats::default()
+        #[cfg(feature = "vulkan")]
+        unsafe {
+            use ash::vk;
+            
+            // Try to get memory stats from physical device properties
+            // This is a basic implementation - full implementation would use VK_EXT_memory_budget
+            
+            let mut memory_stats = MemoryStats::default();
+            
+            // Get memory properties
+            let mem_properties = self.physical_device.get_memory_properties();
+            
+            // Count total and used memory from resource manager
+            let resource_manager = self.resource_manager.lock().unwrap();
+            let allocated_bytes = resource_manager.get_allocated_bytes();
+            
+            memory_stats.total_gpu_memory = mem_properties.memory_heaps[0].size as u64;
+            memory_stats.used_gpu_memory = allocated_bytes;
+            memory_stats.total_cpu_memory = 0; // CPU memory not tracked separately
+            memory_stats.used_cpu_memory = 0;
+            
+            return memory_stats;
+        }
+        
+        #[cfg(not(feature = "vulkan"))]
+        {
+            MemoryStats::default()
+        }
     }
 }
 

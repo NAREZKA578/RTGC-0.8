@@ -28,12 +28,23 @@ impl Winch {
     }
 
     /// Выстрелить тросом в направлении - использует physics.raycast()
-    pub fn shoot(&mut self, origin: Vector3<f32>, direction: Vector3<f32>, _physics_world: &PhysicsWorld) -> bool {
-        // Заглушка - упрощено для компиляции
-        self.target_point = Some(origin);
-        self.current_length = 10.0;
+    pub fn shoot(&mut self, origin: Vector3<f32>, direction: Vector3<f32>, physics_world: &PhysicsWorld) -> bool {
+        // Perform raycast to find hit point
+        let ray = Ray::new(origin, direction);
+        
+        if let Some(hit) = physics_world.raycast(&ray, self.max_length) {
+            // Hit something - attach cable
+            self.target_point = Some(hit.point);
+            self.current_length = (hit.point - origin).norm();
+            self.is_active = true;
+            return true;
+        }
+        
+        // No hit - extend to max length
+        self.target_point = Some(origin + direction.normalize() * self.max_length);
+        self.current_length = self.max_length;
         self.is_active = true;
-        true
+        false
     }
 
     /// Начать подмотку

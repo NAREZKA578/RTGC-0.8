@@ -179,7 +179,7 @@ impl VkTexture {
     }
     
     #[cfg(feature = "vulkan")]
-    fn to_vk_format(format: TextureFormat) -> vk::Format {
+    pub fn to_vk_format(format: TextureFormat) -> vk::Format {
         match format {
             TextureFormat::R8Unorm => vk::Format::R8_UNORM,
             TextureFormat::R8G8Unorm => vk::Format::R8G8_UNORM,

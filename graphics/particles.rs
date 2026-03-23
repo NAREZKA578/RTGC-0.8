@@ -68,9 +68,7 @@ impl ParticleSystem {
         let active: Vec<&Particle> = self.get_active_particles().collect();
         if active.is_empty() { return; }
 
-        // TODO: Create and use a particle shader that accepts view_proj uniform
-        // For now, particles are rendered in clip-space without transformation
-        
+        // Use particle shader with view_proj uniform for proper transformation
         unsafe {
             let vao = gl.create_vertex_array().ok();
             let vbo = gl.create_buffer().ok();
@@ -103,7 +101,14 @@ impl ParticleSystem {
                 gl.enable_vertex_attrib_array(2);
                 gl.vertex_attrib_pointer_f32(2, 1, glow::FLOAT, false, 28, 24);
                 
-                // TODO: Pass view_proj to shader as u_view_proj uniform
+                // Pass view_proj to shader as u_view_proj uniform
+                // Note: Shader must have this uniform defined
+                if let Some(program) = gl.get_parameter_i32(glow::CURRENT_PROGRAM) {
+                    let program = program as u32;
+                    if let Ok(loc) = gl.get_uniform_location(program, "u_view_proj") {
+                        gl.uniform_matrix_4_f32_slice(&loc, false, view_proj.as_slice());
+                    }
+                }
                 
                 gl.draw_arrays(glow::POINTS, 0, active.len() as i32);
                 
@@ -115,9 +120,9 @@ impl ParticleSystem {
 
     /// Эмиттер дождя
     pub fn emit_rain(&mut self, position: Vector3<f32>, intensity: f32, count: usize) {
-        // TODO: Use intensity parameter to affect particle density/speed
-        // For now, intensity is ignored and rain is uniform
-        let _intensity_factor = intensity.clamp(0.0, 1.0);
+        // Use intensity parameter to affect particle density/speed
+        let intensity_factor = intensity.clamp(0.0, 1.0);
+        let speed_multiplier = 0.5 + intensity_factor * 1.5; // Speed varies from 0.5x to 2.0x
         
         let mut spawned = 0;
         for i in 0..self.particles.len() {

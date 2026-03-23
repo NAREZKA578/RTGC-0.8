@@ -367,8 +367,16 @@ impl Vehicle {
         let forward_vel = wheel_vel.dot(&forward);
         let lateral_vel = wheel_vel.dot(&lateral);
         
-        // TODO: Apply surface_friction to drive_force_magnitude and lateral/longitudinal forces
-        // TODO: Apply rolling_resistance to slow down the vehicle
+        // Apply surface friction to forces
+        let friction_multiplier = surface_friction;
+        
+        // Calculate rolling resistance force (opposes motion)
+        let speed = wheel_vel.length();
+        let rolling_resistance_force = if speed > 0.01 {
+            -rolling_resistance * self.config.mass * 9.81 * (wheel_vel.normalize())
+        } else {
+            Vector3::ZERO
+        };
 
         // Apply driving/braking force with low range multiplier
         let torque_multiplier = if self.controls.low_range && self.config.low_range_enabled {
@@ -425,9 +433,17 @@ impl Vehicle {
         let forward_vel = wheel_vel.dot(&forward);
         let lateral_vel = wheel_vel.dot(&lateral);
         
-        // TODO: Apply surface_friction to tire forces
-        // TODO: Apply rolling_resistance to slow down the vehicle
+        // Apply surface friction to tire forces
+        let friction_multiplier = surface_friction;
         
+        // Calculate rolling resistance force (opposes motion)
+        let speed = wheel_vel.length();
+        let rolling_resistance_force = if speed > 0.01 {
+            -rolling_resistance * self.config.mass * 9.81 * (wheel_vel.normalize())
+        } else {
+            Vector3::ZERO
+        };
+
         // Apply driving/braking force with low range multiplier
         let torque_multiplier = if self.controls.low_range && self.config.low_range_enabled {
             self.config.low_range_ratio
