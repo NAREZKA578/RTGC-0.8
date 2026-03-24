@@ -3,6 +3,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use tracing;
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
@@ -42,7 +43,7 @@ impl ThreadPool {
             let _ = job_sender.send(());
         });
         if let Err(e) = self.sender.send(job) {
-            log::error!("Failed to send job to thread pool: {}", e);
+            tracing::error!("Failed to send job to thread pool: {}", e);
             self.active_jobs.fetch_sub(1, Ordering::SeqCst);
             return JoinHandle { receiver: job_receiver, active_jobs: None };
         }

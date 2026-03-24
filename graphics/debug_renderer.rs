@@ -1,5 +1,6 @@
 use nalgebra::{Vector3, Matrix4};
 use glow::{Context, HasContext};
+use tracing;
 
 /// Отладочный рендерер для визуализации физики
 pub struct DebugRenderer {
@@ -107,7 +108,7 @@ void main() {
         // Ensure shader is initialized
         if self.shader.is_none() {
             if let Err(e) = self.init_gl(gl) {
-                log::error!("Failed to initialize debug renderer shader: {}", e);
+                tracing::error!("Failed to initialize debug renderer shader: {}", e);
                 return;
             }
         }

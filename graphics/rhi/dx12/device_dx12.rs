@@ -156,7 +156,7 @@ impl Dx12Device {
             let adapter: IDXGIAdapter4 = unsafe { factory.EnumAdapterByGpuPreference(adapter_index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE) }
                 .map_err(|_| RhiError::InitializationFailed("No suitable GPU adapter found".to_string()))?;
             
-            let desc = unsafe { adapter.GetDesc1() }.unwrap();
+            let desc = unsafe { adapter.GetDesc1() }.map_err(|e| RhiError::InitializationFailed(format!("Failed to get adapter description: {:?}", e)))?;
             
             // Skip software adapters
             if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0 {
@@ -762,7 +762,9 @@ impl IDevice for Dx12Device {
         // Create a fence and wait for it
         let fence = self.create_fence(0)?;
         unsafe {
-            self.command_queue.Signal(&fence.as_any().downcast_ref::<Dx12Fence>().unwrap().fence, 1)
+            let dx12_fence = fence.as_any().downcast_ref::<Dx12Fence>()
+                .ok_or_else(|| RhiError::ResourceNotFound("Failed to downcast to Dx12Fence"))?;
+            self.command_queue.Signal(&dx12_fence.fence, 1)
                 .map_err(|e| RhiError::DeviceLost)?;
         }
         
@@ -782,15 +784,18 @@ impl IDevice for Dx12Device {
         
         // Query DXGI adapter for memory stats
         unsafe {
-            let factory: IDXGIFactory4 = CreateDXGIFactory1()
-                .unwrap_or_else(|_| std::mem::zeroed());
+            let factory_result = CreateDXGIFactory1();
+            if factory_result.is_err() {
+                return MemoryStats::default();
+            }
+            let factory: IDXGIFactory4 = factory_result.unwrap_or_else(|_| std::mem::zeroed());
             
             if factory.is_err() {
                 return MemoryStats::default();
             }
             
-            let adapter = self.find_adapter(&factory.unwrap());
-            if let Ok(adapter) = adapter {
+            let adapter_result = self.find_adapter(&factory);
+            if let Ok(adapter) = adapter_result {
                 let mut desc = DXGI_ADAPTER_DESC1::default();
                 if adapter.GetDesc1(&mut desc).is_ok() {
                     return MemoryStats {

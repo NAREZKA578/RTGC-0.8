@@ -3,6 +3,7 @@ use std::sync::Arc;
 use glow::Context;
 use crate::graphics::renderer::{Renderer, MenuState};
 use crate::graphics::rhi::{RhiFactory, RhiConfig, IDevice, GraphicsBackend};
+use tracing;
 
 pub struct GraphicsContext {
     pub renderer: Renderer,
@@ -34,10 +35,10 @@ impl GraphicsContext {
             descriptor_pool_size: 1024,
         };
         
-        log::info!("Initializing RHI with {} backend", config.backend.as_str());
+        tracing::info!("Initializing RHI with {} backend", config.backend.as_str());
         
         let device = RhiFactory::create_device(config.backend)?;
-        log::info!("RHI device created: {}", device.get_device_name());
+        tracing::info!("RHI device created: {}", device.get_device_name());
         
         Ok(device)
     }

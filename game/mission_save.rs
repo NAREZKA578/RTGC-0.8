@@ -489,8 +489,9 @@ mod tests {
     
     #[test]
     fn test_save_load_cycle() {
-        let temp_dir = tempdir().unwrap();
-        let manager = MissionSaveManager::new(temp_dir.path().to_path_buf()).unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp directory");
+        let manager = MissionSaveManager::new(temp_dir.path().to_path_buf())
+            .expect("Failed to create MissionSaveManager");
         
         let player = PlayerProgress {
             player_id: "player1".to_string(),
@@ -503,10 +504,11 @@ mod tests {
             statistics: GameStatistics::default(),
         };
         
-        let save = manager.create_save(0, "Test Save".to_string(), player.clone()).unwrap();
-        manager.save_game(&save).unwrap();
+        let save = manager.create_save(0, "Test Save".to_string(), player.clone())
+            .expect("Failed to create save");
+        manager.save_game(&save).expect("Failed to save game");
         
-        let loaded = manager.load_game(0).unwrap();
+        let loaded = manager.load_game(0).expect("Failed to load game");
         assert_eq!(loaded.player.level, 5);
         assert_eq!(loaded.player.experience, 1500);
     }

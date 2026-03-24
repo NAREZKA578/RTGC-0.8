@@ -216,7 +216,7 @@ impl MissionGenerator {
             let dist = ((player_pos.x - settlement.center.x).powi(2)
                 + (player_pos.z - settlement.center.z).powi(2)).sqrt();
 
-            if best.is_none() || dist < best.unwrap().1 {
+            if best.is_none() || dist < best.map_or(f64::MAX, |(_, d)| d) {
                 best = Some((settlement, dist));
             }
         }

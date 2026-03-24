@@ -6,6 +6,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use nalgebra::Vector3;
 use crate::config::AudioConfig;
+use tracing;
 
 /// Тип для 3D вектора (единый стек с nalgebra)
 pub type Vec3 = Vector3<f32>;
@@ -438,7 +439,7 @@ impl AudioSystem {
 impl Default for AudioSystem {
     fn default() -> Self {
         Self::new().unwrap_or_else(|e| {
-            log::warn!("Failed to initialize audio system: {}, using silent fallback", e);
+            tracing::warn!("Failed to initialize audio system: {}, using silent fallback", e);
             // Create a minimal silent audio system as fallback
             AudioSystem {
                 sources: HashMap::new(),

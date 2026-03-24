@@ -282,7 +282,7 @@ fn rand_float() -> f32 {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos() as f32;
+        .map(|d| d.subsec_nanos() as f32)
+        .unwrap_or(0.0);
     (nanos / 1_000_000_000.0).fract()
 }

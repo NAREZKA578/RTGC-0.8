@@ -6,7 +6,7 @@ use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Textu
 // use crate::graphics::models::{Model as ModelGen, Vertex as ModelVertex}; // нет такого модуля
 use crate::graphics::lod_system::{LodManager, LodObject};
 use crate::graphics::texture_streaming::TextureStreamingSystem;
-use log::warn;
+use tracing::warn;
 
 #[derive(Debug, Clone)]
 pub struct Vertex {

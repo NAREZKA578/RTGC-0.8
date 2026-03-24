@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use nalgebra::Vector3;
+use tracing;
 
 /// Audio configuration
 #[derive(Debug, Clone)]
@@ -104,7 +105,7 @@ impl AudioEngine {
                 Ok(handle)
             }
             Err(e) => {
-                log::warn!("Failed to load sound '{}': {}. Creating silent placeholder.", path, e);
+                tracing::warn!("Failed to load sound '{}': {}. Creating silent placeholder.", path, e);
                 // If loading fails, create a silent placeholder
                 self.loaded_sounds.insert(handle, LoadedSound {
                     samples: vec![0.0f32; 1024],
