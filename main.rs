@@ -10,7 +10,7 @@ use winit::{
 };
 use glow::HasContext;
 use std::time::Instant;
-use log::{error, warn, info};
+use tracing::{error, warn, info};
 
 use rtgc::graphics::GlContext;
 use rtgc::config::{Config, GraphicsConfig};

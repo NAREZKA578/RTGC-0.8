@@ -782,7 +782,7 @@ mod tests {
         
         let pos = ecs.get_component::<Position>(entity);
         assert!(pos.is_some());
-        assert_eq!(pos.unwrap().x, 1.0);
+        assert_eq!(pos.expect("Position component should exist").x, 1.0);
     }
     
     #[test]

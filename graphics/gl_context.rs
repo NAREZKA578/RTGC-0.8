@@ -40,8 +40,8 @@ impl GlContext {
         let (window, gl_config) = DisplayBuilder::new()
             .with_window_attributes(Some(window_attrs))
             .build(event_loop, template, |mut configs| {
-                // Выбираем первую конфигурацию
-                configs.next().unwrap()
+                // Выбираем первую конфигурацию или возвращаем ошибку
+                configs.next().ok_or("No suitable OpenGL config found")?
             })?;
 
         let window = window.ok_or("Не удалось создать окно")?;
@@ -65,8 +65,8 @@ impl GlContext {
         let (raw_width, raw_height): (u32, u32) = window.inner_size().into();
         
         // NonZeroU32 требует значение > 0; при первом создании окно может иметь размер 0
-        let nz_width  = NonZeroU32::new(raw_width).unwrap_or(NonZeroU32::new(1280).unwrap());
-        let nz_height = NonZeroU32::new(raw_height).unwrap_or(NonZeroU32::new(720).unwrap());
+        let nz_width  = NonZeroU32::new(raw_width).unwrap_or_else(|| NonZeroU32::new(1280).expect("Default width must be non-zero"));
+        let nz_height = NonZeroU32::new(raw_height).unwrap_or_else(|| NonZeroU32::new(720).expect("Default height must be non-zero"));
         
         // Используем SurfaceAttributesBuilder вместо default()
         let surface_attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
@@ -91,7 +91,8 @@ impl GlContext {
         };
 
         // Включаем VSync
-        let _ = surface.set_swap_interval(&gl_context, SwapInterval::Wait(NonZeroU32::new(1).unwrap()));
+        let swap_interval = SwapInterval::Wait(NonZeroU32::new(1).expect("Swap interval must be non-zero"));
+        let _ = surface.set_swap_interval(&gl_context, swap_interval);
 
         Ok(Self {
             gl,
@@ -109,8 +110,8 @@ impl GlContext {
         self.height = height;
 
         // glutin 0.32: resize принимает NonZeroU32
-        let nz_w = NonZeroU32::new(width).unwrap_or(NonZeroU32::new(1).unwrap());
-        let nz_h = NonZeroU32::new(height).unwrap_or(NonZeroU32::new(1).unwrap());
+        let nz_w = NonZeroU32::new(width).unwrap_or_else(|| NonZeroU32::new(1).expect("Width must be non-zero"));
+        let nz_h = NonZeroU32::new(height).unwrap_or_else(|| NonZeroU32::new(1).expect("Height must be non-zero"));
         self.surface.resize(&self.gl_context, nz_w, nz_h);
 
         // Обновляем viewport в OpenGL

@@ -782,7 +782,7 @@ impl ICommandQueue for Dx12CommandQueue {
                 // Cast to Dx12CommandList and get ID3D12CommandList
                 if let Some(dx12_cmd) = cmd.as_any().downcast_ref::<Dx12CommandList>() {
                     unsafe {
-                        dx12_lists.push(dx12_cmd.command_list.cast().unwrap());
+                        dx12_lists.push(dx12_cmd.command_list.cast().expect("Failed to cast to ID3D12CommandList"));
                     }
                 }
             }

@@ -7,7 +7,7 @@
 //! - Multiple controller support
 
 use std::collections::HashMap;
-use log::info;
+use tracing::info;
 
 /// Gamepad button enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -279,12 +279,12 @@ mod tests {
         // Update state
         manager.set_button_state(0, GamepadButton::A, true);
         
-        let gamepad = manager.get_gamepad(0).unwrap();
+        let gamepad = manager.get_gamepad(0).expect("Gamepad should exist");
         assert!(gamepad.is_button_pressed(GamepadButton::A));
         
         // Test axis
         manager.set_axis_value(0, GamepadAxis::LeftStickX, 0.5);
-        let gamepad = manager.get_gamepad(0).unwrap();
+        let gamepad = manager.get_gamepad(0).expect("Gamepad should exist");
         assert!(gamepad.get_axis(GamepadAxis::LeftStickX, 0.15).abs() > 0.3);
     }
 }

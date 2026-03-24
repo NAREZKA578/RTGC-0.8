@@ -186,7 +186,7 @@ impl Dx12Texture {
             command_list.Close()?;
             
             // Execute and wait for completion
-            command_queue.ExecuteCommandLists(&[command_list.cast().unwrap()]);
+            command_queue.ExecuteCommandLists(&[command_list.cast().expect("Failed to cast to ID3D12CommandList")]);
         }
         
         Ok(texture)

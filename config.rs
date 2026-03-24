@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use log::{warn, info};
+use tracing::{warn, info};
 
 /// Main configuration structure containing all subsystem configs
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -11,6 +11,7 @@ use std::thread::{self, JoinHandle};
 use std::collections::VecDeque;
 use crossbeam_channel::{bounded, Sender, Receiver, TrySendError};
 use parking_lot::{Mutex, Condvar};
+use tracing;
 
 /// Максимальное количество задач в очереди
 const MAX_QUEUE_SIZE: usize = 4096;
@@ -254,7 +255,7 @@ impl JobSystem {
                             "Unknown panic".to_string()
                         };
 
-                        log::error!("Job '{}' panicked: {}", job_name, error_msg);
+                        tracing::error!("Job '{}' panicked: {}", job_name, error_msg);
 
                         JobResult {
                             id: job_id,
@@ -302,11 +303,11 @@ impl JobSystem {
                 id
             }
             Err(TrySendError::Full(_)) => {
-                log::warn!("Job queue is full, dropping job");
+                tracing::warn!("Job queue is full, dropping job");
                 id
             }
             Err(TrySendError::Disconnected(_)) => {
-                log::error!("Job receiver disconnected");
+                tracing::error!("Job receiver disconnected");
                 id
             }
         }
@@ -341,13 +342,13 @@ impl JobSystem {
                     stats.total_jobs_submitted += 1;
                 }
                 Err(e) => {
-                    log::warn!("Failed to send job: {:?}", e);
+                    tracing::warn!("Failed to send job: {:?}", e);
                 }
             }
         } else {
             // Задача будет отправлена когда зависимости будут выполнены
             // В реальной реализации нужно хранить ожидающие задачи
-            log::debug!("Job {} waiting for dependencies", id);
+            tracing::debug!("Job {} waiting for dependencies", id);
         }
         
         id

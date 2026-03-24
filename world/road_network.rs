@@ -307,8 +307,20 @@ impl RoadNetwork {
         
         // Step 2: Generate roads for each connection
         for (from_id, to_id) in connections {
-            let from = settlements.iter().find(|s| s.id == from_id).unwrap();
-            let to = settlements.iter().find(|s| s.id == to_id).unwrap();
+            let from = match settlements.iter().find(|s| s.id == from_id) {
+                Some(s) => s,
+                None => {
+                    tracing::warn!("Settlement {} not found for road generation", from_id);
+                    continue;
+                }
+            };
+            let to = match settlements.iter().find(|s| s.id == to_id) {
+                Some(s) => s,
+                None => {
+                    tracing::warn!("Settlement {} not found for road generation", to_id);
+                    continue;
+                }
+            };
             
             let road_type = Self::determine_road_type(&from.settlement_type, &to.settlement_type);
             
@@ -545,7 +557,9 @@ impl RoadNetwork {
         }
         
         // Add last point
-        smoothed.push(*waypoints.last().unwrap());
+        if let Some(last) = waypoints.last() {
+            smoothed.push(*last);
+        }
         
         smoothed
     }

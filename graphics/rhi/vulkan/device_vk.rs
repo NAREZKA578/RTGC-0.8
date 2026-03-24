@@ -824,7 +824,7 @@ impl IDevice for VkDevice {
             use ash::vk;
             
             // Получаем буфер из ResourceManager
-            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let mut resource_manager = self.resource_manager.lock().expect("Lock should not be poisoned");
             let buffer_data = resource_manager.get_buffer(buffer)
                 .ok_or_else(|| RhiError::ResourceNotFound("Buffer not found".to_string()))?;
             
@@ -849,7 +849,7 @@ impl IDevice for VkDevice {
         #[cfg(feature = "vulkan")]
         {
             // Получаем буфер из ResourceManager
-            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let mut resource_manager = self.resource_manager.lock().expect("Lock should not be poisoned");
             let buffer_data = resource_manager.get_buffer(buffer)
                 .ok_or_else(|| RhiError::ResourceNotFound("Buffer not found".to_string()))?;
             
@@ -874,7 +874,7 @@ impl IDevice for VkDevice {
         unsafe {
             use ash::vk;
             
-            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let mut resource_manager = self.resource_manager.lock().expect("Lock should not be poisoned");
             if let Some(buffer_data) = resource_manager.get_buffer_mut(buffer) {
                 if let Some(mapped_ptr) = buffer_data.mapped_ptr.take() {
                     if let Some(vulkan_buffer) = buffer_data.vulkan_buffer {
@@ -896,7 +896,7 @@ impl IDevice for VkDevice {
         #[cfg(feature = "vulkan")]
         {
             // Получаем текстуру из ResourceManager
-            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let mut resource_manager = self.resource_manager.lock().expect("Lock should not be poisoned");
             let texture_data = resource_manager.get_texture(texture)
                 .ok_or_else(|| RhiError::ResourceNotFound("Texture not found".to_string()))?;
             
@@ -925,7 +925,7 @@ impl IDevice for VkDevice {
         unsafe {
             use ash::vk;
             
-            let mut resource_manager = self.resource_manager.lock().unwrap();
+            let mut resource_manager = self.resource_manager.lock().expect("Lock should not be poisoned");
             
             // Remove from ResourceManager - this will drop the resource data
             // The actual Vulkan destruction happens in Drop impl of VulkanBuffer/VulkanImage
@@ -967,7 +967,7 @@ impl IDevice for VkDevice {
             let mem_properties = self.physical_device.get_memory_properties();
             
             // Count total and used memory from resource manager
-            let resource_manager = self.resource_manager.lock().unwrap();
+            let resource_manager = self.resource_manager.lock().expect("Lock should not be poisoned");
             let allocated_bytes = resource_manager.get_allocated_bytes();
             
             memory_stats.total_gpu_memory = mem_properties.memory_heaps[0].size as u64;

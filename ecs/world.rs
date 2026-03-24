@@ -208,11 +208,10 @@ impl EcsWorld {
             }
         }
         
-        // Безопасно: мы не модифицируем данные во время итерации
-        entities_with_component.into_iter().map(move |(entity, ptr)| {
-            // SAFETY: ptr получен из Vec и валиден пока Vec не изменяется в этом scope.
-            // Мы уже собрали все указатели до начала итерации, поэтому они остаются валидными.
-            unsafe { (entity, &*ptr) }
+        // Безопасно: используем прямой доступ к данным через хранилище
+        entities_with_component.into_iter().filter_map(move |(entity, _)| {
+            // SAFETY: мы получаем компонент напрямую из хранилища без сырых указателей
+            self.get_component::<T>(entity).map(|c| (entity, c))
         })
     }
     
@@ -329,11 +328,11 @@ mod tests {
         let mut world = EcsWorld::new();
         let entity = world.create_entity();
         
-        world.add_component(entity, Position(1.0, 2.0, 3.0)).unwrap();
+        world.add_component(entity, Position(1.0, 2.0, 3.0)).expect("Failed to add component");
         
         let pos = world.get_component::<Position>(entity);
         assert!(pos.is_some());
-        assert_eq!(pos.unwrap().0, 1.0);
+        assert_eq!(pos.expect("Position component should exist").0, 1.0);
     }
     
     #[test]
@@ -341,14 +340,14 @@ mod tests {
         let mut world = EcsWorld::new();
         let entity = world.create_entity();
         
-        world.add_component(entity, Position(1.0, 2.0, 3.0)).unwrap();
+        world.add_component(entity, Position(1.0, 2.0, 3.0)).expect("Failed to add component");
         
         if let Some(pos) = world.get_component_mut::<Position>(entity) {
             pos.0 = 10.0;
         }
         
         let pos = world.get_component::<Position>(entity);
-        assert_eq!(pos.unwrap().0, 10.0);
+        assert_eq!(pos.expect("Position component should exist").0, 10.0);
     }
     
     #[test]
@@ -356,7 +355,7 @@ mod tests {
         let mut world = EcsWorld::new();
         let entity = world.create_entity();
         
-        world.add_component(entity, Position(1.0, 2.0, 3.0)).unwrap();
+        world.add_component(entity, Position(1.0, 2.0, 3.0)).expect("Failed to add component");
         world.destroy_entity(entity);
         
         assert!(!world.is_alive(entity));

@@ -4,6 +4,7 @@
 use thiserror::Error;
 use std::fmt;
 use std::error::Error;
+use tracing;
 
 /// Main error type for the RTGC engine
 #[derive(Error, Debug)]
@@ -177,12 +178,12 @@ impl<T, E: std::fmt::Display> ResultExt<T> for std::result::Result<T, E> {
 
 /// Error reporting utility
 pub fn report_error(error: &EngineError) {
-    log::error!("Engine Error: {}", error);
+    tracing::error!("Engine Error: {}", error);
     
     // Log error chain
     let mut source = error.source();
     while let Some(err) = source {
-        log::error!("  Caused by: {}", err);
+        tracing::error!("  Caused by: {}", err);
         source = err.source();
     }
 }
@@ -204,7 +205,7 @@ pub fn install_panic_hook() {
             "unknown location".to_string()
         };
         
-        log::error!("Panic at {}: {}", location, message);
+        tracing::error!("Panic at {}: {}", location, message);
         eprintln!("Panic at {}: {}", location, message);
     }));
 }

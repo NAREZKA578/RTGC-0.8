@@ -4,6 +4,7 @@
 use crate::graphics::rhi::device::IDevice;
 use crate::graphics::rhi::types::RhiResult;
 use std::sync::Arc;
+use tracing;
 
 #[cfg(feature = "dx12")]
 use crate::graphics::rhi::dx12_module::Dx12Device;
@@ -50,7 +51,7 @@ impl RhiFactory {
     pub fn create_device(config: &RhiConfig) -> RhiResult<Arc<dyn IDevice>> {
         let selected_backend = Self::select_backend(config.backend)?;
         
-        log::info!("Creating RHI device with backend: {:?}", selected_backend);
+        tracing::info!("Creating RHI device with backend: {:?}", selected_backend);
         
         match selected_backend {
             #[cfg(feature = "dx12")]
@@ -119,7 +120,7 @@ impl RhiFactory {
         #[cfg(feature = "vulkan")]
         {
             if Self::is_vulkan_available() {
-                log::info!("Vulkan backend detected as available");
+                tracing::info!("Vulkan backend detected as available");
                 return Ok(RhiBackend::Vulkan);
             }
         }
@@ -127,7 +128,7 @@ impl RhiFactory {
         #[cfg(all(feature = "dx12", target_os = "windows"))]
         {
             if Self::is_dx12_available() {
-                log::info!("DirectX 12 backend detected as available");
+                tracing::info!("DirectX 12 backend detected as available");
                 return Ok(RhiBackend::Dx12);
             }
         }

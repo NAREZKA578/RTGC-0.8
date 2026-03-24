@@ -4,7 +4,7 @@
 
 use crate::graphics::rhi::types::*;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use parking_lot::RwLock;
 use std::fmt;
 
 /// Resource ID for internal tracking
@@ -168,7 +168,7 @@ impl ResourceManager {
     
     /// Generate a new unique resource handle
     fn generate_handle(&self) -> ResourceHandle {
-        let mut next_id = self.next_id.write().unwrap();
+        let mut next_id = self.next_id.write();
         let handle = ResourceHandle(*next_id);
         *next_id += 1;
         handle
@@ -181,7 +181,7 @@ impl ResourceManager {
         let handle = self.generate_handle();
         buffer.handle = handle;
         
-        let mut buffers = self.buffers.write().unwrap();
+        let mut buffers = self.buffers.write();
         buffers.insert(handle, buffer);
         
         handle
@@ -189,13 +189,13 @@ impl ResourceManager {
     
     /// Get a buffer by handle
     pub fn get_buffer(&self, handle: ResourceHandle) -> Option<BufferHandle> {
-        let buffers = self.buffers.read().unwrap();
+        let buffers = self.buffers.read();
         buffers.get(&handle).cloned()
     }
     
     /// Update buffer state
     pub fn update_buffer_state(&self, handle: ResourceHandle, state: ResourceState) {
-        let mut buffers = self.buffers.write().unwrap();
+        let mut buffers = self.buffers.write();
         if let Some(buffer) = buffers.get_mut(&handle) {
             buffer.state = state;
         }
@@ -203,7 +203,7 @@ impl ResourceManager {
     
     /// Remove a buffer
     pub fn remove_buffer(&self, handle: ResourceHandle) -> Option<BufferHandle> {
-        let mut buffers = self.buffers.write().unwrap();
+        let mut buffers = self.buffers.write();
         buffers.remove(&handle)
     }
     
@@ -214,7 +214,7 @@ impl ResourceManager {
         let handle = self.generate_handle();
         texture.handle = handle;
         
-        let mut textures = self.textures.write().unwrap();
+        let mut textures = self.textures.write();
         textures.insert(handle, texture);
         
         handle
@@ -222,13 +222,13 @@ impl ResourceManager {
     
     /// Get a texture by handle
     pub fn get_texture(&self, handle: ResourceHandle) -> Option<TextureHandle> {
-        let textures = self.textures.read().unwrap();
+        let textures = self.textures.read();
         textures.get(&handle).cloned()
     }
     
     /// Set texture SRV handle (DX12)
     pub fn set_texture_srv(&self, handle: ResourceHandle, srv_handle: u64) {
-        let mut textures = self.textures.write().unwrap();
+        let mut textures = self.textures.write();
         if let Some(texture) = textures.get_mut(&handle) {
             texture.dx12_srv_handle = Some(srv_handle);
         }
@@ -236,7 +236,7 @@ impl ResourceManager {
     
     /// Set texture RTV handle (DX12)
     pub fn set_texture_rtv(&self, handle: ResourceHandle, rtv_handle: u64) {
-        let mut textures = self.textures.write().unwrap();
+        let mut textures = self.textures.write();
         if let Some(texture) = textures.get_mut(&handle) {
             texture.dx12_rtv_handle = Some(rtv_handle);
         }
@@ -244,7 +244,7 @@ impl ResourceManager {
     
     /// Set texture DSV handle (DX12)
     pub fn set_texture_dsv(&self, handle: ResourceHandle, dsv_handle: u64) {
-        let mut textures = self.textures.write().unwrap();
+        let mut textures = self.textures.write();
         if let Some(texture) = textures.get_mut(&handle) {
             texture.dx12_dsv_handle = Some(dsv_handle);
         }
@@ -252,7 +252,7 @@ impl ResourceManager {
     
     /// Remove a texture
     pub fn remove_texture(&self, handle: ResourceHandle) -> Option<TextureHandle> {
-        let mut textures = self.textures.write().unwrap();
+        let mut textures = self.textures.write();
         textures.remove(&handle)
     }
     
@@ -263,7 +263,7 @@ impl ResourceManager {
         let handle = self.generate_handle();
         sampler.handle = handle;
         
-        let mut samplers = self.samplers.write().unwrap();
+        let mut samplers = self.samplers.write();
         samplers.insert(handle, sampler);
         
         handle
@@ -271,13 +271,13 @@ impl ResourceManager {
     
     /// Get a sampler by handle
     pub fn get_sampler(&self, handle: ResourceHandle) -> Option<SamplerHandle> {
-        let samplers = self.samplers.read().unwrap();
+        let samplers = self.samplers.read();
         samplers.get(&handle).cloned()
     }
     
     /// Remove a sampler
     pub fn remove_sampler(&self, handle: ResourceHandle) -> Option<SamplerHandle> {
-        let mut samplers = self.samplers.write().unwrap();
+        let mut samplers = self.samplers.write();
         samplers.remove(&handle)
     }
     
@@ -288,7 +288,7 @@ impl ResourceManager {
         let handle = self.generate_handle();
         pipeline.handle = handle;
         
-        let mut pipelines = self.pipelines.write().unwrap();
+        let mut pipelines = self.pipelines.write();
         pipelines.insert(handle, pipeline);
         
         handle
@@ -296,13 +296,13 @@ impl ResourceManager {
     
     /// Get a pipeline by handle
     pub fn get_pipeline(&self, handle: ResourceHandle) -> Option<PipelineHandle> {
-        let pipelines = self.pipelines.read().unwrap();
+        let pipelines = self.pipelines.read();
         pipelines.get(&handle).cloned()
     }
     
     /// Remove a pipeline
     pub fn remove_pipeline(&self, handle: ResourceHandle) -> Option<PipelineHandle> {
-        let mut pipelines = self.pipelines.write().unwrap();
+        let mut pipelines = self.pipelines.write();
         pipelines.remove(&handle)
     }
     
@@ -313,7 +313,7 @@ impl ResourceManager {
         let handle = self.generate_handle();
         shader.handle = handle;
         
-        let mut shaders = self.shaders.write().unwrap();
+        let mut shaders = self.shaders.write();
         shaders.insert(handle, shader);
         
         handle
@@ -321,13 +321,13 @@ impl ResourceManager {
     
     /// Get a shader by handle
     pub fn get_shader(&self, handle: ResourceHandle) -> Option<ShaderHandle> {
-        let shaders = self.shaders.read().unwrap();
+        let shaders = self.shaders.read();
         shaders.get(&handle).cloned()
     }
     
     /// Remove a shader
     pub fn remove_shader(&self, handle: ResourceHandle) -> Option<ShaderHandle> {
-        let mut shaders = self.shaders.write().unwrap();
+        let mut shaders = self.shaders.write();
         shaders.remove(&handle)
     }
     
@@ -338,7 +338,7 @@ impl ResourceManager {
         let handle = self.generate_handle();
         swapchain.handle = handle;
         
-        let mut swapchains = self.swapchains.write().unwrap();
+        let mut swapchains = self.swapchains.write();
         swapchains.insert(handle, swapchain);
         
         handle
@@ -346,13 +346,13 @@ impl ResourceManager {
     
     /// Get a swapchain by handle
     pub fn get_swapchain(&self, handle: ResourceHandle) -> Option<SwapchainHandle> {
-        let swapchains = self.swapchains.read().unwrap();
+        let swapchains = self.swapchains.read();
         swapchains.get(&handle).cloned()
     }
     
     /// Set RTV handles for swapchain back buffers
     pub fn set_swapchain_rtvs(&self, handle: ResourceHandle, rtv_handles: Vec<u64>) {
-        let mut swapchains = self.swapchains.write().unwrap();
+        let mut swapchains = self.swapchains.write();
         if let Some(swapchain) = swapchains.get_mut(&handle) {
             swapchain.dx12_rtv_handles = rtv_handles;
         }
@@ -360,7 +360,7 @@ impl ResourceManager {
     
     /// Remove a swapchain
     pub fn remove_swapchain(&self, handle: ResourceHandle) -> Option<SwapchainHandle> {
-        let mut swapchains = self.swapchains.write().unwrap();
+        let mut swapchains = self.swapchains.write();
         swapchains.remove(&handle)
     }
     
@@ -368,25 +368,25 @@ impl ResourceManager {
     
     /// Get resource count by type
     pub fn get_buffer_count(&self) -> usize {
-        self.buffers.read().unwrap().len()
+        self.buffers.read().len()
     }
     
     pub fn get_texture_count(&self) -> usize {
-        self.textures.read().unwrap().len()
+        self.textures.read().len()
     }
     
     pub fn get_pipeline_count(&self) -> usize {
-        self.pipelines.read().unwrap().len()
+        self.pipelines.read().len()
     }
     
     /// Clear all resources (for cleanup)
     pub fn clear(&self) {
-        self.buffers.write().unwrap().clear();
-        self.textures.write().unwrap().clear();
-        self.samplers.write().unwrap().clear();
-        self.pipelines.write().unwrap().clear();
-        self.shaders.write().unwrap().clear();
-        self.swapchains.write().unwrap().clear();
+        self.buffers.write().clear();
+        self.textures.write().clear();
+        self.samplers.write().clear();
+        self.pipelines.write().clear();
+        self.shaders.write().clear();
+        self.swapchains.write().clear();
     }
 }
 

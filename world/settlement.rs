@@ -304,7 +304,7 @@ fn choose_building_type(
             if rng.gen_bool(0.8) {
                 BuildingType::IzbaDerevo
             } else {
-                *[BuildingType::ZaborDerevo, BuildingType::Kolodets].choose(rng).unwrap()
+                *[BuildingType::ZaborDerevo, BuildingType::Kolodets].choose(rng).unwrap_or(&BuildingType::ZaborDerevo)
             }
         }
         SettlementType::Posyolok => {

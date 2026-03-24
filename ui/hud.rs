@@ -235,7 +235,10 @@ impl HudManager {
             return;
         }
 
-        let data = self.last_data.as_ref().unwrap();
+        let data = match &self.last_data {
+            Some(d) => d,
+            None => return,
+        };
         let layout = &self.layout;
 
         let screen_width = renderer.get_width() as f32;
@@ -403,8 +406,9 @@ mod tests {
         
         hud.update(data.clone(), 0.016);
         
-        assert_eq!(hud.get_data().unwrap().speed_kmh, 60.0);
-        assert_eq!(hud.get_data().unwrap().gear, GearState::Drive(3));
+        let hud_data = hud.get_data().expect("HUD data should exist");
+        assert_eq!(hud_data.speed_kmh, 60.0);
+        assert_eq!(hud_data.gear, GearState::Drive(3));
     }
 
     #[test]
@@ -417,6 +421,6 @@ mod tests {
         
         hud.update(data, 0.016);
         assert!(hud.flash_element.is_some());
-        assert_eq!(hud.flash_element.unwrap(), HudFlashElement::FuelReserve);
+        assert_eq!(hud.flash_element.expect("Flash element should exist"), HudFlashElement::FuelReserve);
     }
 }

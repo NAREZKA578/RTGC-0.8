@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{Read, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use log::warn;
+use tracing::warn;
 
 /// Handle to a loaded asset
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
