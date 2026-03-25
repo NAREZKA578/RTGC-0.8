@@ -43,6 +43,8 @@ pub struct BufferHandle {
     pub dx12_resource: Option<()>,
     pub vulkan_buffer: Option<u64>, // Placeholder for ash::Buffer
     pub vulkan_allocation: Option<u64>, // For gpu-alloc or similar
+    // OpenGL resources
+    pub gl_buffer: Option<u32>, // glow::NativeBuffer as u32
 }
 
 impl fmt::Debug for BufferHandle {
@@ -70,6 +72,10 @@ pub struct TextureHandle {
     pub dx12_dsv_handle: Option<u64>,
     pub vulkan_image: Option<u64>, // Placeholder for ash::Image
     pub vulkan_view: Option<u64>,  // ImageView
+    // OpenGL resources
+    pub gl_texture: Option<u32>, // glow::NativeTexture as u32
+    pub gl_target: Option<u32>,  // GL texture target
+    pub gl_framebuffer: Option<u32>, // For render targets
 }
 
 impl fmt::Debug for TextureHandle {
@@ -91,6 +97,8 @@ pub struct SamplerHandle {
     #[cfg(not(target_os = "windows"))]
     pub dx12_handle: Option<u64>,
     pub vulkan_sampler: Option<u64>,
+    // OpenGL resources
+    pub gl_sampler: Option<u32>, // glow::NativeSampler as u32
 }
 
 /// Pipeline handle
@@ -104,6 +112,9 @@ pub struct PipelineHandle {
     pub dx12_pso: Option<()>,
     pub vulkan_pipeline: Option<u64>,
     pub vulkan_layout: Option<u64>,
+    // OpenGL resources
+    pub gl_program: Option<u32>, // OpenGL program ID
+    pub gl_vao: Option<u32>,     // Vertex Array Object
 }
 
 /// Shader handle
@@ -117,6 +128,8 @@ pub struct ShaderHandle {
     #[cfg(not(target_os = "windows"))]
     pub dx12_bytecode: Vec<u8>,
     pub spirv_bytecode: Vec<u8>,
+    // OpenGL resources
+    pub gl_shader: Option<u32>, // OpenGL shader ID
 }
 
 /// Swapchain handle
@@ -133,6 +146,10 @@ pub struct SwapchainHandle {
     pub dx12_swapchain: Option<()>,
     pub dx12_rtv_handles: Vec<u64>, // RTV descriptors for each back buffer
     pub vulkan_swapchain: Option<u64>,
+    // OpenGL resources
+    pub gl_framebuffer: Option<u32>, // Default framebuffer ID (usually 0)
+    pub gl_color_texture: Option<u32>, // Color render target texture
+    pub gl_depth_texture: Option<u32>, // Depth render target texture
 }
 
 /// Resource manager for RHI resources

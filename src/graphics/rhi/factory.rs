@@ -12,6 +12,8 @@ use crate::graphics::rhi::dx12_module::Dx12Device;
 #[cfg(feature = "vulkan")]
 use crate::graphics::rhi::vulkan_module::VkDevice;
 
+use crate::graphics::rhi::gl::GlDevice;
+
 /// Graphics API backend selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RhiBackend {
@@ -21,6 +23,8 @@ pub enum RhiBackend {
     Dx12,
     /// Vulkan (Cross-platform)
     Vulkan,
+    /// OpenGL 4.5+ (Cross-platform, default fallback)
+    OpenGL,
 }
 
 /// RHI configuration
@@ -75,6 +79,15 @@ impl RhiFactory {
                 Ok(Arc::new(device))
             }
             
+            // OpenGL fallback - always available
+            RhiBackend::OpenGL => {
+                // OpenGL device requires an active GL context from glutin/winit
+                // This is handled by GlContext which creates GlDevice internally
+                Err(crate::graphics::rhi::types::RhiError::InitializationFailed(
+                    "OpenGL device must be created via GlContext with active GL context. Use GlContext::new() to create a window and context, then access GlContext.rhi_device.".to_string(),
+                ))
+            }
+            
             _ => Err(crate::graphics::rhi::types::RhiError::Unsupported(
                 "No suitable RHI backend available".to_string(),
             )),
@@ -109,13 +122,17 @@ impl RhiFactory {
                     ))
                 }
             }
+            RhiBackend::OpenGL => {
+                // OpenGL is always available as fallback
+                Ok(RhiBackend::OpenGL)
+            }
         }
     }
     
     /// Detect the best available backend for the current platform
     fn detect_best_backend() -> RhiResult<RhiBackend> {
-        // Priority order: Vulkan > DX12
-        // Vulkan is preferred due to cross-platform support
+        // Priority order: Vulkan > DX12 > OpenGL
+        // Vulkan is preferred due to cross-platform support and performance
         
         #[cfg(feature = "vulkan")]
         {
@@ -133,9 +150,9 @@ impl RhiFactory {
             }
         }
         
-        Err(crate::graphics::rhi::types::RhiError::InitializationFailed(
-            "No suitable RHI backend found".to_string(),
-        ))
+        // Fallback to OpenGL (always available)
+        tracing::info!("Falling back to OpenGL backend");
+        Ok(RhiBackend::OpenGL)
     }
     
     /// Check if Vulkan is available on the system
@@ -181,6 +198,9 @@ impl RhiFactory {
         {
             backends.push(RhiBackend::Dx12);
         }
+        
+        // OpenGL is always available
+        backends.push(RhiBackend::OpenGL);
         
         backends
     }

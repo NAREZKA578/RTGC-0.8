@@ -88,7 +88,7 @@ pub struct JobSystemConfig {
 impl Default for JobSystemConfig {
     fn default() -> Self {
         Self {
-            num_threads: num_cpus::get().max(2),
+            num_threads: std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).max(2),
             queue_size: MAX_QUEUE_SIZE,
             steal_enabled: true,
         }

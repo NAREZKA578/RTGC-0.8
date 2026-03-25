@@ -97,6 +97,11 @@ pub struct PhysicsConfig {
 
 impl Default for PhysicsConfig {
     fn default() -> Self {
+        // Use std::thread::available_parallelism() instead of num_cpus::get()
+        let thread_count = std::thread::available_parallelism()
+            .map(|n| n.get() as u32)
+            .unwrap_or(1);
+        
         Self {
             substeps: 4,
             gravity: [0.0, -9.81, 0.0],
@@ -105,7 +110,7 @@ impl Default for PhysicsConfig {
             rest_offset: 0.0,
             max_depenetration_velocity: 100.0,
             enable_ccd: true,
-            thread_count: num_cpus::get() as u32,
+            thread_count,
             async_physics: true,
         }
     }

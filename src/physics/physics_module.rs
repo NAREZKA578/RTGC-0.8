@@ -1,6 +1,5 @@
 use nalgebra::{Vector3, Isometry3, Matrix3, UnitQuaternion, Point3};
 use std::collections::HashMap;
-use num_cpus;
 pub use super::spatial_hash::SpatialHash;
 pub use super::thread_pool::ThreadPool;
 pub use super::arena_allocator::ArenaAllocator;
@@ -663,7 +662,7 @@ impl PhysicsWorld {
             broadphase_pairs: Vec::new(),
             sub_steps: 4, // 4 substeps for stable collision resolution
             spatial_hash: SpatialHash::new(10.0), // Cell size of 10 units
-            thread_pool: ThreadPool::new(num_cpus::get()).expect("Failed to create thread pool"),
+            thread_pool: ThreadPool::new(std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4)).expect("Failed to create thread pool"),
             sleeping_threshold: 0.01, // Bodies with velocity < 0.01 m/s can sleep
             deactivation_time: 1.0,   // Sleep after 1 second of inactivity
             // Contact events (B6)

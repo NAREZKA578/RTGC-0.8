@@ -1,5 +1,6 @@
-//! OpenGL Context для RTGC-0.7
+//! OpenGL Context для RTGC-0.8
 //! Реализация инициализации OpenGL контекста с использованием glutin и winit
+//! Интеграция с RHI через GlDevice
 
 use glow::Context;
 use glutin::config::ConfigTemplateBuilder;
@@ -11,10 +12,14 @@ use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasWindowHandle;
 use std::ffi::CStr;
 use std::num::NonZeroU32;
+use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes};
 
-/// OpenGL контекст для рендеринга
+use crate::graphics::rhi::gl::GlDevice;
+use crate::graphics::rhi::device::IDevice;
+
+/// OpenGL контекст для рендеринга с RHI интеграцией
 pub struct GlContext {
     pub gl: Context,
     pub window: Window,
@@ -23,13 +28,15 @@ pub struct GlContext {
     // Храним контекст и поверхность для swap_buffers
     gl_context: PossiblyCurrentContext,
     surface: glutin::surface::Surface<WindowSurface>,
+    // RHI device для OpenGL
+    pub rhi_device: Arc<GlDevice>,
 }
 
 unsafe impl Send for GlContext {}
 unsafe impl Sync for GlContext {}
 
 impl GlContext {
-    /// Создаёт новый OpenGL контекст с окном
+    /// Создаёт новый OpenGL контекст с окном и RHI устройством
     pub fn new(event_loop: &ActiveEventLoop, window_attrs: WindowAttributes) -> Result<Self, Box<dyn std::error::Error>> {
         // Шаблон для поиска подходящей конфигурации OpenGL
         let template = ConfigTemplateBuilder::new()
@@ -94,6 +101,9 @@ impl GlContext {
         let swap_interval = SwapInterval::Wait(NonZeroU32::new(1).expect("Swap interval must be non-zero"));
         let _ = surface.set_swap_interval(&gl_context, swap_interval);
 
+        // Создаём RHI устройство для OpenGL
+        let rhi_device = Arc::new(GlDevice::new(Arc::new(gl.clone())));
+
         Ok(Self {
             gl,
             window,
@@ -101,6 +111,7 @@ impl GlContext {
             height: nz_height.get(),
             gl_context,
             surface,
+            rhi_device,
         })
     }
 
