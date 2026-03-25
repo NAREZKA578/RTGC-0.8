@@ -1,0 +1,31 @@
+//! Graphics Module for RTGC-0.7
+//! Provides rendering, camera, shaders, meshes, textures, and RHI abstraction
+
+pub mod renderer;
+pub mod renderer_rhi;  // RHI-based renderer (future backend-agnostic)
+pub mod camera;
+pub mod shader;
+pub mod mesh;
+pub mod texture;
+pub mod lod_system;
+pub mod texture_streaming;
+pub mod lighting;
+pub mod rhi;
+pub use rhi::rhi_module::{RhiFactory, RhiConfig, GraphicsBackend};
+pub mod material;
+pub mod particles;
+pub mod debug_renderer;
+pub mod gl_context;
+
+pub use renderer::{Renderer, MenuState};
+pub use renderer_rhi::RendererRhi;  // New RHI-based renderer
+pub use camera::Camera;
+pub use shader::Shader;
+pub use mesh::{Mesh, MeshHandle};
+pub use texture::Texture;
+pub use gl_context::GlContext;
+// pub use lod_system::LodSystem; // нет такого типа, используется LodManager
+// pub use texture_streaming::TextureStreamer; // нет такого типа
+// pub use lighting::{Light, LightManager, LightingConfig}; // нет LightManager и LightingConfig
+// pub use rhi::{RhiFactory, RhiConfig, IDevice, GraphicsBackend, RhiManager}; // большинство типов не существует
+pub use material::{Material, MaterialManager, MaterialLayers, MaterialParams, TextureQuality, MaterialStats};
