@@ -1,58 +1,53 @@
 ```
 # Compiled and build artifacts
+*.pyc
+__pycache__/
 *.o
 *.obj
 *.exe
 *.dll
 *.so
 *.a
-*.pyc
-__pycache__/
-*.class
 *.out
+target/
+build/
+dist/
 
 # Dependencies
-node_modules/
-venv/
 .venv/
-.env
-.env.local
-*.env.*
+venv/
+node_modules/
+.julia/
+.zig-cache/
 
-# Build directories
-dist/
-build/
-target/
+# Logs and temp files
 *.log
 *.tmp
 *.swp
 *.swo
 
-# IDE/Editor files
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Editors and IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
+# Rust-specific
+Cargo.lock
+target/
+**/*.rs.bk
 
-# System files
-.DS_Store
-Thumbs.db
+# Graphics shaders (if compiled versions exist)
+*.spv
+*.dxbc
+*.metal
 
-# MyPy cache
-.mypy_cache/
-
-# Pytest cache
-.pytest_cache/
-
-# Gradle
-.gradle/
-
-# Compressed files
+# Compression and archives
 *.zip
 *.gz
 *.tar
@@ -75,4 +70,18 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Gradle
+.gradle/
+
+# MyPy cache
+.mypy_cache/
+
+# Pytest cache
+.pytest_cache/
 ```
