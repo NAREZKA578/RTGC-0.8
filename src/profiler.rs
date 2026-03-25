@@ -77,43 +77,60 @@ impl Profiler {
     }
 }
 
-// Global profiler instance using parking_lot::Mutex (does not poison on panic)
-use parking_lot::Mutex;
-use once_cell::sync::Lazy;
+// Lazy initialization - use std::sync::OnceLock instead of once_cell
+use std::sync::{Mutex, OnceLock};
 
-pub static PROFILER: Lazy<Mutex<Profiler>> = Lazy::new(|| Mutex::new(Profiler::new()));
+pub static PROFILER: OnceLock<Mutex<Profiler>> = OnceLock::new();
+
+fn get_profiler() -> &'static Mutex<Profiler> {
+    PROFILER.get_or_init(|| Mutex::new(Profiler::new()))
+}
 
 #[macro_export]
 macro_rules! profile_scope {
     ($name:expr, $block:block) => {{
-        use crate::profiler::PROFILER;
-        PROFILER.lock().start_timer($name);
-        let result = $block;
-        PROFILER.lock().stop_timer($name);
-        result
+        let _guard = $crate::profiler::ProfileGuard::new($name);
+        $block
     }};
 }
 
+pub struct ProfileGuard<'a> {
+    name: &'a str,
+}
+
+impl<'a> ProfileGuard<'a> {
+    pub fn new(name: &'a str) -> Self {
+        get_profiler().lock().unwrap().start_timer(name);
+        Self { name }
+    }
+}
+
+impl<'a> Drop for ProfileGuard<'a> {
+    fn drop(&mut self) {
+        get_profiler().lock().unwrap().stop_timer(self.name);
+    }
+}
+
 pub fn start_timer(name: &str) {
-    PROFILER.lock().start_timer(name);
+    get_profiler().lock().unwrap().start_timer(name);
 }
 
 pub fn stop_timer(name: &str) -> Option<f64> {
-    PROFILER.lock().stop_timer(name)
+    get_profiler().lock().unwrap().stop_timer(name)
 }
 
 pub fn get_average_time(name: &str) -> Option<f64> {
-    PROFILER.lock().get_average_time(name)
+    get_profiler().lock().unwrap().get_average_time(name)
 }
 
 pub fn get_last_time(name: &str) -> Option<f64> {
-    PROFILER.lock().get_last_time(name)
+    get_profiler().lock().unwrap().get_last_time(name)
 }
 
 pub fn print_profile_report() {
-    PROFILER.lock().print_profile_report();
+    get_profiler().lock().unwrap().print_profile_report();
 }
 
 pub fn reset_profiler() {
-    PROFILER.lock().reset();
+    get_profiler().lock().unwrap().reset();
 }

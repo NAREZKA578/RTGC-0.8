@@ -7,9 +7,9 @@ use crate::graphics::rhi::{
     resource_manager::{ResourceManager, BufferHandle},
 };
 use std::sync::Arc;
+use std::sync::OnceLock;
 
-static RESOURCE_MANAGER: once_cell::sync::Lazy<Arc<ResourceManager>> = 
-    once_cell::sync::Lazy::new(|| Arc::new(ResourceManager::new()));
+static RESOURCE_MANAGER: OnceLock<Arc<ResourceManager>> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
 use windows::{
