@@ -1,4 +1,4 @@
-// UI Module for RTGC-0.7
+// UI Module for RTGC-0.8
 
 pub mod hud;
 

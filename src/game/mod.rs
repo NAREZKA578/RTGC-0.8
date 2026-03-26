@@ -1,4 +1,4 @@
-//! Game Module for RTGC-0.7
+//! Game Module for RTGC-0.8
 //! Contains gameplay systems: missions, cargo, weather, day/night cycle
 
 pub mod mission_save;

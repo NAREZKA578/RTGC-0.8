@@ -1,4 +1,4 @@
-//! Inventory System for RTGC-0.7
+//! Inventory System for RTGC-0.8
 //! Manages player inventory, item stacking, weight limits
 
 use serde::{Deserialize, Serialize};

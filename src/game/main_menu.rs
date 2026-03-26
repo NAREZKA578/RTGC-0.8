@@ -1,4 +1,4 @@
-//! Main Menu System for RTGC-0.7
+//! Main Menu System for RTGC-0.8
 //! Handles main menu, new game, continue, options, exit
 
 use crate::game::character_creation::CharacterCreationManager;

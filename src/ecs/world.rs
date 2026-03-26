@@ -1,4 +1,4 @@
-//! ECS World for RTGC-0.7
+//! ECS World for RTGC-0.8
 //! Контейнер сущностей с Archetype storage
 
 use std::collections::HashMap;

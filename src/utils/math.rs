@@ -1,4 +1,4 @@
-//! Math utilities for RTGC-0.7
+//! Math utilities for RTGC-0.8
 //! Provides common mathematical functions: lerp, slerp, clamping, etc.
 
 use nalgebra::{Vector3, Quaternion, UnitQuaternion};

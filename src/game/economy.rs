@@ -1,4 +1,4 @@
-//! Economy System for RTGC-0.7
+//! Economy System for RTGC-0.8
 //! Handles player wallet, market prices, shops, wages, and contracts
 
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-//! Utils module for RTGC-0.7
+//! Utils module for RTGC-0.8
 
 pub mod math;
 pub mod time;

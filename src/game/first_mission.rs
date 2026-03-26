@@ -1,4 +1,4 @@
-//! First Mission System for RTGC-0.7
+//! First Mission System for RTGC-0.8
 //! Handles the initial contract from "Серега" - tutorial mission
 
 use std::time::Duration;

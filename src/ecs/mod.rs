@@ -1,4 +1,4 @@
-//! ECS (Entity Component System) Module for RTGC-0.7
+//! ECS (Entity Component System) Module for RTGC-0.8
 //! Provides entity management, component storage, and system execution
 
 pub mod ecs_module;
