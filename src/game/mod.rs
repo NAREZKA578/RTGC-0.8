@@ -23,6 +23,8 @@ pub mod storage;
 pub mod base_builder;
 pub mod settings;
 pub mod map_system;
+pub mod scene;
+pub mod scenes;
 
 pub use mission_save::{SaveGame, MissionSaveManager};
 pub use weather::{WeatherSystem, WeatherState, DayNightCycle, PrecipitationType};
@@ -46,3 +48,5 @@ pub use storage::{StorageSystem, StorageContainer, StoredItem, ContainerType, It
 pub use base_builder::{BaseBuildingSystem, PlayerBase, BuiltStructure, BaseType, StructureType, BaseCapability, ResourceRequirements, MAX_STRUCTURES_PER_BASE, MAX_BASES_PER_PLAYER, GRID_CELL_SIZE, MIN_BASE_DISTANCE};
 pub use settings::{SettingsManager, GameSettings, DisplaySettings, GraphicsSettings, AudioSettings, ControlsSettings, GameplaySettings, HudSettings, NetworkSettings, PerformanceSettings, DebugSettings};
 pub use map_system::{MapSystem, MapMarker, MarkerType};
+pub use scene::{Scene, SceneType, SceneId, SceneState, SceneManager, SceneManagerConfig, TransitionEffect};
+pub use scenes::{MainMenuScene, OpenWorldScene, LoadingScene, PauseScene};

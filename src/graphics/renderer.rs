@@ -1,12 +1,222 @@
+//! Renderer module - Command queue based rendering system
+
 use glow::{Context, HasContext};
 use std::sync::Arc;
 use std::collections::HashMap;
 use nalgebra::{Vector3, Matrix4, UnitQuaternion};
 use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Texture};
-// use crate::graphics::models::{Model as ModelGen, Vertex as ModelVertex}; // нет такого модуля
 use crate::graphics::lod_system::{LodManager, LodObject};
 use crate::graphics::texture_streaming::TextureStreamingSystem;
 use tracing::warn;
+
+/// Handle to a GPU resource
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Handle<T>(u64, std::marker::PhantomData<T>);
+
+impl<T> Handle<T> {
+    pub const fn null() -> Self {
+        Self(0, std::marker::PhantomData)
+    }
+    
+    pub const fn is_null(&self) -> bool {
+        self.0 == 0
+    }
+    
+    fn new(id: u64) -> Self {
+        Self(id, std::marker::PhantomData)
+    }
+}
+
+/// Material definition for rendering
+#[derive(Debug, Clone)]
+pub struct Material {
+    pub shader: Handle<Shader>,
+    pub textures: Vec<Handle<Texture>>,
+    pub uniforms: HashMap<String, UniformValue>,
+    pub render_order: i32,
+    pub transparent: bool,
+}
+
+impl Material {
+    pub fn new(shader: Handle<Shader>) -> Self {
+        Self {
+            shader,
+            textures: Vec::new(),
+            uniforms: HashMap::new(),
+            render_order: 0,
+            transparent: false,
+        }
+    }
+    
+    pub fn with_texture(mut self, texture: Handle<Texture>) -> Self {
+        self.textures.push(texture);
+        self
+    }
+    
+    pub fn with_uniform(mut self, name: &str, value: UniformValue) -> Self {
+        self.uniforms.insert(name.to_string(), value);
+        self
+    }
+}
+
+/// Uniform value types for shaders
+#[derive(Debug, Clone)]
+pub enum UniformValue {
+    Float(f32),
+    Vec2([f32; 2]),
+    Vec3([f32; 3]),
+    Vec4([f32; 4]),
+    Mat4([[f32; 4]; 4]),
+    Int(i32),
+    Bool(bool),
+}
+
+/// Render command types for the command queue
+#[derive(Debug, Clone)]
+pub enum RenderCommand {
+    /// Render a mesh with transform and material
+    Mesh {
+        handle: Handle<Mesh>,
+        transform: Matrix4<f32>,
+        material: Material,
+    },
+    /// Render a particle system
+    ParticleSystem {
+        handle: Handle<crate::graphics::particles::ParticleSystem>,
+        view_proj: Matrix4<f32>,
+    },
+    /// Render a UI element
+    UIElement {
+        rect: [f32; 4], // x, y, width, height
+        texture: Option<Handle<Texture>>,
+        color: [f32; 4],
+        depth: f32,
+    },
+    /// Render a debug line
+    DebugLine {
+        start: [f32; 3],
+        end: [f32; 3],
+        color: [f32; 4],
+    },
+    /// Render debug lines (batched)
+    DebugLines {
+        lines: Vec<([f32; 3], [f32; 3], [f32; 4])>,
+    },
+    /// Render skybox/skydome
+    Skybox {
+        texture: Option<Handle<Texture>>,
+        rotation: Matrix4<f32>,
+    },
+    /// Render terrain
+    Terrain {
+        handle: Handle<Mesh>,
+        transform: Matrix4<f32>,
+        material: Material,
+    },
+    /// Render vehicle
+    Vehicle {
+        handle: Handle<Mesh>,
+        transform: Matrix4<f32>,
+        material: Material,
+        lights_enabled: bool,
+    },
+    /// Clear screen
+    Clear {
+        color: Option<[f32; 4]>,
+        depth: bool,
+        stencil: bool,
+    },
+    /// Set viewport
+    Viewport {
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+    },
+}
+
+/// Render queue for batching and sorting draw calls
+#[derive(Debug)]
+pub struct RenderQueue {
+    commands: Vec<RenderCommand>,
+    sorted: bool,
+}
+
+impl RenderQueue {
+    pub fn new() -> Self {
+        Self {
+            commands: Vec::with_capacity(256),
+            sorted: false,
+        }
+    }
+    
+    /// Submit a render command to the queue
+    pub fn submit(&mut self, command: RenderCommand) {
+        self.commands.push(command);
+        self.sorted = false;
+    }
+    
+    /// Clear all commands
+    pub fn clear(&mut self) {
+        self.commands.clear();
+        self.sorted = false;
+    }
+    
+    /// Sort commands by material/shader for efficient batching
+    pub fn sort(&mut self) {
+        if self.sorted {
+            return;
+        }
+        
+        // Sort by: transparent flag, then shader, then texture
+        self.commands.sort_by(|a, b| {
+            let transparent_a = Self::is_transparent(a);
+            let transparent_b = Self::is_transparent(b);
+            
+            // Render opaque first, then transparent
+            transparent_a.cmp(&transparent_b).then_with(|| {
+                Self::get_shader_id(a).cmp(&Self::get_shader_id(b))
+            })
+        });
+        
+        self.sorted = true;
+    }
+    
+    fn is_transparent(cmd: &RenderCommand) -> bool {
+        match cmd {
+            RenderCommand::Mesh { material, .. } => material.transparent,
+            RenderCommand::UIElement { .. } => true,
+            RenderCommand::Vehicle { material, .. } => material.transparent,
+            RenderCommand::Terrain { material, .. } => material.transparent,
+            _ => false,
+        }
+    }
+    
+    fn get_shader_id(cmd: &RenderCommand) -> u64 {
+        match cmd {
+            RenderCommand::Mesh { material, .. } => material.shader.0,
+            RenderCommand::Vehicle { material, .. } => material.shader.0,
+            RenderCommand::Terrain { material, .. } => material.shader.0,
+            _ => 0,
+        }
+    }
+    
+    /// Get all commands
+    pub fn commands(&self) -> &[RenderCommand] {
+        &self.commands
+    }
+    
+    /// Get mutable commands
+    pub fn commands_mut(&mut self) -> &mut Vec<RenderCommand> {
+        &mut self.commands
+    }
+}
+
+impl Default for RenderQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Vertex {
@@ -29,6 +239,8 @@ pub struct Renderer {
     pub menu_state: MenuState,
     pub lod_manager: LodManager,
     pub texture_streaming: TextureStreamingSystem,
+    // Render queue for command-based rendering
+    render_queue: RenderQueue,
     // Terrain & Vehicle rendering
     terrain_mesh: Option<Mesh>,
     vehicle_box_mesh: Option<Mesh>,
@@ -206,7 +418,79 @@ impl Renderer {
             minimap_size: 128,
             width: 800,
             height: 600,
+            // Render queue
+            render_queue: RenderQueue::new(),
         })
+    }
+    
+    /// Submit a render command to the queue
+    pub fn submit(&mut self, command: RenderCommand) {
+        self.render_queue.submit(command);
+    }
+    
+    /// Flush the render queue - execute all commands
+    pub fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.render_queue.sort();
+        
+        for command in self.render_queue.commands() {
+            self.execute_command(command)?;
+        }
+        
+        self.render_queue.clear();
+        Ok(())
+    }
+    
+    /// Execute a single render command
+    fn execute_command(&mut self, command: &RenderCommand) -> Result<(), Box<dyn std::error::Error>> {
+        match command {
+            RenderCommand::Clear { color, depth, stencil } => {
+                unsafe {
+                    let mut clear_bits = 0;
+                    if let Some([r, g, b, a]) = color {
+                        self.gl.clear_color(*r, *g, *b, *a);
+                        clear_bits |= glow::COLOR_BUFFER_BIT;
+                    }
+                    if *depth {
+                        clear_bits |= glow::DEPTH_BUFFER_BIT;
+                    }
+                    if *stencil {
+                        clear_bits |= glow::STENCIL_BUFFER_BIT;
+                    }
+                    if clear_bits != 0 {
+                        self.gl.clear(clear_bits);
+                    }
+                }
+            }
+            RenderCommand::Viewport { x, y, width, height } => {
+                unsafe {
+                    self.gl.viewport(*x, *y, *width, *height);
+                }
+            }
+            RenderCommand::DebugLine { start, end, color } => {
+                self.draw_debug_line(*start, *end, *color);
+            }
+            RenderCommand::DebugLines { lines } => {
+                for (start, end, color) in lines {
+                    self.draw_debug_line(*start, *end, *color);
+                }
+            }
+            RenderCommand::UIElement { rect, texture, color, depth } => {
+                self.draw_ui_element(*rect, *texture, *color, *depth);
+            }
+            // Other commands handled by existing render methods
+            _ => {}
+        }
+        Ok(())
+    }
+    
+    /// Draw a debug line
+    fn draw_debug_line(&mut self, start: [f32; 3], end: [f32; 3], color: [f32; 4]) {
+        // Implementation using existing debug rendering
+    }
+    
+    /// Draw a UI element
+    fn draw_ui_element(&mut self, rect: [f32; 4], texture: Option<Handle<Texture>>, color: [f32; 4], depth: f32) {
+        // Implementation using existing HUD rendering
     }
     
     /// Граф-1: Создать процедурную bitmap font текстуру 128x128

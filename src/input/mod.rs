@@ -2,6 +2,8 @@
 
 pub mod mapping;
 pub mod input_module;
+pub mod gamepad;
 
 pub use mapping::{InputAction, InputMapping, MouseButton};
 pub use input_module::InputManager;
+pub use gamepad::{GamepadButton, GamepadAxis, GamepadState, GamepadManager, GamepadConfig};
