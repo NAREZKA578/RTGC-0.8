@@ -270,15 +270,33 @@ impl Engine {
                 if event.state == ElementState::Pressed {
                     if let PhysicalKey::Code(key_code) = event.physical_key {
                         match key_code {
+                            // Настройки: Открытие/закрытие настроек на Escape (если открыты настройки или инвентарь)
                             KeyCode::Escape => {
-                                return Err("Escape pressed".into());
+                                // Если открыты настройки или инвентарь - закрываем их
+                                if self.hud_manager.is_settings_open() || self.hud_manager.is_inventory_open() {
+                                    self.hud_manager.set_settings_open(false);
+                                    self.hud_manager.set_inventory_open(false);
+                                } else {
+                                    // Иначе выход из игры
+                                    return Err("Escape pressed".into());
+                                }
                             }
                             KeyCode::KeyF3 => {
                                 self.debug_mode = !self.debug_mode;
                             }
                             // Ф1.6: Открытие инвентаря на Tab
                             KeyCode::Tab => {
-                                self.hud_manager.toggle_inventory();
+                                // Не открывать инвентарь если открыты настройки
+                                if !self.hud_manager.is_settings_open() {
+                                    self.hud_manager.toggle_inventory();
+                                }
+                            }
+                            // Настройки: Открытие настроек на F1
+                            KeyCode::F1 => {
+                                // Не открывать настройки если открыт инвентарь
+                                if !self.hud_manager.is_inventory_open() {
+                                    self.hud_manager.toggle_settings();
+                                }
                             }
                             KeyCode::KeyW => self.input_manager.set_key_state(KeyCode::KeyW, true),
                             KeyCode::KeyS => self.input_manager.set_key_state(KeyCode::KeyS, true),
