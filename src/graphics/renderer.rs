@@ -755,15 +755,132 @@ impl Renderer {
                 self.draw_rect(150.0, self.height as f32 - 25.0, 100.0, 8.0, [1.0, 0.0, 0.0, 1.0]);
             }
             
-            // Граф-3: Мини-карта в правом верхнем углу
-            self.render_minimap(&hud_data);
-            
-            // Re-enable depth test
-            self.gl.enable(glow::DEPTH_TEST);
-        }
-        
-        Ok(())
-    }
+			// Граф-3: Мини-карта в правом верхнем углу
+			self.render_minimap(&hud_data);
+
+			// Ф1.5: Компас вверху экрана (400×24px)
+			self.render_compass(&hud_data);
+
+			// Re-enable depth test
+			self.gl.enable(glow::DEPTH_TEST);
+		}
+
+		Ok(())
+	}
+
+	/// Ф1.5: Рендер компаса вверху экрана
+	/// Полоска 400×24px, маркеры N/E/S/NE/SE/SW/NW + промежуточные
+	/// Вращается по heading (yaw), стрелка к цели миссии
+	fn render_compass(&mut self, hud_data: &crate::ui::hud::VehicleHudData) {
+		unsafe {
+			let compass_width = 400.0;
+			let compass_height = 24.0;
+			let compass_x = (self.width as f32 - compass_width) / 2.0;
+			let compass_y = self.height as f32 - compass_height - 10.0;
+
+			// Фон компаса (полупрозрачный чёрный)
+			self.draw_rect(compass_x, compass_y, compass_width, compass_height, [0.15, 0.15, 0.15, 0.85]);
+			
+			// Рамка компаса
+			self.draw_rect_border(compass_x, compass_y, compass_width, compass_height, 1.5, [0.6, 0.6, 0.6, 1.0]);
+
+			// Получаем heading игрока (из HUD данных или используем заглушку)
+			let player_heading = hud_data.heading_degrees; // 0-360 градусов
+
+			// Центр компаса
+			let center_x = compass_x + compass_width / 2.0;
+			let center_y = compass_y + compass_height / 2.0;
+
+			// Рисуем основные направления (N, E, S, W)
+			let directions = [
+				(0.0, "N", [1.0, 0.2, 0.2, 1.0]),      // Север - красный
+				(90.0, "E", [1.0, 1.0, 1.0, 0.7]),     // Восток
+				(180.0, "S", [1.0, 1.0, 1.0, 0.7]),    // Юг
+				(270.0, "W", [1.0, 1.0, 1.0, 0.7]),    // Запад
+			];
+
+			for (angle_deg, label, mut color) in directions.iter() {
+				// Вычисляем относительный угол с учётом поворота игрока
+				let rel_angle = (angle_deg - player_heading + 720.0) % 360.0; // нормализуем 0-360
+				
+				// Преобразуем в позицию на полоске компаса (0-360 -> 0-width)
+				let x_offset = ((rel_angle / 360.0) - 0.5) * compass_width;
+				let x = center_x + x_offset;
+				
+				// Рисуем только если маркер в пределах видимости
+				if x > compass_x + 10.0 && x < compass_x + compass_width - 10.0 {
+					// Увеличиваем яркость для ближайших направлений
+					if rel_angle < 30.0 || rel_angle > 330.0 {
+						color = &[1.0, 1.0, 1.0, 1.0];
+					}
+					
+					// Рисуем метку направления
+					self.draw_text(label, x - 6.0, center_y + 4.0, 0.7, *color);
+					
+					// Рисуем деление
+					let tick_height = if rel_angle < 30.0 || rel_angle > 330.0 { 10.0 } else { 5.0 };
+					let tick_color = if rel_angle < 30.0 || rel_angle > 330.0 { 
+						[1.0, 0.5, 0.0, 1.0] 
+					} else { 
+						[0.7, 0.7, 0.7, 0.8] 
+					};
+					self.draw_rect(x - 1.0, compass_y + compass_height - tick_height, 2.0, tick_height, tick_color);
+				}
+			}
+
+			// Промежуточные направления (NE, SE, SW, NW)
+			let intercardinal = [
+				(45.0, "NE"),
+				(135.0, "SE"),
+				(225.0, "SW"),
+				(315.0, "NW"),
+			];
+
+			for (angle_deg, label) in intercardinal.iter() {
+				let rel_angle = (angle_deg - player_heading + 720.0) % 360.0;
+				let x_offset = ((rel_angle / 360.0) - 0.5) * compass_width;
+				let x = center_x + x_offset;
+				
+				if x > compass_x + 15.0 && x < compass_x + compass_width - 15.0 {
+					self.draw_text(label, x - 10.0, center_y + 5.0, 0.5, [0.8, 0.8, 0.8, 0.6]);
+				}
+			}
+
+			// Центральная метка (текущее направление)
+			self.draw_rect(center_x - 2.0, compass_y + 2.0, 4.0, 6.0, [1.0, 1.0, 0.0, 1.0]);
+
+			// Стрелка к цели миссии (если есть waypoint)
+			if let Some(waypoint) = &hud_data.active_waypoint {
+				let target_heading = waypoint.heading_degrees;
+				let rel_angle = (target_heading - player_heading + 720.0) % 360.0;
+				let x_offset = ((rel_angle / 360.0) - 0.5) * compass_width;
+				let target_x = center_x + x_offset;
+				
+				if target_x > compass_x + 5.0 && target_x < compass_x + compass_width - 5.0 {
+					// Рисуем стрелку цели (треугольник вниз)
+					let arrow_color = [0.2, 1.0, 0.2, 1.0]; // зелёный
+					
+					// Маленький треугольник
+					let arrow_size = 8.0;
+					self.draw_triangle(
+						target_x, compass_y + compass_height - 2.0,
+						target_x - arrow_size / 2.0, compass_y + compass_height - 2.0 - arrow_size,
+						target_x + arrow_size / 2.0, compass_y + compass_height - 2.0 - arrow_size,
+						arrow_color,
+					);
+					
+					// Дистанция до цели
+					let distance_km = waypoint.distance_meters / 1000.0;
+					let dist_text = if distance_km >= 1.0 {
+						format!("{:.1} км", distance_km)
+					} else {
+						format!("{:.0} м", waypoint.distance_meters)
+					};
+					self.draw_text(&dist_text, target_x - 20.0, compass_y - 12.0, 0.5, arrow_color);
+				}
+			}
+		}
+	}
 
     /// Draw a 2D rectangle (simple quad) with proper VAO/VBO implementation
     pub unsafe fn draw_rect(&self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {

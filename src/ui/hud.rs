@@ -48,6 +48,28 @@ pub struct VehicleHudData {
 
     // === Блок ПОВРЕЖДЕНИЙ ===
     pub vehicle_health: f32,         // 0.0..1.0
+
+    // === Ф1.5: Компас ===
+    pub heading_degrees: f32,        // 0-360°, направление игрока/машины
+    pub active_waypoint: Option<Waypoint>, // Активная цель миссии
+}
+
+/// Waypoint для компаса — цель миссии
+#[derive(Debug, Clone)]
+pub struct Waypoint {
+    pub name: String,                // Название цели (например, "Бердск")
+    pub heading_degrees: f32,        // Направление к цели (0-360°)
+    pub distance_meters: f32,        // Дистанция до цели в метрах
+}
+
+impl Default for Waypoint {
+    fn default() -> Self {
+        Waypoint {
+            name: String::new(),
+            heading_degrees: 0.0,
+            distance_meters: 0.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,6 +98,7 @@ pub struct HudLayout {
     pub show_terrain_angle: bool,
     pub compact_mode: bool,   // Мини-версия для слабых экранов
     pub show_minimap: bool,   // Правый блок с картой
+    pub show_compass: bool,   // Ф1.5: Компас вверху экрана
 }
 
 impl Default for HudLayout {
@@ -90,6 +113,7 @@ impl Default for HudLayout {
             show_terrain_angle: true,
             compact_mode: false,
             show_minimap: true,
+            show_compass: true,  // Ф1.5: включен по умолчанию
         }
     }
 }
@@ -370,6 +394,145 @@ impl HudManager {
             if data.cargo_damage > 0.3 {
                 let damage_color = if data.cargo_damage > 0.7 { [1.0, 0.0, 0.0, 1.0] } else { [1.0, 0.5, 0.0, 1.0] };
                 unsafe { renderer.draw_text("DAMAGED", cargo_x, cargo_y + 25.0, 16.0, damage_color); }
+            }
+        }
+
+        // 7. Ф1.5 — КОМПАС В HUD (Верхняя часть экрана, по центру)
+        // Полоска 400×24px, вращается по heading, показывает N/S/E/W + стрелку к цели
+        if layout.show_compass {
+            let compass_width = 400.0;
+            let compass_height = 24.0;
+            let compass_x = (screen_width - compass_width) / 2.0;
+            let compass_y = 15.0; // Чуть ниже самого верха
+
+            // Фон компаса (полупрозрачный чёрный)
+            unsafe { renderer.draw_rect(compass_x, compass_y, compass_width, compass_height, [0.0, 0.0, 0.0, 0.5]); }
+            unsafe { renderer.draw_rect_border(compass_x, compass_y, compass_width, compass_height, 2.0, [0.6, 0.6, 0.6, 0.8]); }
+
+            // Центральный маркер (треугольник вверх)
+            let center_x = screen_width / 2.0;
+            let triangle_size = 8.0;
+            let triangle_color = [1.0, 1.0, 0.0, 1.0]; // Жёлтый
+            
+            // Рисуем треугольник (центр сверху)
+            unsafe {
+                // Левая половина треугольника
+                renderer.draw_line(
+                    center_x - triangle_size / 2.0,
+                    compass_y + compass_height,
+                    center_x,
+                    compass_y + compass_height - triangle_size,
+                    2.0,
+                    triangle_color,
+                );
+                // Правая половина треугольника
+                renderer.draw_line(
+                    center_x,
+                    compass_y + compass_height - triangle_size,
+                    center_x + triangle_size / 2.0,
+                    compass_y + compass_height,
+                    2.0,
+                    triangle_color,
+                );
+            }
+
+            // Вычисляем смещение шкалы компаса на основе heading
+            // heading_degrees: 0=N, 90=E, 180=S, 270=W
+            let heading = data.heading_degrees;
+            let scale_pixels_per_degree = compass_width / 180.0; // 180° видимой области
+            
+            // Основные направления
+            let directions = [
+                (0.0, "N", [1.0, 1.0, 1.0, 1.0]),      // N - белый
+                (45.0, "NE", [0.7, 0.7, 0.7, 0.8]),    // NE - серый
+                (90.0, "E", [1.0, 1.0, 1.0, 1.0]),     // E - белый
+                (135.0, "SE", [0.7, 0.7, 0.7, 0.8]),   // SE - серый
+                (180.0, "S", [1.0, 1.0, 1.0, 1.0]),    // S - белый
+                (225.0, "SW", [0.7, 0.7, 0.7, 0.8]),   // SW - серый
+                (270.0, "W", [1.0, 1.0, 1.0, 1.0]),    // W - белый
+                (315.0, "NW", [0.7, 0.7, 0.7, 0.8]),   // NW - серый
+            ];
+
+            // Рисуем деления и буквы
+            for (angle, label, mut color) in directions.iter() {
+                // Вычисляем относительное положение относительно текущего heading
+                let mut rel_angle = *angle - heading;
+                
+                // Нормализуем угол (-180 до +180)
+                while rel_angle > 180.0 { rel_angle -= 360.0; }
+                while rel_angle < -180.0 { rel_angle += 360.0; }
+                
+                // Если в пределах видимой области (±90° от центра)
+                if rel_angle.abs() <= 90.0 {
+                    let x = center_x + rel_angle * scale_pixels_per_degree;
+                    
+                    // Делаем цвет тусклее если далеко от центра
+                    if rel_angle.abs() > 60.0 {
+                        color = &[0.5, 0.5, 0.5, 0.5];
+                    }
+                    
+                    let font_size = if rel_angle.abs() < 15.0 { 16.0 } else { 12.0 };
+                    let text_y = compass_y + 4.0;
+                    let text_x = x - (label.len() as f32 * font_size * 0.3);
+                    
+                    unsafe { renderer.draw_text(label, text_x, text_y, font_size, *color); }
+                }
+            }
+
+            // Стрелка к активной цели миссии (если есть)
+            if let Some(waypoint) = &data.active_waypoint {
+                let wp_heading = waypoint.heading_degrees;
+                let mut rel_wp_angle = wp_heading - heading;
+                
+                // Нормализуем угол
+                while rel_wp_angle > 180.0 { rel_wp_angle -= 360.0; }
+                while rel_wp_angle < -180.0 { rel_wp_angle += 360.0; }
+                
+                // Если цель в пределах видимости
+                if rel_wp_angle.abs() <= 90.0 {
+                    let arrow_x = center_x + rel_wp_angle * scale_pixels_per_degree;
+                    let arrow_color = [0.0, 1.0, 0.0, 1.0]; // Зелёная стрелка
+                    
+                    // Рисуем стрелку вниз (к цели)
+                    unsafe {
+                        renderer.draw_line(
+                            arrow_x,
+                            compass_y + compass_height + 2.0,
+                            arrow_x,
+                            compass_y + compass_height + 12.0,
+                            2.0,
+                            arrow_color,
+                        );
+                        // Наконечник стрелки
+                        renderer.draw_line(
+                            arrow_x - 4.0,
+                            compass_y + compass_height + 8.0,
+                            arrow_x,
+                            compass_y + compass_height + 12.0,
+                            2.0,
+                            arrow_color,
+                        );
+                        renderer.draw_line(
+                            arrow_x,
+                            compass_y + compass_height + 12.0,
+                            arrow_x + 4.0,
+                            compass_y + compass_height + 8.0,
+                            2.0,
+                            arrow_color,
+                        );
+                    }
+                    
+                    // Дистанция до цели (справа от компаса)
+                    let distance_km = waypoint.distance_meters / 1000.0;
+                    let dist_text = format!("{:.1} км", distance_km);
+                    let dist_x = compass_x + compass_width + 10.0;
+                    let dist_y = compass_y + 4.0;
+                    unsafe { renderer.draw_text(&dist_text, dist_x, dist_y, 14.0, [0.0, 1.0, 0.0, 1.0]); }
+                    
+                    // Название цели (слева от компаса)
+                    let name_x = compass_x - 10.0 - (waypoint.name.len() as f32 * 7.0);
+                    unsafe { renderer.draw_text(&waypoint.name, name_x, dist_y, 14.0, [0.0, 1.0, 0.0, 1.0]); }
+                }
             }
         }
     }
