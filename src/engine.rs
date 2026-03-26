@@ -1,8 +1,9 @@
 use winit::{
-    event::{WindowEvent, ElementState, KeyEvent, MouseButton},
+    event::{WindowEvent, ElementState, KeyboardInput, MouseButton},
     keyboard::{KeyCode, PhysicalKey},
 };
 use std::sync::Arc;
+use crate::config::Config;
 use crate::graphics::GlContext;
 use crate::graphics::material::MaterialManager;
 use crate::graphics::mesh::Mesh;
@@ -72,6 +73,12 @@ pub struct Engine {
 
 impl Engine {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        // Загрузка конфигурации
+        let config = Config::load("config.json").unwrap_or_else(|_| {
+            tracing::warn!("Не удалось загрузить config.json, используются настройки по умолчанию");
+            Config::default()
+        });
+        
         // GlContext будет создан в resumed() через init_window
         let graphics_context = GlContext::new_placeholder();
         let input_manager = InputManager::new();

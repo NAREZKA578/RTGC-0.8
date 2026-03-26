@@ -618,10 +618,13 @@ impl ICommandList for GlCommandList {
     fn begin_render_pass(&mut self, desc: &RenderPassDescription) {
         // Создаем или используем framebuffer
         let framebuffer = unsafe { self.context.create_framebuffer() }
-            .unwrap_or_else(|| unsafe { self.context.create_framebuffer().unwrap() });
+            .unwrap_or_else(|_| {
+                eprintln!("[RHI] Failed to create framebuffer, using default");
+                None
+            });
         
         unsafe {
-            self.context.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+            self.context.bind_framebuffer(glow::FRAMEBUFFER, framebuffer);
             
             // Прикрепляем color attachments через ResourceManager
             // В полной реализации нужно получать текстуры из ResourceManager по handle

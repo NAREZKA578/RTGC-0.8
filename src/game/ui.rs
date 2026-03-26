@@ -5,7 +5,7 @@ use crate::game::player::{PlayerState, CameraMode};
 use crate::game::skills::PlayerSkills;
 use crate::game::interaction::{InteractableType, InteractionResult};
 use crate::game::weather::WeatherState;
-use glam::Vec2;
+use nalgebra::Vector2;
 
 /// UI visibility flags
 #[derive(Debug, Clone, Copy)]
