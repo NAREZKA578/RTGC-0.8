@@ -4,8 +4,7 @@
 use rtgc::engine::Engine;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let event_loop = winit::event_loop::EventLoop::new();
-    let mut engine = Engine::new(&event_loop)?;
+    let mut engine = Engine::new()?;
     engine.run()?;
     Ok(())
 }

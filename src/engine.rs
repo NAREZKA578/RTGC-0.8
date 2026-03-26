@@ -82,9 +82,9 @@ impl Engine {
         let material_manager = MaterialManager::new();
         let particle_system = ParticleSystem::new(1000);
         let debug_renderer = DebugRenderer::new();
-        let weather_system = WeatherSystem::new(12.0, 86400.0);
-        let day_night_cycle = DayNightCycle::new();
-        let winch = Winch::new(0);
+        let weather_system = WeatherSystem::new(42);  // seed для погоды
+        let day_night_cycle = DayNightCycle::new(55.0, 82.9);  // широта и долгота (Новосибирск)
+        let winch = Winch::new(0);  // индекс тела транспортного средства
 
         Ok(Self {
             graphics_context,
@@ -342,17 +342,10 @@ impl Engine {
             self.settlements = Self::generate_settlements_simple(open_world, 5);
         }
 
-        // Создание дорожной сети
+        // Создание дорожной сети - используем правильный метод generate_from_settlements
         if !self.settlements.is_empty() {
             let seed = self.world_seed;
-            let terrain_getter = |x: f32, z: f32| -> f32 {
-                if let Some(ref open_world) = self.open_world {
-                    open_world.get_height(x, z)
-                } else {
-                    0.0
-                }
-            };
-            self.road_network = Some(RoadNetwork::generate(&self.settlements, seed, &terrain_getter));
+            self.road_network = Some(RoadNetwork::generate_from_settlements(&self.settlements, seed));
         }
 
         // Создание генератора миссий
@@ -385,6 +378,7 @@ impl Engine {
             let center_x = grid_x as f32 * CHUNK_SIZE as f32;
             let center_z = grid_z as f32 * CHUNK_SIZE as f32;
             
+            // Используем правильный метод генерации поселений
             if let Some(settlement) = Settlement::generate(open_world.seed + i as u64, grid_x, grid_z, center_x, center_z) {
                 settlements.push(settlement);
             }
