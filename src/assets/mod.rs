@@ -1,4 +1,4 @@
-//! Assets module for RTGC-0.7
+//! Assets module for RTGC-0.8
 
 pub mod loader;
 pub mod asset_loader;

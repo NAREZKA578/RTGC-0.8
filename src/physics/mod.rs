@@ -1,4 +1,4 @@
-//! Physics Module for RTGC-0.7
+//! Physics Module for RTGC-0.8
 //! Provides rigid body dynamics, collision detection, constraints, and vehicle physics
 
 pub mod physics_module;

@@ -1,4 +1,4 @@
-//! Base Building System for RTGC-0.7
+//! Base Building System for RTGC-0.8
 //! Construction of bases, outposts, and structures in the open world
 //! 
 //! Features:

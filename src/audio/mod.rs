@@ -1,4 +1,4 @@
-//! Audio module for RTGC-0.7
+//! Audio module for RTGC-0.8
 
 pub mod engine;
 pub mod audio_module;

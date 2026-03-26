@@ -1,4 +1,4 @@
-//! Input module for RTGC-0.7
+//! Input module for RTGC-0.8
 
 pub mod mapping;
 pub mod input_module;

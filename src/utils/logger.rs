@@ -1,4 +1,4 @@
-//! Logger utilities for RTGC-0.7
+//! Logger utilities for RTGC-0.8
 //! Provides centralized logging configuration
 
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};

@@ -1,4 +1,4 @@
-//! Chunk Manager for RTGC-0.7
+//! Chunk Manager for RTGC-0.8
 //! Менеджер жизненного цикла чанков
 
 use std::collections::HashMap;

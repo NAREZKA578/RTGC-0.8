@@ -1,4 +1,4 @@
-//! Storage System for RTGC-0.7
+//! Storage System for RTGC-0.8
 //! Handles inventory storage with grid-based item placement (Tarkov-style)
 //! Note: No game references in public-facing content
 

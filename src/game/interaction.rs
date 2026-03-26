@@ -1,4 +1,4 @@
-//! Interaction System for RTGC-0.7
+//! Interaction System for RTGC-0.8
 //! Handles player interactions with doors, vehicles, objects, NPCs
 
 use crate::game::events::{GameEvent, publish_event};
