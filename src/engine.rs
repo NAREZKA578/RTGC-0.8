@@ -269,6 +269,10 @@ impl Engine {
                             KeyCode::KeyF3 => {
                                 self.debug_mode = !self.debug_mode;
                             }
+                            // Ф1.6: Открытие инвентаря на Tab
+                            KeyCode::Tab => {
+                                self.hud_manager.toggle_inventory();
+                            }
                             KeyCode::KeyW => self.input_manager.set_key_state(KeyCode::KeyW, true),
                             KeyCode::KeyS => self.input_manager.set_key_state(KeyCode::KeyS, true),
                             KeyCode::KeyA => self.input_manager.set_key_state(KeyCode::KeyA, true),
