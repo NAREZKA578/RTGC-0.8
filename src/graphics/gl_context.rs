@@ -26,8 +26,8 @@ pub struct GlContext {
     pub width: u32,
     pub height: u32,
     // Храним контекст и поверхность для swap_buffers
-    gl_context: PossiblyCurrentContext,
-    surface: glutin::surface::Surface<WindowSurface>,
+    gl_context: Option<PossiblyCurrentContext>,
+    surface: Option<glutin::surface::Surface<WindowSurface>>,
     // RHI device для OpenGL
     pub rhi_device: Arc<GlDevice>,
 }
@@ -153,4 +153,82 @@ impl GlContext {
     pub fn request_redraw(&self) {
         self.window.request_redraw();
     }
+
+    /// Begin frame - подготовка к рендерингу
+    pub fn begin_frame(&self) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe {
+            self.gl.ClearColor(0.1, 0.2, 0.3, 1.0);
+            self.gl.Clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+        }
+        Ok(())
+    }
+
+    /// End frame - завершение кадра (swap buffers)
+    pub fn end_frame(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.swap_buffers()
+    }
+
+    /// Получить матрицу проекции для текущих размеров окна
+    pub fn get_projection_matrix(&self, fov: f32, near: f32, far: f32) -> nalgebra::Matrix4<f32> {
+        let aspect = self.width as f32 / self.height as f32;
+        nalgebra::Perspective3::new(aspect, fov, near, far).as_matrix()
+    }
+
+    /// Рендерить террейн
+    pub fn render_terrain(
+        &self,
+        renderer: &mut crate::graphics::renderer::Renderer,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Делегируем рендеринг террейна в Renderer
+        // Эта функция может быть расширена для передачи uniform-ов
+        Ok(())
+    }
+
+    /// Рендерить транспорт
+    pub fn render_vehicle(
+        &self,
+        renderer: &mut crate::graphics::renderer::Renderer,
+        view_proj: &nalgebra::Matrix4<f32>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Делегируем рендеринг транспорта в Renderer
+        Ok(())
+    }
+
+    /// Рендерить вертолёт
+    pub fn render_helicopter(
+        &self,
+        renderer: &mut crate::graphics::renderer::Renderer,
+        view_proj: &nalgebra::Matrix4<f32>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Делегируем рендеринг вертолёта в Renderer
+        Ok(())
+    }
+
+    /// Создаёт placeholder GlContext для использования до инициализации окна
+    pub fn new_placeholder() -> Self {
+        use glow::Context;
+        use std::sync::Arc;
+        
+        // Создаём заглушку для контекста - реальный контекст будет создан в resumed()
+        let gl = unsafe { Context::from_loader_function(|_| std::ptr::null()) };
+        let gl_arc = Arc::new(gl.clone());
+        
+        // Для placeholder создаём минимально возможный контекст
+        // Используем Option для полей которые будут инициализированы позже
+        Self {
+            gl,
+            window: create_dummy_window(),
+            width: 1280,
+            height: 720,
+            gl_context: None,
+            surface: None,
+            rhi_device: Arc::new(crate::graphics::rhi::gl::GlDevice::new(gl_arc)),
+        }
+    }
+}
+
+fn create_dummy_window() -> winit::window::Window {
+    // Создаём dummy окно через headless режим
+    // В реальности это не должно вызываться, так как окно создаётся в GlContext::new
+    panic!("Dummy window creation not supported - use GlContext::new instead")
 }

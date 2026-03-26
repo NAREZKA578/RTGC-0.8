@@ -1,33 +1,7 @@
 ```
-# Rust/Cargo specific
-target/
-Cargo.lock
-*.rs.bk
+# Compiled and build artifacts
 *.pyc
 __pycache__/
-
-# Dependencies
-node_modules/
-venv/
-.venv/
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-
-# Environment
-.env
-.env.local
-.env.*
-
-# Editors
-.vscode/
-.idea/
-
-# Build artifacts
-build/
-dist/
 *.o
 *.obj
 *.exe
@@ -35,18 +9,31 @@ dist/
 *.so
 *.a
 *.out
-
-# Caching
+# Dependencies
+.venv/
+venv/
+node_modules/
+target/
 .mypy_cache/
 .pytest_cache/
 .coverage
-coverage/
-htmlcov/
-
-# OS generated
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+# Environment
+.env
+.env.local
+.env.*
+# Editors
+.vscode/
+.idea/
+# OS specific
 .DS_Store
 Thumbs.db
-
+# Coverage
+coverage/
+htmlcov/
 # Compressed files
 *.zip
 *.gz

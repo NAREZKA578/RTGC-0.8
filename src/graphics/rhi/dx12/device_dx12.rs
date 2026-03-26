@@ -287,26 +287,6 @@ impl IDevice for Dx12Device {
         Ok(handle)
     }
     
-    #[cfg(not(target_os = "windows"))]
-    fn create_buffer(&self, _desc: &BufferDescription) -> RhiResult<ResourceHandle> {
-        Err(RhiError::Unsupported("DX12 is only available on Windows".to_string()))
-    }
-    
-    #[cfg(target_os = "windows")]
-    fn create_texture(&self, desc: &TextureDescription) -> RhiResult<ResourceHandle> {
-        use windows::Win32::Graphics::Direct3D12::*;
-        
-        let handle = self.generate_handle();
-        let texture = Dx12Texture::new(&self.device, desc, handle)?;
-        
-        Ok(handle)
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    fn create_texture(&self, _desc: &TextureDescription) -> RhiResult<ResourceHandle> {
-        Err(RhiError::Unsupported("DX12 is only available on Windows".to_string()))
-    }
-    
     #[cfg(target_os = "windows")]
     fn create_texture_view(
         &self,
@@ -369,15 +349,6 @@ impl IDevice for Dx12Device {
         }
         
         Ok(handle)
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    fn create_texture_view(
-        &self,
-        _texture: ResourceHandle,
-        _desc: &TextureViewDescription,
-    ) -> RhiResult<ResourceHandle> {
-        Err(RhiError::Unsupported("DX12 is only available on Windows".to_string()))
     }
     
     #[cfg(target_os = "windows")]
@@ -528,11 +499,6 @@ impl IDevice for Dx12Device {
         )?;
         
         Ok(Arc::new(cmd_list))
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    fn create_command_list(&self, _cmd_type: CommandListType) -> RhiResult<Arc<dyn ICommandList>> {
-        Err(RhiError::Unsupported("DX12 is only available on Windows".to_string()))
     }
     
     #[cfg(target_os = "windows")]
@@ -770,11 +736,6 @@ impl IDevice for Dx12Device {
         
         fence.set_event_on_completion(1)?;
         
-        Ok(())
-    }
-    
-    #[cfg(not(target_os = "windows"))]
-    fn wait_idle(&self) -> RhiResult<()> {
         Ok(())
     }
     

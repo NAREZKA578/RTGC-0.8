@@ -13,44 +13,6 @@ pub use super::dx12::*;
 #[cfg(feature = "vulkan")]
 pub use super::vulkan::*;
 
-/// RHI Factory - creates device instances for different backends
-pub struct RhiFactory;
-
-impl RhiFactory {
-    /// Create a device with the specified backend
-    pub fn create_device(backend: GraphicsBackend, enable_validation: bool) -> RhiResult<Box<dyn IDevice>> {
-        match backend {
-            #[cfg(all(target_os = "windows", feature = "dx12"))]
-            GraphicsBackend::DirectX12 => super::dx12::create_dx12_device(enable_validation),
-
-            #[cfg(feature = "vulkan")]
-            GraphicsBackend::Vulkan => super::vulkan::create_vulkan_device(enable_validation),
-
-            _ => Err(RhiError::Unsupported("Requested backend is not available".to_string())),
-        }
-    }
-    
-    /// Get the best available backend for the current platform
-    pub fn get_preferred_backend() -> GraphicsBackend {
-        #[cfg(all(target_os = "windows", feature = "dx12"))]
-        {
-            GraphicsBackend::DirectX12
-        }
-        #[cfg(not(all(target_os = "windows", feature = "dx12")))]
-        {
-            #[cfg(feature = "vulkan")]
-            {
-                GraphicsBackend::Vulkan
-            }
-            #[cfg(not(feature = "vulkan"))]
-            {
-                // Fallback to OpenGL (not yet implemented in RHI)
-                GraphicsBackend::OpenGL
-            }
-        }
-    }
-}
-
 /// Graphics API backend
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicsBackend {
@@ -67,28 +29,6 @@ impl GraphicsBackend {
             GraphicsBackend::DirectX12 => "DirectX 12",
             GraphicsBackend::OpenGL => "OpenGL",
             GraphicsBackend::Metal => "Metal",
-        }
-    }
-}
-
-/// RHI initialization configuration
-#[derive(Debug, Clone)]
-pub struct RhiConfig {
-    pub backend: GraphicsBackend,
-    pub enable_validation: bool,
-    pub enable_debug_layers: bool,
-    pub max_frames_in_flight: u32,
-    pub descriptor_pool_size: u32,
-}
-
-impl Default for RhiConfig {
-    fn default() -> Self {
-        Self {
-            backend: RhiFactory::get_preferred_backend(),
-            enable_validation: cfg!(debug_assertions),
-            enable_debug_layers: cfg!(debug_assertions),
-            max_frames_in_flight: 3,
-            descriptor_pool_size: 1024,
         }
     }
 }

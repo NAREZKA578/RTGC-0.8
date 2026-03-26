@@ -75,8 +75,7 @@ pub enum MenuState {
 }
 
 impl Renderer {
-    pub fn new(gl: Context) -> Result<Self, Box<dyn std::error::Error>> {
-        let gl = Arc::new(gl);
+    pub fn new(gl: Arc<Context>) -> Result<Self, Box<dyn std::error::Error>> {
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
@@ -87,16 +86,16 @@ impl Renderer {
 
         // Исп-4: Загружать шейдер из файла
         let vertex_src = std::fs::read_to_string("assets/shaders/terrain.vert")
-            .unwrap_or_else(|_| include_str!("../../assets/shaders/terrain.vert").to_string());
+            .unwrap_or_else(|_| include_str!("../assets/shaders/terrain.vert").to_string());
         let fragment_src = std::fs::read_to_string("assets/shaders/terrain.frag")
-            .unwrap_or_else(|_| include_str!("../../assets/shaders/terrain.frag").to_string());
+            .unwrap_or_else(|_| include_str!("../assets/shaders/terrain.frag").to_string());
         let shader = Shader::new(&gl, &vertex_src, &fragment_src)?;
 
         // Задача 2: Загрузить vehicle shader
         let vehicle_vertex_src = std::fs::read_to_string("assets/shaders/vehicle.vert")
-            .unwrap_or_else(|_| include_str!("../../assets/shaders/vehicle.vert").to_string());
+            .unwrap_or_else(|_| include_str!("../assets/shaders/vehicle.vert").to_string());
         let vehicle_fragment_src = std::fs::read_to_string("assets/shaders/vehicle.frag")
-            .unwrap_or_else(|_| include_str!("../../assets/shaders/vehicle.frag").to_string());
+            .unwrap_or_else(|_| include_str!("../assets/shaders/vehicle.frag").to_string());
         let vehicle_shader = Shader::new(&gl, &vehicle_vertex_src, &vehicle_fragment_src).ok();
 
         // Исп-2: Создать простой шейдер для неба
