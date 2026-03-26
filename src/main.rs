@@ -4,6 +4,9 @@
 use rtgc::engine::Engine;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Инициализация логгера для отладки
+    tracing_subscriber::fmt::init();
+    
     let mut engine = Engine::new()?;
     engine.run()?;
     Ok(())

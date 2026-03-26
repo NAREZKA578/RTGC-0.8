@@ -10,7 +10,7 @@
 //! - Ownership and permissions
 
 use serde::{Deserialize, Serialize};
-use glam::Vec3;
+use nalgebra::Vector3;
 use std::collections::HashMap;
 
 /// Maximum number of structures per base

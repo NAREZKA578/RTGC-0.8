@@ -100,37 +100,50 @@ pub struct ProfileGuard<'a> {
 
 impl<'a> ProfileGuard<'a> {
     pub fn new(name: &'a str) -> Self {
-        get_profiler().lock().unwrap().start_timer(name);
+        if let Ok(mut profiler) = get_profiler().lock() {
+            profiler.start_timer(name);
+        } else {
+            eprintln!("[Profiler] Failed to acquire lock for start_timer: {}", name);
+        }
         Self { name }
     }
 }
 
 impl<'a> Drop for ProfileGuard<'a> {
     fn drop(&mut self) {
-        get_profiler().lock().unwrap().stop_timer(self.name);
+        if let Ok(mut profiler) = get_profiler().lock() {
+            profiler.stop_timer(self.name);
+        }
+        // Silent fail on drop to avoid panics during unwinding
     }
 }
 
 pub fn start_timer(name: &str) {
-    get_profiler().lock().unwrap().start_timer(name);
+    if let Ok(mut profiler) = get_profiler().lock() {
+        profiler.start_timer(name);
+    }
 }
 
 pub fn stop_timer(name: &str) -> Option<f64> {
-    get_profiler().lock().unwrap().stop_timer(name)
+    get_profiler().lock().ok().and_then(|mut p| p.stop_timer(name))
 }
 
 pub fn get_average_time(name: &str) -> Option<f64> {
-    get_profiler().lock().unwrap().get_average_time(name)
+    get_profiler().lock().ok().and_then(|p| p.get_average_time(name))
 }
 
 pub fn get_last_time(name: &str) -> Option<f64> {
-    get_profiler().lock().unwrap().get_last_time(name)
+    get_profiler().lock().ok().and_then(|p| p.get_last_time(name))
 }
 
 pub fn print_profile_report() {
-    get_profiler().lock().unwrap().print_profile_report();
+    if let Ok(profiler) = get_profiler().lock() {
+        profiler.print_profile_report();
+    }
 }
 
 pub fn reset_profiler() {
-    get_profiler().lock().unwrap().reset();
+    if let Ok(mut profiler) = get_profiler().lock() {
+        profiler.reset();
+    }
 }

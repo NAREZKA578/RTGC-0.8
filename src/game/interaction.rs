@@ -3,7 +3,7 @@
 
 use crate::game::events::{GameEvent, publish_event};
 use crate::physics::raycast::{RayCastHit, raycast_world};
-use glam::Vec3;
+use nalgebra::Vector3;
 
 /// Interaction layers bitmask
 pub const LAYER_INTERACTABLE_DOOR: u32 = 0b00001;
@@ -396,7 +396,6 @@ impl Default for InteractionSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glam::Vec3;
 
     #[test]
     fn test_interaction_system_creation() {
@@ -409,7 +408,7 @@ mod tests {
         let mut system = InteractionSystem::new();
         
         // Simulate update
-        system.update(0.1, Vec3::ZERO, Vec3::Z, 2.0);
+        system.update(0.1, Vector3::zeros(), Vector3::z(), 2.0);
         
         // Cooldown should be 0 initially
         assert_eq!(system.interaction_cooldown, 0.0);
