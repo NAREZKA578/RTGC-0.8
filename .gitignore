@@ -4,7 +4,6 @@
 __pycache__/
 *.o
 *.obj
-*.class
 *.exe
 *.dll
 *.so
@@ -17,12 +16,10 @@ node_modules/
 target/
 .mypy_cache/
 .pytest_cache/
-.dist-info/
 # Logs and temp files
 *.log
 *.tmp
 *.swp
-*.swo
 # Environment
 .env
 .env.local
@@ -30,19 +27,11 @@ target/
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
 # Coverage
 coverage/
 htmlcov/
 .coverage
-# Distribution archives
-*.tar
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.gz
-*.zip
-*.rar
-*.7z
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
