@@ -21,6 +21,8 @@ pub mod economy;
 pub mod first_mission;
 pub mod storage;
 pub mod base_builder;
+pub mod settings;
+pub mod map_system;
 
 pub use mission_save::{SaveGame, MissionSaveManager};
 pub use weather::{WeatherSystem, WeatherState, DayNightCycle, PrecipitationType};
@@ -42,3 +44,5 @@ pub use economy::{EconomySystem, PlayerWallet, MarketPrice, Shop, ShopType, Shop
 pub use first_mission::{FirstMission, FirstMissionManager, FirstMissionState, PhoneNotification};
 pub use storage::{StorageSystem, StorageContainer, StoredItem, ContainerType, ItemDimensions, StorageSlot, MAX_STORAGE_WIDTH, MAX_STORAGE_HEIGHT, MAX_STORAGE_SLOTS};
 pub use base_builder::{BaseBuildingSystem, PlayerBase, BuiltStructure, BaseType, StructureType, BaseCapability, ResourceRequirements, MAX_STRUCTURES_PER_BASE, MAX_BASES_PER_PLAYER, GRID_CELL_SIZE, MIN_BASE_DISTANCE};
+pub use settings::{SettingsManager, GameSettings, DisplaySettings, GraphicsSettings, AudioSettings, ControlsSettings, GameplaySettings, HudSettings, NetworkSettings, PerformanceSettings, DebugSettings};
+pub use map_system::{MapSystem, MapMarker, MarkerType};
