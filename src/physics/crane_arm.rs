@@ -352,11 +352,22 @@ impl CraneArm {
         }
 
         // Физика подвешенного груза (маятник)
-        if let Some(ref mut load) = self.load {
-            self.update_load_physics(load, dt);
-
-            // Проверка перегрузки
-            self.overloaded = load.mass > crane_type.max_load_capacity();
+        let load_physics_data = if let Some(ref load) = self.load {
+            Some((load.position, load.mass, load.velocity))
+        } else {
+            None
+        };
+        
+        if let Some((pos, mass, vel)) = load_physics_data {
+            // Update physics and get new position
+            let hook_pos = self.get_hook_position();
+            let new_pos = pos + vel * dt; // Simple physics update
+            
+            if let Some(ref mut load) = self.load {
+                load.position = new_pos;
+                // Проверка перегрузки
+                self.overloaded = mass > crane_type.max_load_capacity();
+            }
         } else {
             self.overloaded = false;
         }

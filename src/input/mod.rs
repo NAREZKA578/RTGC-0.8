@@ -4,3 +4,5 @@ pub mod mapping;
 pub mod input_module;
 pub mod gamepad;
 pub mod action_map;
+
+pub use input_module::InputManager;

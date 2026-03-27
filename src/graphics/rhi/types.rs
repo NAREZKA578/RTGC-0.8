@@ -648,7 +648,6 @@ impl std::error::Error for RhiError {}
 pub type RhiResult<T> = Result<T, RhiError>;
 
 // Type aliases for backwards compatibility
-pub type BufferDesc = BufferDescription;
 pub type TextureDesc = TextureDescription;
 pub type SamplerDesc = SamplerDescription;
 pub type PipelineDesc = PipelineStateObject;

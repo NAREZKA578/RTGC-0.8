@@ -2,7 +2,8 @@
 //! Handles player interactions with doors, vehicles, objects, NPCs
 
 use crate::game::events::{GameEvent, publish_event};
-use crate::physics::{Ray, RaycastHit, raycast_world};
+use crate::physics::{Ray, RaycastHit};
+use crate::physics::physics_module::raycast_world;
 use nalgebra::Vector3;
 
 /// Interaction layers bitmask

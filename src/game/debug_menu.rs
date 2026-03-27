@@ -2,7 +2,8 @@
 //! Displays FPS, CPU/RAM usage, physics stats, player info
 
 use nalgebra::Vector3;
-use crate::game::{Player, PlayerState, PhysicsStats};
+use crate::game::{Player, PlayerState};
+use crate::physics::PhysicsStats;
 
 /// Debug menu state
 pub struct DebugMenu {
@@ -62,9 +63,9 @@ impl DebugMenu {
     
     /// Update physics statistics
     pub fn update_physics_stats(&mut self, stats: PhysicsStats) {
-        self.physics_stats = stats;
         self.active_rigid_bodies = stats.active_bodies;
         self.active_collisions = stats.broadphase_pairs;
+        self.physics_stats = stats.clone();
     }
     
     /// Update chunk count

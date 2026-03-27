@@ -1,0 +1,336 @@
+﻿
+error[E0432]: unresolved import `crate::input::gamepad::Gamepad`
+error[E0432]: unresolved import `crate::physics_module`
+error[E0432]: unresolved import `crate::physics_module`
+error[E0433]: failed to resolve: unresolved import
+error[E0433]: failed to resolve: unresolved import
+error[E0433]: failed to resolve: unresolved import
+error[E0412]: cannot find type `SurfaceType` in module `crate::physics`
+error[E0412]: cannot find type `InventoryItem` in module `crate::game::cargo`
+error[E0433]: failed to resolve: use of undeclared type `Vec3`
+error[E0412]: cannot find type `Vec2` in this scope
+error[E0412]: cannot find type `Vec2` in this scope
+error[E0412]: cannot find type `Vec2` in this scope
+error[E0412]: cannot find type `Vec2` in this scope
+error[E0412]: cannot find type `Vec2` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0412]: cannot find type `Vec3` in this scope
+error[E0603]: struct import `Material` is private
+error[E0119]: conflicting implementations of trait `std::marker::Copy` for type `render_command::Handle<_>`
+error: captured variable cannot escape `FnMut` closure body
+error[E0277]: `*mut c_void` cannot be shared between threads safely
+error[E0277]: `*mut c_void` cannot be sent between threads safely
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0599]: no method named `clone` found for struct `parking_lot::lock_api::RwLock` in the current scope
+error[E0599]: no method named `clone` found for struct `parking_lot::lock_api::RwLock` in the current scope
+error[E0599]: the function or associated item `new` exists for struct `AssetPreloader<T>`, but its trait bounds were not satisfied
+error[E0308]: mismatched types
+error[E0599]: no method named `update` found for mutable reference `&mut (SoundHandle, audio::engine::AudioSource)` in the current scope
+error[E0599]: no method named `is_finished` found for mutable reference `&mut (SoundHandle, audio::engine::AudioSource)` in the current scope
+error[E0599]: no method named `update_3d_position` found for mutable reference `&mut (SoundHandle, audio::engine::AudioSource)` in the current scope
+error[E0609]: no field `listener_position` on type `&mut AudioEngine`
+error[E0609]: no field `listener_orientation` on type `&mut AudioEngine`
+error[E0599]: no associated item named `ZERO` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no associated item named `ZERO` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no associated item named `ZERO` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no associated item named `Z` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no associated item named `Y` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no associated item named `ZERO` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0308]: mismatched types
+error[E0282]: type annotations needed
+error[E0599]: no associated item named `ZERO` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no method named `length` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0308]: mismatched types
+error[E0282]: type annotations needed
+error[E0308]: mismatched types
+error[E0599]: no method named `length` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0308]: mismatched types
+error[E0599]: no method named `length` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0277]: `Shader` doesn't implement `Debug`
+error[E0277]: the trait bound `Shader: Clone` is not satisfied
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0599]: no function or associated item named `new_with_normals` found for struct `graphics::mesh::Mesh` in the current scope
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0599]: no function or associated item named `new_with_normals` found for struct `graphics::mesh::Mesh` in the current scope
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `position` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0609]: no field `normal` on type `&nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>`
+error[E0599]: no function or associated item named `new_with_normals` found for struct `graphics::mesh::Mesh` in the current scope
+error[E0599]: no method named `render_billboard` found for mutable reference `&mut Renderer` in the current scope
+error[E0308]: mismatched types
+error[E0614]: type `[{float}; 4]` cannot be dereferenced
+error[E0308]: mismatched types
+error[E0599]: no variant or associated item named `VertexBuffer` found for enum `types::BufferType` in the current scope
+error[E0609]: no field `vertices` on type `graphics::mesh::Mesh`
+error[E0609]: no field `indices` on type `graphics::mesh::Mesh`
+error[E0599]: no variant or associated item named `IndexBuffer` found for enum `types::BufferType` in the current scope
+error[E0609]: no field `indices` on type `graphics::mesh::Mesh`
+error[E0609]: no field `terrain_mesh` on type `&mut RendererRhi`
+error[E0308]: mismatched types
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0599]: no method named `supports_glsl_version` found for reference `&glow::Context` in the current scope
+error[E0609]: no field `texture_type` on type `&types::TextureDescription`
+error[E0599]: no variant or associated item named `R8Uint` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rg8Unorm` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rg16Float` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rg32Float` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rgba8Unorm` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rgba8Uint` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rgba8Snorm` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rgba16Float` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Rgba32Float` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Bgra8Unorm` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Depth16Unorm` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Depth24Plus` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Depth32Float` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Stencil8` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Depth24PlusStencil8` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `Depth32FloatStencil8` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `BC3RgbaUnorm` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no variant or associated item named `BC7RgbaUnorm` found for enum `types::TextureFormat` in the current scope
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0599]: no variant or associated item named `CompilationFailed` found for enum `types::RhiError` in the current scope
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0599]: no associated item named `Immutable` found for struct `types::BufferUsage` in the current scope
+error[E0599]: no associated item named `Dynamic` found for struct `types::BufferUsage` in the current scope
+error[E0599]: no associated item named `Transient` found for struct `types::BufferUsage` in the current scope
+error[E0599]: no associated item named `Upload` found for struct `types::BufferUsage` in the current scope
+error[E0599]: no associated item named `Readback` found for struct `types::BufferUsage` in the current scope
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0609]: no field `texture_type` on type `&types::TextureDescription`
+error[E0308]: mismatched types
+error[E0599]: no method named `unwrap_or` found for type `u32` in the current scope
+error[E0308]: mismatched types
+error[E0599]: no method named `unwrap_or` found for type `u32` in the current scope
+error[E0609]: no field `depth` on type `&types::TextureDescription`
+error[E0308]: mismatched types
+error[E0599]: no method named `unwrap_or` found for type `u32` in the current scope
+error[E0308]: mismatched types
+error[E0599]: no method named `unwrap_or` found for type `u32` in the current scope
+error[E0308]: mismatched types
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0609]: no field `bytecode` on type `&types::ShaderDescription`
+error[E0599]: no variant or associated item named `CompilationFailed` found for enum `types::RhiError` in the current scope
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0609]: no field `shaders` on type `&types::PipelineStateObject`
+error[E0308]: mismatched types
+error[E0599]: no variant or associated item named `CompilationFailed` found for enum `types::RhiError` in the current scope
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0277]: the trait bound `GlSemaphoreInternal: ISemaphore` is not satisfied
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0599]: no method named `ok_or_else` found for enum `std::result::Result` in the current scope
+error[E0599]: no method named `unwrap_or` found for type `u32` in the current scope
+error[E0599]: no method named `get_tex_image_u8_slice` found for struct `Arc<glow::Context>` in the current scope
+error[E0599]: no variant or associated item named `InvalidResourceHandle` found for enum `types::RhiError` in the current scope
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0599]: no method named `clear_buffer_color_f32` found for struct `Arc<glow::Context>` in the current scope
+error[E0609]: no field `x` on type `&types::ScissorRect`
+error[E0609]: no field `y` on type `&types::ScissorRect`
+error[E0609]: no field `width` on type `&types::ScissorRect`
+error[E0609]: no field `height` on type `&types::ScissorRect`
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0599]: no method named `clear_buffer_color_f32` found for struct `Arc<glow::Context>` in the current scope
+error[E0599]: no method named `set_value` found for reference `&dyn IFence` in the current scope
+error[E0609]: no field `context` on type `&mut GlSwapChainInternal`
+error[E0609]: no field `context` on type `&mut GlSwapChainInternal`
+error[E0609]: no field `context` on type `&mut GlSwapChainInternal`
+error[E0277]: `ParticleType` doesn't implement `Debug`
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0599]: no method named `ok_or` found for enum `std::result::Result` in the current scope
+error[E0599]: no method named `ok_or` found for enum `std::result::Result` in the current scope
+error[E0599]: no method named `ok_or` found for enum `std::result::Result` in the current scope
+error[E0308]: mismatched types
+error[E0277]: the `?` operator can only be used in a closure that returns `Result` or `Option` (or another type that implements `FromResidual`)
+error[E0599]: no method named `clone` found for struct `glow::Context` in the current scope
+error[E0308]: mismatched types
+error[E0308]: mismatched types
+error[E0599]: no method named `resize` found for enum `std::option::Option` in the current scope
+error[E0599]: no method named `swap_buffers` found for enum `std::option::Option` in the current scope
+error[E0599]: no method named `ClearColor` found for struct `glow::Context` in the current scope
+error[E0599]: no method named `Clear` found for struct `glow::Context` in the current scope
+error[E0308]: mismatched types
+error[E0599]: no method named `clone` found for struct `glow::Context` in the current scope
+error[E0369]: binary operation `!=` cannot be applied to type `std::option::Option<render_command::Handle<graphics::material::Material>>`
+error[E0063]: missing field `gamepad_bindings` in initializer of `InputMapping`
+error[E0609]: no field `id` on type `&&mut GamepadState`
+error[E0609]: no field `id` on type `GamepadState`
+error[E0063]: missing fields `layer` and `object_id` in initializer of `RaycastHit`
+error[E0063]: missing fields `layer` and `object_id` in initializer of `RaycastHit`
+error[E0063]: missing fields `layer` and `object_id` in initializer of `RaycastHit`
+error[E0063]: missing fields `layer` and `object_id` in initializer of `RaycastHit`
+error[E0063]: missing fields `layer` and `object_id` in initializer of `RaycastHit`
+error[E0609]: no field `cargo_hook_force` on type `&mut Helicopter`
+error[E0609]: no field `cargo_hook_force` on type `&mut Helicopter`
+error[E0609]: no field `cargo_hook_force` on type `&Helicopter`
+error[E0599]: no method named `length` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no associated item named `ZERO` found for struct `nalgebra::Matrix<_, Const<3>, Const<1>, ArrayStorage<_, 3, 1>>` in the current scope
+error[E0599]: no method named `length` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no associated item named `ZERO` found for struct `nalgebra::Matrix<_, Const<3>, Const<1>, ArrayStorage<_, 3, 1>>` in the current scope
+error[E0599]: no method named `normalize_or_zero` found for struct `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>` in the current scope
+error[E0599]: no method named `deform` found for mutable reference `&mut DeformableTerrainComponent` in the current scope
+error[E0599]: no method named `draw_line` found for mutable reference `&mut Renderer` in the current scope
+error[E0599]: no method named `draw_line` found for mutable reference `&mut Renderer` in the current scope
+error[E0308]: mismatched types
+error[E0614]: type `[{float}; 4]` cannot be dereferenced
+error[E0624]: method `draw_triangle` is private
+error[E0599]: no method named `draw_line` found for mutable reference `&mut Renderer` in the current scope
+error[E0599]: no method named `draw_line` found for mutable reference `&mut Renderer` in the current scope
+error[E0624]: method `draw_triangle` is private
+error[E0599]: no method named `draw_circle` found for mutable reference `&mut Renderer` in the current scope
+error[E0606]: casting `&usize` as `f64` is invalid
+error[E0061]: this function takes 1 argument but 0 arguments were supplied
+error[E0599]: no method named `update` found for struct `InputManager` in the current scope
+error[E0599]: no method named `update` found for struct `EcsManager` in the current scope
+error[E0599]: no method named `get_height` found for reference `&OpenWorld` in the current scope
+error[E0599]: no variant or associated item named `KeyF3` found for enum `KeyCode` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_mouse_button_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_mouse_button_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `generate_terrain` found for mutable reference `&mut OpenWorld` in the current scope
+error[E0308]: mismatched types
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+error[E0609]: no field `seed` on type `&OpenWorld`
+error[E0609]: no field `seed` on type `&OpenWorld`
+error[E0599]: no method named `generate_terrain` found for mutable reference `&mut OpenWorld` in the current scope
+error[E0599]: no variant or associated item named `KeyF3` found for enum `KeyCode` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_key_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_mouse_button_state` found for struct `InputManager` in the current scope
+error[E0599]: no method named `set_mouse_button_state` found for struct `InputManager` in the current scope
+error[E0599]: no function or associated item named `new` found for struct `Ray` in the current scope
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+error[E0308]: mismatched types
+error[E0599]: no method named `norm` found for struct `OPoint<f32, Const<3>>` in the current scope
+error[E0308]: mismatched types
+error[E0609]: no field `weight` on type `InventoryItem`
+error[E0609]: no field `weight` on type `InventoryItem`
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Serialize` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Serialize` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Serialize` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0277]: the trait bound `nalgebra::Matrix<f32, Const<3>, Const<1>, ArrayStorage<f32, 3, 1>>: serde::Deserialize<'de>` is not satisfied
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `bincode`
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `bincode`
+error[E0308]: mismatched types
+error[E0560]: struct `SaveMetadata` has no field named `location`
+error[E0560]: struct `SaveMetadata` has no field named `playtime_seconds`
+error[E0560]: struct `SaveMetadata` has no field named `real_time_saved`
+error[E0560]: struct `SaveMetadata` has no field named `money`
+error[E0599]: no method named `get_final_data` found for reference `&CharacterCreationManager` in the current scope
+error[E0599]: no method named `update` found for mutable reference `&mut CharacterCreationManager` in the current scope
+error[E0026]: variant `PlayerState::InVehicle` does not have a field named `vehicle_id`
+error[E0559]: variant `PlayerState::InVehicle` has no field named `vehicle_id`
+error[E0559]: variant `GameEvent::PlayerEnteredVehicle` has no field named `vehicle_id`
+error[E0559]: variant `GameEvent::PlayerExitedVehicle` has no field named `vehicle_id`
+error[E0533]: expected value, found struct variant `CameraMode::ThirdPerson`
+error[E0433]: failed to resolve: use of undeclared type `Vec2`
+error[E0433]: failed to resolve: use of undeclared type `Vec2`
+error[E0599]: no associated item named `Clear` found for struct `WeatherState` in the current scope
+error[E0599]: no associated item named `Cloudy` found for struct `WeatherState` in the current scope
+error[E0223]: ambiguous associated type
+error[E0223]: ambiguous associated type
+error[E0223]: ambiguous associated type
+error[E0223]: ambiguous associated type
+error[E0599]: no method named `saturating_sub` found for type `f32` in the current scope
+error[E0689]: can't call method `min` on ambiguous numeric type `{float}`
+error[E0615]: attempted to take value of method `is_complete` on type `BuiltStructure`
+error[E0599]: no function or associated item named `new_placeholder` found for struct `graphics::mesh::Mesh` in the current scope
+error[E0599]: no function or associated item named `new_placeholder` found for struct `graphics::texture::Texture` in the current scope
+error[E0277]: `dyn StdError` cannot be sent between threads safely
+error[E0599]: `Map<Iter<'_, &str>, {closure@asset_manager.rs:217:18}>` is not an iterator
+error[E0308]: mismatched types
+error[E0505]: cannot move out of `path_to_key` because it is borrowed
+error[E0502]: cannot borrow `cache` as mutable because it is also borrowed as immutable
+error[E0382]: borrow of moved value: `path`
+error[E0515]: cannot return value referencing local variable `storages`
+error[E0502]: cannot borrow `*self` as mutable because it is also borrowed as immutable
+error[E0507]: cannot move out of `*texture` which is behind a shared reference
+error[E0382]: borrow of moved value: `context`
+error: could not compile `rtgc` (lib) due to 332 previous errors; 218 warnings emitted
+
+
