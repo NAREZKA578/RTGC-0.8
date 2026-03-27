@@ -12,6 +12,8 @@ pub mod advanced_vehicle;
 pub mod vehicle;
 pub mod deformable_terrain;
 pub mod constraints;
+pub mod tracked_vehicle;
+pub mod crane_arm;
 
 // Re-export collision layer constants
 pub use physics_module::{LAYER_WORLD, LAYER_VEHICLE, LAYER_CARGO, LAYER_TRIGGER};
@@ -26,3 +28,5 @@ pub use vehicle::{Vehicle, VehicleControls};
 pub use advanced_vehicle::AdvancedVehicle;
 pub use deformable_terrain::DeformableTerrainComponent;
 pub use constraints::{SpringConstraint, RaycastSuspension};
+pub use tracked_vehicle::{TrackedVehicle, TrackedVehicleType, TrackedControls, TrackedVehicleState};
+pub use crane_arm::{CraneArm, CraneConfig, CraneState};
