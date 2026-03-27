@@ -77,6 +77,10 @@ default = ["profiling"]
 profiling = ["tracy-client"]
 dx12 = []
 vulkan = []
+dev_tools = ["console", "hot_reload", "debug_overlay"]
+console = []
+hot_reload = []
+debug_overlay = []
 
 [profile.dev]
 opt-level = 0

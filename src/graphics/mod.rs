@@ -16,6 +16,8 @@ pub mod material;
 pub mod particles;
 pub mod debug_renderer;
 pub mod gl_context;
+pub mod render_command;
+pub mod render_queue;
 
 pub use renderer::{Renderer, MenuState};
 pub use renderer_rhi::RendererRhi;  // New RHI-based renderer
@@ -24,6 +26,8 @@ pub use shader::Shader;
 pub use mesh::{Mesh, MeshHandle};
 pub use texture::Texture;
 pub use gl_context::GlContext;
+pub use render_command::{RenderCommand, Handle};
+pub use render_queue::{RenderQueue, RenderQueueStats};
 // pub use lod_system::LodSystem; // нет такого типа, используется LodManager
 // pub use texture_streaming::TextureStreamer; // нет такого типа
 // pub use lighting::{Light, LightManager, LightingConfig}; // нет LightManager и LightingConfig
