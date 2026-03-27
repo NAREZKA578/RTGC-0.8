@@ -6,7 +6,7 @@ use std::fs;
 use serde::{Deserialize, Serialize};
 use nalgebra::{Vector3, UnitQuaternion};
 use crate::physics::{PhysicsWorld, RigidBody};
-use crate::vehicle::{VehicleConfig, WheelState};
+use crate::physics::vehicle::{VehicleConfig, WheelState};
 use crate::assets::AssetLoader;
 
 /// Метаданные транспортного средства

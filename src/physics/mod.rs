@@ -17,7 +17,7 @@ pub mod crane_arm;
 
 // Re-export collision layer constants
 pub use physics_module::{LAYER_WORLD, LAYER_VEHICLE, LAYER_CARGO, LAYER_TRIGGER};
-pub use physics_module::{PhysicsWorld, RigidBody, Ray, RaycastHit, Aabb};
+pub use physics_module::{PhysicsWorld, RigidBody, Ray, RaycastHit, Aabb, Shape, PhysicsStats};
 pub use arena_allocator::ArenaAllocator;
 pub use spatial_hash::SpatialHash;
 pub use async_physics::AsyncPhysicsEngine;

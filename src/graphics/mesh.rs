@@ -36,6 +36,19 @@ pub struct Mesh {
     indices_count: i32,
 }
 
+impl Clone for Mesh {
+    fn clone(&self) -> Self {
+        // Note: This creates a shallow clone - actual GPU resources are not duplicated
+        // Deep cloning would require re-uploading data to GPU
+        Self {
+            vao: self.vao,
+            vbo: self.vbo,
+            ebo: self.ebo,
+            indices_count: self.indices_count,
+        }
+    }
+}
+
 impl std::fmt::Debug for Mesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mesh")

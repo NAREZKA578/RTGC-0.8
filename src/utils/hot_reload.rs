@@ -184,7 +184,10 @@ impl HotReloadManager {
         }
 
         // Also scan watched directories for new files
-        for dir in &self.config.watch_directories {
+        // Collect directories first to avoid borrow issues
+        let watch_dirs: Vec<_> = self.config.watch_directories.clone();
+        
+        for dir in &watch_dirs {
             if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();

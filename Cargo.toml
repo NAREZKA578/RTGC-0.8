@@ -13,6 +13,9 @@ raw-window-handle = "0.6"
 # Math (nalgebra for all linear algebra - единый стек математики)
 nalgebra = "0.32"
 
+# Chrono for time/date
+chrono = { version = "0.4", features = ["serde"] }
+
 # DX12 (Windows)
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [

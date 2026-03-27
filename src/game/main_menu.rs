@@ -3,6 +3,7 @@
 
 use crate::game::character_creation::CharacterCreationManager;
 use crate::game::save::{SaveSystem, SaveMetadata};
+use chrono::Local;
 use std::path::PathBuf;
 
 /// Main menu states
@@ -71,7 +72,7 @@ impl MainMenu {
                             player_name: "Player".to_string(),
                             location: "Unknown".to_string(),
                             playtime_seconds: 0,
-                            real_time_saved: chrono::Local::now(),
+                            real_time_saved: Local::now(),
                             money: 0,
                         });
                     }

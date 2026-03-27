@@ -147,9 +147,10 @@ pub struct SceneManager {
 
 impl SceneManager {
     pub fn new(config: SceneManagerConfig) -> Self {
+        let max_scenes = config.max_scenes;
         Self {
             config,
-            scenes: HashMap::with_capacity(config.max_scenes),
+            scenes: HashMap::with_capacity(max_scenes),
             active_scene: None,
             previous_scene: None,
             next_scene: None,

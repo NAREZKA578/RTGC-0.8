@@ -257,12 +257,12 @@ impl AssetManager {
             }
         }
 
-        for path in to_unload_mesh {
-            self.release_mesh(&path);
+        for path in &to_unload_mesh {
+            self.release_mesh(path);
         }
 
-        for path in to_unload_texture {
-            self.release_texture(&path);
+        for path in &to_unload_texture {
+            self.release_texture(path);
         }
 
         if !to_unload_mesh.is_empty() || !to_unload_texture.is_empty() {

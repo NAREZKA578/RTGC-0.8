@@ -484,9 +484,10 @@ impl SettingsManager {
     /// Save settings to a specific path
     pub fn save_to<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(&self.settings)?;
-        fs::write(path, content)?;
-        
-        tracing::info!("Settings saved to {:?}", path.as_ref());
+        let path_ref = path.as_ref();
+        fs::write(path_ref, content)?;
+
+        tracing::info!("Settings saved to {:?}", path_ref);
         Ok(())
     }
     

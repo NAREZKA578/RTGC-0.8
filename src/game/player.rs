@@ -4,7 +4,7 @@
 use nalgebra::{Vector3, UnitQuaternion, Point3};
 use crate::physics::{RigidBody, Shape, LAYER_WORLD, LAYER_VEHICLE, LAYER_CARGO, LAYER_TRIGGER};
 use crate::game::skills::PlayerSkills;
-use crate::game::cargo::InventoryItem;
+use crate::game::InventoryItem;
 
 /// Collision layer for player character
 pub const LAYER_PLAYER: u32 = 0b10000;

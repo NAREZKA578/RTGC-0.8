@@ -7,7 +7,7 @@ use nalgebra::{Vector3, Matrix4, UnitQuaternion};
 
 use crate::graphics::rhi::{
     IDevice, ICommandList, ResourceHandle,
-    BufferDescription, BufferType, BufferUsage,
+    BufferDescription, BufferDesc, BufferType, BufferUsage,
     TextureDescription, TextureDimension, TextureFormat, TextureUsage,
     SamplerDescription, FilterMode, AddressMode,
     ShaderDescription, ShaderStage,
@@ -204,29 +204,31 @@ impl RendererRhi {
         // Create vertex and index buffers from mesh data
         if let Some(ref mut device) = self.device {
             let vertex_buffer_desc = BufferDesc {
-                size: (mesh.vertices.len() * std::mem::size_of::<Vertex>()) as u32,
-                usage: BufferUsage::VertexBuffer,
+                buffer_type: BufferType::VertexBuffer,
+                size: (mesh.vertices.len() * std::mem::size_of::<Vertex>()) as u64,
+                usage: BufferUsage::VERTEX_BUFFER,
                 initial_state: ResourceState::VertexBuffer,
             };
-            
+
             if let Ok(_vertex_buffer) = device.create_buffer(&vertex_buffer_desc) {
                 // Buffer created successfully - actual upload would happen here
                 tracing::debug!("Created vertex buffer for terrain mesh");
             }
-            
+
             if !mesh.indices.is_empty() {
                 let index_buffer_desc = BufferDesc {
-                    size: (mesh.indices.len() * 4) as u32, // u32 indices
-                    usage: BufferUsage::IndexBuffer,
+                    buffer_type: BufferType::IndexBuffer,
+                    size: (mesh.indices.len() * 4) as u64, // u32 indices
+                    usage: BufferUsage::INDEX_BUFFER,
                     initial_state: ResourceState::IndexBuffer,
                 };
-                
+
                 if let Ok(_index_buffer) = device.create_buffer(&index_buffer_desc) {
                     tracing::debug!("Created index buffer for terrain mesh");
                 }
             }
         }
-        
+
         self.terrain_mesh = Some(mesh);
     }
     

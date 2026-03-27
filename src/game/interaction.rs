@@ -2,7 +2,7 @@
 //! Handles player interactions with doors, vehicles, objects, NPCs
 
 use crate::game::events::{GameEvent, publish_event};
-use crate::physics::raycast::{RayCastHit, raycast_world};
+use crate::physics::{Ray, RaycastHit, raycast_world};
 use nalgebra::Vector3;
 
 /// Interaction layers bitmask
@@ -122,8 +122,8 @@ impl InteractionSystem {
     pub fn update(
         &mut self,
         dt: f32,
-        player_pos: Vec3,
-        player_forward: Vec3,
+        player_pos: Vector3<f32>,
+        player_forward: Vector3<f32>,
         camera_distance: f32,
     ) {
         // Reduce cooldown
@@ -149,7 +149,7 @@ impl InteractionSystem {
     }
 
     /// Identify what type of interactable was hit
-    fn identify_interactable(&self, hit: RayCastHit) -> Option<InteractableType> {
+    fn identify_interactable(&self, hit: RaycastHit) -> Option<InteractableType> {
         // This would check collision layers and object metadata
         // Placeholder implementation
         match hit.layer {
@@ -311,8 +311,13 @@ impl InteractionSystem {
 
         let new_state = !is_open;
         publish_event(GameEvent::InteractionTriggered {
-            object_id: door_id,
-            interaction_type: "door_toggle".to_string(),
+            interaction_type: if new_state { 
+                crate::game::events::InteractionType::OpenDoor 
+            } else { 
+                crate::game::events::InteractionType::CloseDoor 
+            },
+            position: nalgebra::Vector3::zeros(),
+            entity_index: None,
         });
 
         InteractionResult {
@@ -345,8 +350,9 @@ impl InteractionSystem {
         }
 
         publish_event(GameEvent::InteractionTriggered {
-            object_id,
-            interaction_type: "pickup".to_string(),
+            interaction_type: crate::game::events::InteractionType::PickUpItem,
+            position: nalgebra::Vector3::zeros(),
+            entity_index: None,
         });
 
         InteractionResult {
@@ -365,8 +371,9 @@ impl InteractionSystem {
         _player_state: &mut crate::game::player::PlayerState,
     ) -> InteractionResult {
         publish_event(GameEvent::InteractionTriggered {
-            object_id: bed_id,
-            interaction_type: "sleep".to_string(),
+            interaction_type: crate::game::events::InteractionType::UseMachine,
+            position: nalgebra::Vector3::zeros(),
+            entity_index: None,
         });
 
         InteractionResult {

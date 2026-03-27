@@ -2,8 +2,7 @@
 //! Displays FPS, CPU/RAM usage, physics stats, player info
 
 use nalgebra::Vector3;
-use crate::game::{Player, PlayerState};
-use crate::physics::PhysicsStats;
+use crate::game::{Player, PlayerState, PhysicsStats};
 
 /// Debug menu state
 pub struct DebugMenu {

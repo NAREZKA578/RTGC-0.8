@@ -193,18 +193,27 @@ impl ReplicationServer {
     
     /// Broadcast state updates to all clients
     fn broadcast_state(&mut self) {
-        for (&client_id, client) in &mut self.clients {
+        // Collect client IDs first to avoid borrow issues
+        let client_ids: Vec<_> = self.clients.keys().copied().collect();
+        
+        for client_id in client_ids {
             let relevant_entities: Vec<_> = self.entities
                 .values()
-                .filter(|e| self.should_replicate_to_client(client, e))
+                .filter(|e| {
+                    if let Some(client) = self.clients.get(&client_id) {
+                        self.should_replicate_to_client(client, e)
+                    } else {
+                        false
+                    }
+                })
                 .cloned()
                 .collect();
-            
+
             if !relevant_entities.is_empty() {
                 self.stats.entities_replicated = relevant_entities.len() as u32;
             }
         }
-        
+
         self.stats.packets_sent += self.clients.len() as u64;
     }
     
@@ -333,10 +342,11 @@ impl ReplicationClient {
         self.last_update_tick = self.local_state.server_tick;
         
         for entity in entity_spawns {
+            let entity_clone = entity.clone();
             self.entity_buffer.insert(entity.id, entity);
-            
+
             let _ = self.event_tx.send(NetworkEvent::EntitySpawned {
-                entity: self.entity_buffer[&entity.id].clone(),
+                entity: self.entity_buffer[&entity_clone.id].clone(),
             });
         }
         

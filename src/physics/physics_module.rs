@@ -59,6 +59,8 @@ pub struct RaycastHit {
     pub normal: Vector3<f32>,
     pub distance: f32,
     pub body_index: usize,
+    pub layer: u32,
+    pub object_id: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -2324,6 +2326,14 @@ impl PhysicsWorld {
     pub fn get_stats(&self) -> &PhysicsStats {
         &self.stats
     }
+}
+
+/// Global raycast function for interaction system
+/// This is a placeholder that returns None - should be connected to actual physics world
+pub fn raycast_world(origin: nalgebra::Vector3<f32>, direction: nalgebra::Vector3<f32>, max_distance: f32) -> Option<RaycastHit> {
+    // Placeholder - in actual usage, this should call physics_world.raycast()
+    // For now, return None to allow compilation
+    None
 }
 
 #[derive(Debug, Clone)]

@@ -5,7 +5,7 @@ use nalgebra::Vector3;
 use serde::{Serialize, Deserialize};
 use crate::game::player::{Player, PlayerState, CameraMode};
 use crate::game::skills::PlayerSkills;
-use crate::world::WorldState;
+use crate::game::mission_save::WorldState;
 
 /// Maximum number of save slots
 pub const MAX_SAVE_SLOTS: usize = 10;

@@ -4,11 +4,8 @@ use std::collections::HashMap;
 use winit::event::{KeyEvent, ElementState, MouseButton as WinitMouseButton};
 use winit::keyboard::{KeyCode, PhysicalKey, NamedKey};
 
-pub mod mapping;
-pub mod gamepad;
-
-pub use mapping::{InputAction, InputMapping, MouseButton};
-pub use gamepad::{Gamepad, GamepadButton, GamepadAxis, GamepadState};
+pub use crate::input::mapping::{InputAction, InputMapping, MouseButton};
+pub use crate::input::gamepad::{Gamepad, GamepadButton, GamepadAxis, GamepadState};
 
 /// State of an input action
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

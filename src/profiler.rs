@@ -306,3 +306,38 @@ pub fn reset_profiler() {
         profiler.reset();
     }
 }
+
+/// RAII-style profile scope for automatic timing
+pub struct ProfileScope {
+    name: String,
+}
+
+impl ProfileScope {
+    pub fn new(name: &str) -> Self {
+        if let Ok(mut profiler) = get_profiler().lock() {
+            profiler.start_timer(name);
+        }
+        Self { name: name.to_string() }
+    }
+}
+
+impl Drop for ProfileScope {
+    fn drop(&mut self) {
+        if let Ok(mut profiler) = get_profiler().lock() {
+            profiler.stop_timer(&self.name);
+        }
+    }
+}
+
+/// Begin a new profiling frame
+pub fn begin_frame() {
+    if let Ok(mut profiler) = get_profiler().lock() {
+        profiler.begin_frame();
+    }
+}
+
+/// End a profiling frame
+pub fn end_frame() {
+    // Currently no special end-frame logic needed
+    // This function is provided for API completeness
+}

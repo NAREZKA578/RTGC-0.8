@@ -12,6 +12,7 @@ pub enum ParticleType {
 }
 
 /// Отдельная частица
+#[derive(Debug, Clone)]
 pub struct Particle {
     pub position: Vector3<f32>,
     pub velocity: Vector3<f32>,
@@ -43,6 +44,7 @@ impl Particle {
 }
 
 /// Система частиц
+#[derive(Debug, Clone)]
 pub struct ParticleSystem {
     particles: Vec<Particle>,
     max_particles: usize,

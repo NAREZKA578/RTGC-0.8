@@ -4,6 +4,7 @@
 
 use crate::graphics::rhi::types::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 use parking_lot::RwLock;
 use std::fmt;
 

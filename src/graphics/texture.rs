@@ -4,6 +4,23 @@ pub struct Texture {
     texture: glow::Texture,
 }
 
+impl Clone for Texture {
+    fn clone(&self) -> Self {
+        // Note: This creates a shallow clone - actual GPU resources are not duplicated
+        Self {
+            texture: self.texture,
+        }
+    }
+}
+
+impl std::fmt::Debug for Texture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Texture")
+            .field("texture", &"glow::Texture")
+            .finish()
+    }
+}
+
 impl Texture {
     pub fn new(gl: &Context, data: &[u8], width: u32, height: u32) -> Result<Self, String> {
         unsafe {

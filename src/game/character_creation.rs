@@ -4,7 +4,7 @@
 use nalgebra::Vector3;
 use crate::game::skills::{PlayerSkills, SkillType};
 use crate::game::player::{Player, PlayerWallet};
-use crate::game::cargo::InventoryItem;
+use crate::game::InventoryItem;
 
 /// Character creation state machine
 #[derive(Debug, Clone, PartialEq)]

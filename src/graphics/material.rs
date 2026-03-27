@@ -74,6 +74,7 @@ impl Default for MaterialParams {
 }
 
 /// Материал с поддержкой уровней качества
+#[derive(Debug, Clone)]
 pub struct Material {
     pub name: String,
     pub layers: MaterialLayers,

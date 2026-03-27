@@ -173,7 +173,8 @@ impl Console {
                 if args.is_empty() {
                     return Err("Usage: give <item> [amount]".to_string());
                 }
-                let amount = args.get(1).unwrap_or(&"1".to_string());
+                let default_amount = "1".to_string();
+                let amount = args.get(1).unwrap_or(&default_amount);
                 Ok(format!("Gave {} x{}", args[0], amount))
             }),
         );
@@ -296,6 +297,10 @@ impl Console {
                         self.input_buffer.clear();
                     }
                 }
+            }
+            ConsoleKey::Left | ConsoleKey::Right => {
+                // Left/Right arrow keys - could be used for cursor navigation
+                // Currently not implemented
             }
         }
     }

@@ -28,6 +28,8 @@ impl<T> Handle<T> {
     }
 }
 
+impl<T> Copy for Handle<T> {}
+
 /// Render command types for the render queue
 #[derive(Debug, Clone)]
 pub enum RenderCommand {

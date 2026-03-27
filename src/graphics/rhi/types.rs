@@ -309,6 +309,18 @@ pub enum TextureDimension {
     Cube,
 }
 
+/// Texture type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextureType {
+    Texture1D,
+    Texture2D,
+    Texture3D,
+    TextureCube,
+    Texture1DArray,
+    Texture2DArray,
+    TextureCubeArray,
+}
+
 /// Texture format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextureFormat {
@@ -428,6 +440,9 @@ pub struct BufferDescription {
     pub usage: BufferUsage,
     pub initial_state: ResourceState,
 }
+
+/// Alias for BufferDescription
+pub type BufferDesc = BufferDescription;
 
 /// Buffer usage flags
 bitflags::bitflags! {

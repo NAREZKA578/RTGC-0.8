@@ -278,10 +278,13 @@ impl UIManager {
 
     /// Update HUD data
     pub fn update_hud(&mut self, data: HUDData) {
-        self.hud_data = data;
+        // Check player state before moving data
+        let is_in_vehicle = matches!(data.player_state, PlayerState::InVehicle { .. });
         
+        self.hud_data = data;
+
         // Auto-show speedometer when in vehicle
-        if matches!(data.player_state, PlayerState::InVehicle { .. }) {
+        if is_in_vehicle {
             self.visibility.speedometer = true;
             self.visibility.fuel_gauge = true;
         } else {

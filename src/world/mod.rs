@@ -17,7 +17,7 @@ pub mod buildings;
 pub mod novosibirsk_map;
 
 pub use world_module::OpenWorld;
-pub use chunk::{Chunk, ChunkData, TerrainVertex, generate_chunk_mesh, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
+pub use chunk::{Chunk, ChunkData, ChunkId, TerrainVertex, generate_chunk_mesh, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
 pub use chunk_manager::ChunkManager;
 pub use prop_spawner::PropSpawner;
 pub use terrain_generator::{TerrainGenerator, SurfaceType};

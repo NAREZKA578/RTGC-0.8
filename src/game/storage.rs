@@ -360,40 +360,49 @@ impl StorageContainer {
         new_y: u8,
         rotated: bool,
     ) -> Result<(), &'static str> {
+        // Get item dimensions and current position first
+        let (item_dims, _item_rotated, old_slots) = if let Some(item) = self.get_item(item_id) {
+            (item.dimensions, item.rotated, item.occupied_slots())
+        } else {
+            return Err("Предмет не найден");
+        };
+        
+        let grid_width = self.grid_width;
+        let grid_height = self.grid_height;
+
         // Temporarily remove item from grid
+        for (x, y) in &old_slots {
+            if (*x as usize) < grid_width && (*y as usize) < grid_height {
+                self.grid[*x as usize][*y as usize] = false;
+            }
+        }
+
+        // Check new position (excluding self)
+        let dims = if rotated {
+            ItemDimensions::new(item_dims.height, item_dims.width)
+        } else {
+            item_dims
+        };
+
+        if !self.can_place_at(dims, new_x, new_y, false) {
+            // Restore old position
+            for (x, y) in &old_slots {
+                if (*x as usize) < grid_width && (*y as usize) < grid_height {
+                    self.grid[*x as usize][*y as usize] = true;
+                }
+            }
+            return Err("Невозможно переместить предмет");
+        }
+
+        // Update item position
         if let Some(item) = self.get_item_mut(item_id) {
-            let old_slots = item.occupied_slots();
-            for (x, y) in old_slots {
-                if (x as usize) < self.grid_width && (y as usize) < self.grid_height {
-                    self.grid[x as usize][y as usize] = false;
-                }
-            }
-
-            // Check new position (excluding self)
-            let dims = if rotated {
-                ItemDimensions::new(item.dimensions.height, item.dimensions.width)
-            } else {
-                item.dimensions
-            };
-
-            if !self.can_place_at(dims, new_x, new_y, false) {
-                // Restore old position
-                for (x, y) in old_slots {
-                    if (x as usize) < self.grid_width && (y as usize) < self.grid_height {
-                        self.grid[x as usize][y as usize] = true;
-                    }
-                }
-                return Err("Невозможно переместить предмет");
-            }
-
             item.x = new_x;
             item.y = new_y;
             item.rotated = rotated;
-            self.rebuild_grid();
-            Ok(())
-        } else {
-            Err("Предмет не найден")
         }
+        
+        self.rebuild_grid();
+        Ok(())
     }
 
     /// Get free slots count
@@ -511,6 +520,9 @@ impl StorageSystem {
                 .ok_or("Предмет не найден в контейнере")?
         };
 
+        // Clone item before moving for potential error handling
+        let item_clone = item.clone();
+        
         // Add to destination
         let dst = self
             .containers
@@ -522,8 +534,8 @@ impl StorageSystem {
             Err(e) => {
                 // Return item to source on failure
                 if let Some(src) = self.containers.get_mut(&from_container) {
-                    let mut returned_item = src.items.pop().unwrap_or(item.clone());
-                    returned_item.id = item.id;
+                    let mut returned_item = src.items.pop().unwrap_or(item_clone.clone());
+                    returned_item.id = item_clone.id;
                     src.items.push(returned_item);
                     src.rebuild_grid();
                 }

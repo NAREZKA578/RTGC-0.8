@@ -336,15 +336,17 @@ impl CraneArm {
 
         // Подъём/опускание груза
         if self.controls.hoist != 0.0 && self.check_stability() {
+            // Get hook position first to avoid borrow issues
+            let hook_pos = self.get_hook_position();
+            
             if let Some(ref mut load) = self.load {
                 let hoist_speed = crane_type.hoist_speed();
                 let hoist_delta = self.controls.hoist * hoist_speed * dt;
-                
+
                 self.boom.cable_length -= hoist_delta;
                 self.boom.cable_length = self.boom.cable_length.clamp(1.0, self.boom.length * 0.95);
 
                 // Обновляем позицию груза
-                let hook_pos = self.get_hook_position();
                 load.position = Vector3::new(hook_pos.x, hook_pos.y - 0.5, hook_pos.z);
             }
         }
@@ -352,7 +354,7 @@ impl CraneArm {
         // Физика подвешенного груза (маятник)
         if let Some(ref mut load) = self.load {
             self.update_load_physics(load, dt);
-            
+
             // Проверка перегрузки
             self.overloaded = load.mass > crane_type.max_load_capacity();
         } else {
