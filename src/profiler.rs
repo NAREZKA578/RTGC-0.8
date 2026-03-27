@@ -1,9 +1,49 @@
 use std::collections::HashMap;
 use std::time::Instant;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+
+/// GPU timing query result
+#[derive(Debug, Clone)]
+pub struct GpuTiming {
+    pub name: String,
+    pub time_ms: f64,
+    pub timestamp: u64,
+}
+
+/// Memory allocation tracking
+#[derive(Debug, Clone)]
+pub struct AllocationInfo {
+    pub size_bytes: usize,
+    pub alignment: usize,
+    pub tag: String,
+    pub timestamp: u64,
+}
+
+/// Memory statistics
+#[derive(Debug, Clone, Default)]
+pub struct MemoryStats {
+    pub total_allocated: usize,
+    pub total_freed: usize,
+    pub current_usage: usize,
+    pub peak_usage: usize,
+    pub allocation_count: usize,
+    pub deallocation_count: usize,
+    pub allocations_by_tag: HashMap<String, usize>,
+}
 
 pub struct Profiler {
     timers: HashMap<String, Instant>,
     measurements: HashMap<String, Vec<f64>>,
+    /// GPU timings (if supported by backend)
+    gpu_timings: Vec<GpuTiming>,
+    /// Memory tracking
+    memory_stats: MemoryStats,
+    /// Frame counter
+    frame_count: u64,
+    /// Total CPU time this frame
+    frame_cpu_time_ms: f64,
+    /// Total GPU time this frame (if available)
+    frame_gpu_time_ms: Option<f64>,
 }
 
 impl Profiler {
@@ -11,6 +51,11 @@ impl Profiler {
         Self {
             timers: HashMap::new(),
             measurements: HashMap::new(),
+            gpu_timings: Vec::new(),
+            memory_stats: MemoryStats::default(),
+            frame_count: 0,
+            frame_cpu_time_ms: 0.0,
+            frame_gpu_time_ms: None,
         }
     }
 
@@ -24,10 +69,95 @@ impl Profiler {
             self.measurements.entry(name.to_string())
                 .or_insert_with(Vec::new)
                 .push(elapsed);
+            self.frame_cpu_time_ms += elapsed;
             Some(elapsed)
         } else {
             None
         }
+    }
+
+    /// Record GPU timing (called by renderer when GPU queries are resolved)
+    pub fn record_gpu_timing(&mut self, name: &str, time_ms: f64) {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        
+        self.gpu_timings.push(GpuTiming {
+            name: name.to_string(),
+            time_ms,
+            timestamp,
+        });
+        
+        self.frame_gpu_time_ms = Some(self.frame_gpu_time_ms.unwrap_or(0.0) + time_ms);
+    }
+
+    /// Get latest GPU timing for a named section
+    pub fn get_gpu_timing(&self, name: &str) -> Option<f64> {
+        self.gpu_timings.iter()
+            .filter(|t| t.name == name)
+            .last()
+            .map(|t| t.time_ms)
+    }
+
+    /// Track a memory allocation
+    pub fn track_allocation(&mut self, size: usize, alignment: usize, tag: &str) {
+        self.memory_stats.total_allocated += size;
+        self.memory_stats.current_usage += size;
+        self.memory_stats.allocation_count += 1;
+        
+        if self.memory_stats.current_usage > self.memory_stats.peak_usage {
+            self.memory_stats.peak_usage = self.memory_stats.current_usage;
+        }
+        
+        *self.memory_stats.allocations_by_tag.entry(tag.to_string()).or_insert(0) += size;
+    }
+
+    /// Track a memory deallocation
+    pub fn track_deallocation(&mut self, size: usize, tag: &str) {
+        self.memory_stats.total_freed += size;
+        if self.memory_stats.current_usage >= size {
+            self.memory_stats.current_usage -= size;
+        } else {
+            self.memory_stats.current_usage = 0;
+        }
+        self.memory_stats.deallocation_count += 1;
+        
+        if let Some(current) = self.memory_stats.allocations_by_tag.get_mut(tag) {
+            if *current >= size {
+                *current -= size;
+            } else {
+                *current = 0;
+            }
+        }
+    }
+
+    /// Get memory statistics
+    pub fn get_memory_stats(&self) -> &MemoryStats {
+        &self.memory_stats
+    }
+
+    /// Begin a new frame (reset per-frame counters)
+    pub fn begin_frame(&mut self) {
+        self.frame_count += 1;
+        self.frame_cpu_time_ms = 0.0;
+        self.frame_gpu_time_ms = None;
+        self.gpu_timings.clear();
+    }
+
+    /// Get current frame count
+    pub fn frame_count(&self) -> u64 {
+        self.frame_count
+    }
+
+    /// Get CPU time for current frame
+    pub fn frame_cpu_time(&self) -> f64 {
+        self.frame_cpu_time_ms
+    }
+
+    /// Get GPU time for current frame (if available)
+    pub fn frame_gpu_time(&self) -> Option<f64> {
+        self.frame_gpu_time_ms
     }
 
     pub fn get_average_time(&self, name: &str) -> Option<f64> {
@@ -52,6 +182,13 @@ impl Profiler {
 
     pub fn print_profile_report(&self) {
         println!("=== Performance Profile Report ===");
+        println!("Frame: {}", self.frame_count);
+        println!("CPU Time: {:.3}ms", self.frame_cpu_time_ms);
+        if let Some(gpu_time) = self.frame_gpu_time_ms {
+            println!("GPU Time: {:.3}ms", gpu_time);
+        }
+        println!();
+        println!("--- CPU Timings ---");
         for (name, times) in &self.measurements {
             if !times.is_empty() {
                 let avg_time = times.iter().sum::<f64>() / times.len() as f64;
@@ -68,12 +205,34 @@ impl Profiler {
                 );
             }
         }
+        println!();
+        println!("--- Memory Statistics ---");
+        println!("Current Usage: {} bytes ({:.2} MB)", 
+            self.memory_stats.current_usage,
+            self.memory_stats.current_usage as f64 / 1024.0 / 1024.0);
+        println!("Peak Usage: {} bytes ({:.2} MB)",
+            self.memory_stats.peak_usage,
+            self.memory_stats.peak_usage as f64 / 1024.0 / 1024.0);
+        println!("Total Allocated: {} bytes", self.memory_stats.total_allocated);
+        println!("Total Freed: {} bytes", self.memory_stats.total_freed);
+        println!("Allocation Count: {}", self.memory_stats.allocation_count);
+        println!("Deallocation Count: {}", self.memory_stats.deallocation_count);
+        println!();
+        println!("--- Allocations by Tag ---");
+        for (tag, size) in &self.memory_stats.allocations_by_tag {
+            println!("{}: {} bytes ({:.2} MB)", tag, size, size as f64 / 1024.0 / 1024.0);
+        }
         println!("===================================");
     }
 
     pub fn reset(&mut self) {
         self.timers.clear();
         self.measurements.clear();
+        self.gpu_timings.clear();
+        self.memory_stats = MemoryStats::default();
+        self.frame_count = 0;
+        self.frame_cpu_time_ms = 0.0;
+        self.frame_gpu_time_ms = None;
     }
 }
 
