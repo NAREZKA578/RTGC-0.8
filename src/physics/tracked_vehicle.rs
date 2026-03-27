@@ -1,0 +1,622 @@
+//! Tracked Vehicle Physics for RTGC-0.8
+//! 
+//! Реализация гусеничной техники:
+//! - ГТ-СМ, ГАЗ-71, МТ-ЛБ, Т-150К
+//! - Детальная физика гусениц с проскальзыванием
+//! - Взаимодействие с мягким грунтом
+//! - Поворот бортовыми фрикционами
+//! - Поддержка лебёдки
+
+use nalgebra::{Vector3, UnitQuaternion, Matrix3, Quaternion};
+use std::f32::consts::PI;
+
+use super::physics_module::{RigidBody, Ray, RaycastHit, LAYER_WORLD};
+use super::deformable_terrain::DeformableTerrainComponent;
+
+/// Типы гусеничной техники
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackedVehicleType {
+    /// ГТ-СМ — гусеничный тягач, лёгкий
+    GTS_M,
+    /// ГАЗ-71 — армейский транспортер
+    GAZ_71,
+    /// МТ-ЛБ — многоцелевой бронетранспортер
+    MT_LB,
+    /// Т-150К — тяжёлый трактор
+    T_150K,
+    /// ДТ-75 — сельскохозяйственный трактор
+    DT_75,
+    /// Витязь ДТ-30 — сочленённый вездеход
+    Vityaz_DT30,
+}
+
+impl TrackedVehicleType {
+    /// Получить массу пустого транспортного средства (кг)
+    pub fn empty_mass(&self) -> f32 {
+        match self {
+            TrackedVehicleType::GTS_M => 4500.0,
+            TrackedVehicleType::GAZ_71 => 3200.0,
+            TrackedVehicleType::MT_LB => 7200.0,
+            TrackedVehicleType::T_150K => 6800.0,
+            TrackedVehicleType::DT_75 => 4700.0,
+            TrackedVehicleType::Vityaz_DT30 => 12500.0,
+        }
+    }
+
+    /// Максимальная полезная нагрузка (кг)
+    pub fn max_payload(&self) -> f32 {
+        match self {
+            TrackedVehicleType::GTS_M => 2000.0,
+            TrackedVehicleType::GAZ_71 => 1000.0,
+            TrackedVehicleType::MT_LB => 2000.0,
+            TrackedVehicleType::T_150K => 3000.0,
+            TrackedVehicleType::DT_75 => 2500.0,
+            TrackedVehicleType::Vityaz_DT30 => 10000.0,
+        }
+    }
+
+    /// Мощность двигателя (л.с.)
+    pub fn engine_horsepower(&self) -> f32 {
+        match self {
+            TrackedVehicleType::GTS_M => 240.0,
+            TrackedVehicleType::GAZ_71 => 115.0,
+            TrackedVehicleType::MT_LB => 240.0,
+            TrackedVehicleType::T_150K => 180.0,
+            TrackedVehicleType::DT_75 => 75.0,
+            TrackedVehicleType::Vityaz_DT30 => 710.0,
+        }
+    }
+
+    /// Ширина гусеницы (м)
+    pub fn track_width(&self) -> f32 {
+        match self {
+            TrackedVehicleType::GTS_M => 0.50,
+            TrackedVehicleType::GAZ_71 => 0.36,
+            TrackedVehicleType::MT_LB => 0.35,
+            TrackedVehicleType::T_150K => 0.58,
+            TrackedVehicleType::DT_75 => 0.39,
+            TrackedVehicleType::Vityaz_DT30 => 0.80,
+        }
+    }
+
+    /// Длина опорной поверхности гусеницы (м)
+    pub fn track_length(&self) -> f32 {
+        match self {
+            TrackedVehicleType::GTS_M => 2.8,
+            TrackedVehicleType::GAZ_71 => 2.5,
+            TrackedVehicleType::MT_LB => 2.9,
+            TrackedVehicleType::T_150K => 2.6,
+            TrackedVehicleType::DT_75 => 2.4,
+            TrackedVehicleType::Vityaz_DT30 => 4.2,
+        }
+    }
+
+    /// Количество опорных катков на сторону
+    pub fn road_wheel_count(&self) -> u32 {
+        match self {
+            TrackedVehicleType::GTS_M => 5,
+            TrackedVehicleType::GAZ_71 => 4,
+            TrackedVehicleType::MT_LB => 6,
+            TrackedVehicleType::T_150K => 5,
+            TrackedVehicleType::DT_75 => 6,
+            TrackedVehicleType::Vityaz_DT30 => 7,
+        }
+    }
+
+    /// Удельное давление на грунт (кгс/см²)
+    pub fn ground_pressure(&self) -> f32 {
+        // P = масса / (2 * ширина * длина)
+        let mass = self.empty_mass() + self.max_payload();
+        let area = 2.0 * self.track_width() * self.track_length(); // м²
+        let pressure_kg_m2 = mass / area;
+        pressure_kg_m2 / 10000.0 * 1000.0 // кгс/см²
+    }
+
+    /// Максимальная скорость по шоссе (км/ч)
+    pub fn max_speed_kmh(&self) -> f32 {
+        match self {
+            TrackedVehicleType::GTS_M => 50.0,
+            TrackedVehicleType::GAZ_71 => 60.0,
+            TrackedVehicleType::MT_LB => 60.0,
+            TrackedVehicleType::T_150K => 43.0,
+            TrackedVehicleType::DT_75 => 11.0,
+            TrackedVehicleType::Vityaz_DT30 => 50.0,
+        }
+    }
+
+    /// Запас хода по шоссе (км)
+    pub fn range_km(&self) -> f32 {
+        match self {
+            TrackedVehicleType::GTS_M => 500.0,
+            TrackedVehicleType::GAZ_71 => 600.0,
+            TrackedVehicleType::MT_LB => 500.0,
+            TrackedVehicleType::T_150K => 625.0,
+            TrackedVehicleType::DT_75 => 750.0,
+            TrackedVehicleType::Vityaz_DT30 => 500.0,
+        }
+    }
+}
+
+/// Управление гусеничным транспортным средством
+#[derive(Debug, Clone, Default)]
+pub struct TrackedControls {
+    /// Газ (0.0 - 1.0)
+    pub throttle: f32,
+    /// Тормоз (0.0 - 1.0)
+    pub brake: f32,
+    /// Поворот левой гусеницы (-1.0 - 1.0, отрицательный = назад)
+    pub left_track: f32,
+    /// Поворот правой гусеницы (-1.0 - 1.0, отрицательный = назад)
+    pub right_track: f32,
+    /// Бортовой фрикцион левый (0.0 - 1.0)
+    pub left_clutch: f32,
+    /// Бортовой фрикцион правый (0.0 - 1.0)
+    pub right_clutch: f32,
+}
+
+impl TrackedControls {
+    /// Создать управление из ввода (клавиатура/геймпад)
+    pub fn from_input(
+        forward: f32,
+        turn: f32,
+        brake_pressed: bool,
+    ) -> Self {
+        let mut controls = Self::default();
+        
+        if forward > 0.0 {
+            controls.left_track = forward;
+            controls.right_track = forward;
+        } else if forward < 0.0 {
+            controls.left_track = forward;
+            controls.right_track = forward;
+        }
+        
+        // Поворот дифференциалом
+        if turn != 0.0 {
+            if forward >= 0.0 {
+                // Поворот в движении: притормаживаем одну гусеницу
+                if turn < 0.0 {
+                    controls.left_track *= 0.5;
+                } else {
+                    controls.right_track *= 0.5;
+                }
+            } else {
+                // Поворот на месте: гусеницы в разные стороны
+                controls.left_track = -turn;
+                controls.right_track = turn;
+            }
+        }
+        
+        controls.brake = if brake_pressed { 1.0 } else { 0.0 };
+        
+        controls
+    }
+}
+
+/// Состояние одной гусеницы
+#[derive(Debug, Clone)]
+pub struct TrackState {
+    /// Текущая скорость (м/с)
+    pub velocity: f32,
+    /// Проскальзывание (0.0 = нет, 1.0 = полное)
+    pub slip: f32,
+    /// Нагрузка (Н)
+    pub load: f32,
+    /// Температура (°C)
+    pub temperature: f32,
+}
+
+impl Default for TrackState {
+    fn default() -> Self {
+        Self {
+            velocity: 0.0,
+            slip: 0.0,
+            load: 0.0,
+            temperature: 20.0,
+        }
+    }
+}
+
+/// Компонент подвески опорного катка
+#[derive(Debug, Clone)]
+pub struct RoadWheelSuspension {
+    /// Позиция относительно центра масс (локальные координаты)
+    pub local_position: Vector3<f32>,
+    /// Ход подвески (м)
+    pub travel: f32,
+    /// Жёсткость пружины (Н/м)
+    pub spring_stiffness: f32,
+    /// Демпфирование (Н·с/м)
+    pub damping: f32,
+    /// Текущее сжатие (м)
+    pub compression: f32,
+    /// Скорость сжатия (м/с)
+    pub compression_velocity: f32,
+}
+
+impl RoadWheelSuspension {
+    pub fn new(x: f32, y: f32, z: f32, travel: f32) -> Self {
+        Self {
+            local_position: Vector3::new(x, y, z),
+            travel,
+            spring_stiffness: 80000.0, // Н/м
+            damping: 5000.0,           // Н·с/м
+            compression: 0.0,
+            compression_velocity: 0.0,
+        }
+    }
+
+    /// Обновить состояние подвески
+    pub fn update(
+        &mut self,
+        terrain_height: f32,
+        wheel_world_y: f32,
+        dt: f32,
+    ) -> f32 {
+        // Целевая позиция колеса на поверхности
+        let target_y = terrain_height + self.local_position.y;
+        
+        // Фактическая позиция
+        let current_y = wheel_world_y;
+        
+        // Сжатие подвески
+        let new_compression = (target_y - current_y).max(0.0).min(self.travel);
+        
+        // Скорость сжатия
+        self.compression_velocity = (new_compression - self.compression) / dt;
+        self.compression = new_compression;
+        
+        // Сила подвески
+        let spring_force = self.spring_stiffness * self.compression;
+        let damping_force = self.damping * self.compression_velocity;
+        
+        spring_force + damping_force
+    }
+}
+
+/// Гусеничное транспортное средство
+pub struct TrackedVehicle {
+    /// Тип транспортного средства
+    pub vehicle_type: TrackedVehicleType,
+    /// Масса с грузом (кг)
+    pub mass: f32,
+    /// Позиция (м)
+    pub position: Vector3<f32>,
+    /// Ориентация
+    pub orientation: UnitQuaternion<f32>,
+    /// Линейная скорость (м/с)
+    pub linear_velocity: Vector3<f32>,
+    /// Угловая скорость (рад/с)
+    pub angular_velocity: Vector3<f32>,
+    /// Управление
+    pub controls: TrackedControls,
+    /// Состояние левой гусеницы
+    pub left_track: TrackState,
+    /// Состояние правой гусеницы
+    pub right_track: TrackState,
+    /// Подвеска опорных катков
+    pub suspensions: Vec<RoadWheelSuspension>,
+    /// Топливо (кг)
+    pub fuel: f32,
+    /// Расход топлива (кг/ч)
+    pub fuel_consumption: f32,
+    /// Температура двигателя (°C)
+    pub engine_temperature: f32,
+    /// Работает ли двигатель
+    pub engine_running: bool,
+}
+
+impl TrackedVehicle {
+    /// Создать новое гусеничное транспортное средство
+    pub fn new(vehicle_type: TrackedVehicleType, position: Vector3<f32>) -> Self {
+        let mut suspensions = Vec::new();
+        let track_length = vehicle_type.track_length();
+        let wheel_count = vehicle_type.road_wheel_count() as usize;
+        
+        // Равномерно распределяем катки вдоль гусеницы
+        let spacing = track_length / (wheel_count + 1) as f32;
+        for i in 0..wheel_count {
+            let x = -track_length / 2.0 + (i + 1) as f32 * spacing;
+            suspensions.push(RoadWheelSuspension::new(x, -0.3, 0.0, 0.2));
+        }
+
+        let mass = vehicle_type.empty_mass();
+        
+        Self {
+            vehicle_type,
+            mass,
+            position,
+            orientation: UnitQuaternion::identity(),
+            linear_velocity: Vector3::zeros(),
+            angular_velocity: Vector3::zeros(),
+            controls: TrackedControls::default(),
+            left_track: TrackState::default(),
+            right_track: TrackState::default(),
+            suspensions,
+            fuel: vehicle_type.range_km() * 0.5, // Половина бака
+            fuel_consumption: 0.0,
+            engine_temperature: 20.0,
+            engine_running: false,
+        }
+    }
+
+    /// Запустить двигатель
+    pub fn start_engine(&mut self) -> bool {
+        if !self.engine_running && self.fuel > 1.0 {
+            self.engine_running = true;
+            self.engine_temperature = 60.0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Остановить двигатель
+    pub fn stop_engine(&mut self) {
+        self.engine_running = false;
+    }
+
+    /// Обновить физику
+    pub fn update(
+        &mut self,
+        dt: f32,
+        terrain_getter: &dyn Fn(f32, f32) -> f32,
+        deformable_terrain: Option<&mut DeformableTerrainComponent>,
+    ) {
+        if !self.engine_running {
+            // Затухание без двигателя
+            self.linear_velocity *= 0.98;
+            self.angular_velocity *= 0.95;
+            return;
+        }
+
+        // Потребление топлива
+        let throttle_avg = (self.controls.left_track.abs() + self.controls.right_track.abs()) / 2.0;
+        let base_consumption = self.vehicle_type.engine_horsepower() * 0.0002; // кг/с при полном газе
+        self.fuel_consumption = base_consumption * throttle_avg;
+        self.fuel = (self.fuel - self.fuel_consumption * dt).max(0.0);
+        
+        if self.fuel < 1.0 {
+            self.stop_engine();
+            return;
+        }
+
+        // Температура двигателя
+        let target_temp = 80.0 + throttle_avg * 40.0;
+        self.engine_temperature += (target_temp - self.engine_temperature) * dt * 0.1;
+
+        // Получаем высоту terrain под каждым катком
+        let mut suspension_forces = Vec::new();
+        let mut total_normal_force = 0.0;
+        
+        for suspension in &mut self.suspensions {
+            // Мировая позиция катка
+            let world_pos = self.position + self.orientation * suspension.local_position;
+            
+            // Высота terrain
+            let terrain_height = terrain_getter(world_pos.x, world_pos.z);
+            
+            // Сила подвески
+            let force = suspension.update(terrain_height, world_pos.y, dt);
+            suspension_forces.push(force);
+            total_normal_force += force;
+        }
+
+        // Силы от гусениц
+        let max_force = self.vehicle_type.engine_horsepower() * 735.5 / 
+                        (self.vehicle_type.max_speed_kmh() / 3.6); // Н
+        
+        let left_force = self.controls.left_track * max_force;
+        let right_force = self.controls.right_track * max_force;
+        
+        // Применяем бортовые фрикции
+        let left_effective = left_force * (1.0 - self.controls.left_clutch);
+        let right_effective = right_force * (1.0 - self.controls.right_clutch);
+        
+        // Торможение
+        let brake_force = self.controls.brake * 20000.0;
+        
+        // Направление движения (локальная ось X)
+        let forward = self.orientation * Vector3::x();
+        let right = self.orientation * Vector3::z();
+        
+        // Средняя сила тяги
+        let avg_force = (left_effective + right_effective) / 2.0;
+        
+        // Сила тяги с учётом проскальзывания
+        let slip_factor_left = 1.0 - self.left_track.slip;
+        let slip_factor_right = 1.0 - self.right_track.slip;
+        
+        let traction_force = forward * (
+            left_effective * slip_factor_left + 
+            right_effective * slip_factor_right
+        ) / 2.0;
+        
+        // Момент поворота от разницы сил гусениц
+        let track_width = self.vehicle_type.track_width() * 2.0;
+        let turning_torque = (right_effective - left_effective) * track_width / 2.0;
+        
+        // Сопротивление качению
+        let rolling_resistance = self.mass * 9.81 * 0.05; // Коэффициент для гусениц
+        let rolling_force = -self.linear_velocity.normalize() * rolling_resistance;
+        
+        // Тормозная сила
+        let brake_vector = -self.linear_velocity.normalize_or_zero() * brake_force;
+        
+        // Суммарная сила
+        let total_force = traction_force + rolling_force + brake_vector;
+        
+        // Ускорение
+        let acceleration = total_force / self.mass;
+        
+        // Обновляем линейную скорость
+        self.linear_velocity += acceleration * dt;
+        
+        // Угловое ускорение от поворота
+        let moment_of_inertia = self.mass * track_width.powi(2) / 12.0;
+        let angular_acceleration = turning_torque / moment_of_inertia;
+        
+        // Угловая скорость вокруг Y
+        self.angular_velocity.y += angular_acceleration * dt;
+        self.angular_velocity.y *= 0.95; // Затухание
+        
+        // Применяем скорость
+        self.position += self.linear_velocity * dt;
+        
+        // Поворот
+        let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.angular_velocity.y * dt);
+        self.orientation = rotation * self.orientation;
+        
+        // Обновляем проскальзывание гусениц
+        self.update_track_slip(dt, terrain_getter);
+        
+        // Деформация грунта
+        if let Some(terrain) = deformable_terrain {
+            self.deform_terrain(terrain, total_normal_force);
+        }
+    }
+
+    /// Обновить проскальзывание гусениц
+    fn update_track_slip(
+        &mut self,
+        dt: f32,
+        terrain_getter: &dyn Fn(f32, f32) -> f32,
+    ) {
+        // Теоретическая скорость от вращения гусениц
+        let left_theoretical = self.controls.left_track * self.vehicle_type.max_speed_kmh() / 3.6;
+        let right_theoretical = self.controls.right_track * self.vehicle_type.max_speed_kmh() / 3.6;
+        
+        // Фактическая скорость (проекция на направление гусениц)
+        let forward = self.orientation * Vector3::x();
+        let actual_speed = self.linear_velocity.dot(&forward);
+        
+        // Вычисляем проскальзывание
+        if left_theoretical.abs() > 0.1 {
+            let slip_left = (left_theoretical - actual_speed) / left_theoretical;
+            self.left_track.slip += (slip_left.abs() - self.left_track.slip) * dt * 2.0;
+            self.left_track.slip = self.left_track.slip.clamp(0.0, 1.0);
+        }
+        
+        if right_theoretical.abs() > 0.1 {
+            let slip_right = (right_theoretical - actual_speed) / right_theoretical;
+            self.right_track.slip += (slip_right.abs() - self.right_track.slip) * dt * 2.0;
+            self.right_track.slip = self.right_track.slip.clamp(0.0, 1.0);
+        }
+        
+        // Охлаждение гусениц
+        self.left_track.temperature += (20.0 - self.left_track.temperature) * dt * 0.05;
+        self.right_track.temperature += (20.0 - self.right_track.temperature) * dt * 0.05;
+        
+        // Нагрев от трения
+        let friction_heat = (self.left_track.slip + self.right_track.slip) * 50.0 * dt;
+        self.left_track.temperature += friction_heat;
+        self.right_track.temperature += friction_heat;
+    }
+
+    /// Деформация грунта под гусеницами
+    fn deform_terrain(
+        &self,
+        terrain: &mut DeformableTerrainComponent,
+        normal_force: f32,
+    ) {
+        let pressure = normal_force / (
+            self.vehicle_type.track_width() * 
+            self.vehicle_type.track_length()
+        );
+        
+        // Глубина колеи зависит от давления и типа грунта
+        let depth = pressure * 0.0001; // Упрощённая модель
+        
+        for suspension in &self.suspensions {
+            let world_pos = self.position + self.orientation * suspension.local_position;
+            terrain.deform(world_pos.x, world_pos.z, depth, 0.3);
+        }
+    }
+
+    /// Получить состояние для рендеринга
+    pub fn get_state(&self) -> TrackedVehicleState {
+        TrackedVehicleState {
+            position: self.position,
+            orientation: self.orientation,
+            linear_velocity: self.linear_velocity,
+            angular_velocity: self.angular_velocity,
+            left_track_slip: self.left_track.slip,
+            right_track_slip: self.right_track.slip,
+            fuel_remaining: self.fuel,
+            engine_running: self.engine_running,
+            engine_temperature: self.engine_temperature,
+        }
+    }
+
+    /// Проверить, может ли проехать по поверхности
+    pub fn can_traverse(&self, surface_type: &str) -> bool {
+        // Гусеницы могут ехать почти везде
+        matches!(surface_type, 
+            "dirt" | "mud" | "sand" | "snow" | "grass" | 
+            "gravel" | "asphalt_bad" | "asphalt_good"
+        )
+    }
+}
+
+/// Состояние гусеничного транспортного средства для рендеринга
+#[derive(Debug, Clone)]
+pub struct TrackedVehicleState {
+    pub position: Vector3<f32>,
+    pub orientation: UnitQuaternion<f32>,
+    pub linear_velocity: Vector3<f32>,
+    pub angular_velocity: Vector3<f32>,
+    pub left_track_slip: f32,
+    pub right_track_slip: f32,
+    pub fuel_remaining: f32,
+    pub engine_running: bool,
+    pub engine_temperature: f32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gtsm_creation() {
+        let vehicle = TrackedVehicle::new(
+            TrackedVehicleType::GTS_M,
+            Vector3::new(0.0, 10.0, 0.0)
+        );
+        
+        assert_eq!(vehicle.vehicle_type, TrackedVehicleType::GTS_M);
+        assert_eq!(vehicle.mass, 4500.0);
+        assert!(vehicle.fuel > 0.0);
+        assert!(!vehicle.engine_running);
+    }
+
+    #[test]
+    fn test_engine_start() {
+        let mut vehicle = TrackedVehicle::new(
+            TrackedVehicleType::GAZ_71,
+            Vector3::zeros()
+        );
+        
+        assert!(vehicle.start_engine());
+        assert!(vehicle.engine_running);
+        assert_eq!(vehicle.engine_temperature, 60.0);
+    }
+
+    #[test]
+    fn test_ground_pressure() {
+        // МТ-ЛБ должен иметь низкое удельное давление
+        let mt_lb = TrackedVehicleType::MT_LB;
+        let pressure = mt_lb.ground_pressure();
+        
+        // Должно быть около 0.2-0.5 кгс/см²
+        assert!(pressure > 0.1 && pressure < 1.0);
+    }
+
+    #[test]
+    fn test_controls_from_input() {
+        let controls = TrackedControls::from_input(0.8, -0.3, false);
+        
+        assert!(controls.left_track > 0.0);
+        assert!(controls.right_track > 0.0);
+        assert_eq!(controls.brake, 0.0);
+    }
+}

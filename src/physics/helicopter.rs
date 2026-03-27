@@ -65,6 +65,12 @@ pub struct HelicopterConfig {
     pub max_cyclic_pitch: f32,        // Максимальный циклический шаг (рад)
     pub max_tail_pitch: f32,          // Максимальный шаг хвостового ротора (рад)
     pub control_smoothing: f32,       // Коэффициент сглаживания управления
+    
+    // Внешняя подвеска (для перевозки грузов)
+    pub has_cargo_hook: bool,         // Наличие грузового крюка
+    pub cargo_hook_offset: Vector3<f32>, // Позиция крюка относительно ЦМ (м)
+    pub max_cargo_mass: f32,          // Максимальная масса груза на внешней подвеске (кг)
+    pub cargo_cable_length: f32,      // Длина троса подвески (м)
 }
 
 /// Тип двигателя вертолёта
@@ -105,6 +111,11 @@ impl HelicopterConfig {
             max_cyclic_pitch: 0.17,     // ~10°
             max_tail_pitch: 0.35,       // ~20°
             control_smoothing: 5.0,
+            // Внешняя подвеска (для перевозки грузов)
+            has_cargo_hook: false,      // R22 обычно не имеет внешнего крюка
+            cargo_hook_offset: Vector3::new(0.0, -0.5, 0.0),
+            max_cargo_mass: 0.0,
+            cargo_cable_length: 0.0,
         }
     }
 
@@ -137,6 +148,11 @@ impl HelicopterConfig {
             max_cyclic_pitch: 0.20,
             max_tail_pitch: 0.40,
             control_smoothing: 4.0,
+            // Внешняя подвеска
+            has_cargo_hook: true,       // UH-1 может перевозить грузы на внешней подвеске
+            cargo_hook_offset: Vector3::new(0.0, -1.0, 0.5),
+            max_cargo_mass: 1500.0,
+            cargo_cable_length: 10.0,
         }
     }
 
@@ -169,6 +185,11 @@ impl HelicopterConfig {
             max_cyclic_pitch: 0.22,
             max_tail_pitch: 0.45,
             control_smoothing: 3.0,
+            // Внешняя подвеска (основное назначение Ми-8 - перевозка грузов)
+            has_cargo_hook: true,       // Ми-8 оснащён грузовым крюком БЛ-56
+            cargo_hook_offset: Vector3::new(0.0, -1.2, 0.8),
+            max_cargo_mass: 4000.0,     // До 4 тонн на внешней подвеске
+            cargo_cable_length: 15.0,   // Стандартная длина троса
         }
     }
 
@@ -210,7 +231,29 @@ impl HelicopterConfig {
             max_cyclic_pitch: 0.20,
             max_tail_pitch: 0.40,
             control_smoothing: 4.0,
+            // Внешняя подвеска (по умолчанию включена для транспортных вертолётов)
+            has_cargo_hook: true,
+            cargo_hook_offset: Vector3::new(0.0, -1.0, 0.5),
+            max_cargo_mass: mass * 0.4,  // До 40% от массы
+            cargo_cable_length: 10.0,
         }
+    }
+    
+    /// Конфигурация для транспортного вертолёта с внешней подвеской
+    pub fn cargo_helicopter(
+        mass: f32,
+        main_rotor_radius: f32,
+        blade_count: u32,
+        engine_power: f32,
+        max_cargo_mass: f32,
+        cable_length: f32,
+    ) -> Self {
+        let mut config = Self::custom(mass, main_rotor_radius, blade_count, engine_power);
+        config.has_cargo_hook = true;
+        config.max_cargo_mass = max_cargo_mass;
+        config.cargo_cable_length = cable_length;
+        config.cargo_hook_offset = Vector3::new(0.0, -1.2, 0.8);
+        config
     }
 }
 
@@ -624,6 +667,16 @@ pub struct Helicopter {
     pub is_on_ground: bool,                 // На земле ли вертолёт
     pub ground_contact_normal: Vector3<f32>, // Нормаль поверхности
     pub rotor_moment_of_inertia: f32,       // Момент инерции ротора
+    
+    // Внешняя подвеска (грузовой крюк)
+    pub has_cargo_hook: bool,               // Наличие грузового крюка
+    pub cargo_hook_offset: Vector3<f32>,    // Позиция крюка относительно ЦМ
+    pub cargo_mass: f32,                    // Текущая масса груза на подвеске
+    pub max_cargo_mass: f32,                // Максимальная масса груза
+    pub cargo_cable_length: f32,            // Длина троса
+    pub cargo_position: Option<Vector3<f32>>, // Позиция груза (если есть)
+    pub cargo_velocity: Vector3<f32>,       // Скорость груза
+    pub is_cargo_attached: bool,            // Прицеплен ли груз
 }
 
 impl Helicopter {
@@ -660,6 +713,72 @@ impl Helicopter {
             is_on_ground: true,
             ground_contact_normal: Vector3::y(),
             rotor_moment_of_inertia: 50.0,
+            // Внешняя подвеска (по умолчанию отключена для лёгких вертолётов)
+            has_cargo_hook: false,
+            cargo_hook_offset: Vector3::new(0.0, -0.5, 0.0),
+            cargo_mass: 0.0,
+            max_cargo_mass: 0.0,
+            cargo_cable_length: 0.0,
+            cargo_position: None,
+            cargo_velocity: Vector3::zeros(),
+            is_cargo_attached: false,
+        }
+    }
+    
+    /// Создание вертолёта с конфигурацией и внешней подвеской
+    pub fn with_config(position: Vector3<f32>, config: HelicopterConfig) -> Self {
+        let main_rotor = MainRotor::new(config.main_rotor_radius, config.main_rotor_blade_count);
+        let tail_rotor = TailRotor::new(
+            config.tail_rotor_radius,
+            Vector3::new(0.0, 0.0, -config.tail_rotor_distance),
+        );
+        
+        let inertia_tensor = Matrix3::new(
+            config.inertia_xx, 0.0, 0.0,
+            0.0, config.inertia_yy, 0.0,
+            0.0, 0.0, config.inertia_zz,
+        );
+        
+        let total_mass = config.mass_empty + config.fuel_capacity * 0.5; // Половина бака
+        
+        Self {
+            mass: total_mass,
+            inertia_tensor,
+            position,
+            rotation: UnitQuaternion::identity(),
+            velocity: Vector3::zeros(),
+            angular_velocity: Vector3::zeros(),
+            main_rotor,
+            tail_rotor,
+            engine: match config.engine_type {
+                EngineType::Turboshaft => TurboshaftEngine::new(config.max_engine_power, config.fuel_capacity),
+                EngineType::Piston => TurboshaftEngine::new(config.max_engine_power, config.fuel_capacity),
+                EngineType::Electric => TurboshaftEngine::new(config.max_engine_power, 0.0), // Электрический без топлива
+            },
+            controls: HelicopterControls::new(),
+            fuselage_drag_coefficient: Vector3::new(
+                config.drag_coefficient_x,
+                config.drag_coefficient_y,
+                config.drag_coefficient_z,
+            ),
+            fuselage_reference_area: config.fuselage_width * config.fuselage_height,
+            side_area: config.fuselage_length * config.fuselage_height,
+            top_area: config.fuselage_length * config.fuselage_width,
+            air_density: 1.225,
+            wind_velocity: Vector3::zeros(),
+            gravity: 9.81,
+            is_on_ground: true,
+            ground_contact_normal: Vector3::y(),
+            rotor_moment_of_inertia: config.mass_empty * config.main_rotor_radius * config.main_rotor_radius * 0.1,
+            // Внешняя подвеска из конфигурации
+            has_cargo_hook: config.has_cargo_hook,
+            cargo_hook_offset: config.cargo_hook_offset,
+            cargo_mass: 0.0,
+            max_cargo_mass: config.max_cargo_mass,
+            cargo_cable_length: config.cargo_cable_length,
+            cargo_position: None,
+            cargo_velocity: Vector3::zeros(),
+            is_cargo_attached: false,
         }
     }
 
@@ -671,20 +790,139 @@ impl Helicopter {
         // 2. Применяем управление к компонентам
         self.apply_controls();
         
-        // 3. Рассчитываем силы и моменты
+        // 3. Рассчитываем силы и моменты (включая груз на подвеске)
         let (forces, torques) = self.calculate_forces_and_torques();
         
-        // 4. Интегрируем уравнения движения (Symplectic Euler)
+        // 4. Обновляем физику груза на внешней подвеске
+        if self.is_cargo_attached && self.has_cargo_hook {
+            self.update_cargo_physics(dt);
+        }
+        
+        // 5. Интегрируем уравнения движения (Symplectic Euler)
         self.integrate_motion(forces, torques, dt);
         
-        // 5. Обновляем скорость вращения ротора
+        // 6. Обновляем скорость вращения ротора
         let available_torque = self.engine.calculate_available_torque(self.main_rotor.current_rpm);
         let rotor_torque = self.main_rotor.calculate_torque(self.air_density, self.velocity);
         self.main_rotor.update_rotor_speed(available_torque, rotor_torque, self.rotor_moment_of_inertia, dt);
         
-        // 6. Обновляем хвостовой ротор
+        // 7. Обновляем хвостовой ротор
         self.tail_rotor.current_rpm = self.main_rotor.current_rpm * 3.0; // Передаточное отношение
     }
+    
+    /// Обновление физики груза на внешней подвеске
+    fn update_cargo_physics(&mut self, dt: f32) {
+        if !self.is_cargo_attached || self.cargo_mass <= 0.0 {
+            return;
+        }
+        
+        // Позиция точки подвески в мире
+        let hook_world_pos = self.position + self.rotation.transform_vector(&self.cargo_hook_offset);
+        
+        if let Some(cargo_pos) = self.cargo_position {
+            // Вектор от крюка к грузу
+            let cable_vector = cargo_pos - hook_world_pos;
+            let cable_length = cable_vector.norm();
+            
+            // Сила натяжения троса (пружинная модель с демпфированием)
+            let spring_constant = 5000.0; // Жёсткость троса
+            let damping_constant = 500.0; // Демпфирование
+            
+            // Растяжение троса
+            let stretch = (cable_length - self.cargo_cable_length).max(0.0);
+            let spring_force = spring_constant * stretch;
+            
+            // Направление силы натяжения
+            let tension_direction = if cable_length > 0.001 {
+                cable_vector.normalize()
+            } else {
+                Vector3::y()
+            };
+            
+            // Скорость груза относительно точки подвески
+            let hook_velocity = self.velocity + self.angular_velocity.cross(&self.cargo_hook_offset);
+            let relative_velocity = self.cargo_velocity - hook_velocity;
+            let damping_force = damping_constant * relative_velocity.dot(&tension_direction);
+            
+            // Общая сила натяжения
+            let tension = (spring_force + damping_force).max(0.0);
+            let tension_force = tension * tension_direction;
+            
+            // Сила тяжести на груз
+            let gravity_force = Vector3::new(0.0, -self.cargo_mass * self.gravity, 0.0);
+            
+            // Ускорение груза
+            let total_force = gravity_force + tension_force;
+            let acceleration = total_force / self.cargo_mass;
+            
+            // Интегрирование скорости и позиции груза
+            self.cargo_velocity += acceleration * dt;
+            self.cargo_velocity *= 0.99; // Небольшое затухание
+            
+            // Ограничение длины троса
+            let new_cargo_pos = cargo_pos + self.cargo_velocity * dt;
+            let new_cable_vector = new_cargo_pos - hook_world_pos;
+            let new_cable_length = new_cable_vector.norm();
+            
+            if new_cable_length > self.cargo_cable_length {
+                // Корректировка позиции для соблюдения ограничения длины троса
+                let corrected_pos = hook_world_pos + new_cable_vector.normalize() * self.cargo_cable_length;
+                self.cargo_position = Some(corrected_pos);
+                
+                // Корректировка скорости (проекция на перпендикуляр к тросу)
+                let tangent = self.cargo_velocity - tension_direction * self.cargo_velocity.dot(&tension_direction);
+                self.cargo_velocity = tangent * 0.95;
+            } else {
+                self.cargo_position = Some(new_cargo_pos);
+            }
+            
+            // Сила реакции на вертолёт от груза (третий закон Ньютона)
+            self.cargo_hook_force = Some(-tension_force);
+        }
+    }
+    
+    /// Прицепить груз к внешней подвеске
+    pub fn attach_cargo(&mut self, cargo_mass: f32, initial_position: Vector3<f32>) -> bool {
+        if !self.has_cargo_hook || cargo_mass > self.max_cargo_mass || cargo_mass <= 0.0 {
+            return false;
+        }
+        
+        self.cargo_mass = cargo_mass;
+        self.cargo_position = Some(initial_position);
+        self.cargo_velocity = Vector3::zeros();
+        self.is_cargo_attached = true;
+        self.mass += cargo_mass; // Учитываем массу груза
+        
+        true
+    }
+    
+    /// Отцепить груз с внешней подвески
+    pub fn detach_cargo(&mut self) -> Option<Vector3<f32>> {
+        if !self.is_cargo_attached {
+            return None;
+        }
+        
+        let cargo_pos = self.cargo_position;
+        self.cargo_mass = 0.0;
+        self.cargo_position = None;
+        self.cargo_velocity = Vector3::zeros();
+        self.is_cargo_attached = false;
+        self.mass -= self.cargo_mass;
+        self.cargo_hook_force = None;
+        
+        cargo_pos
+    }
+    
+    /// Получить текущую позицию груза
+    pub fn get_cargo_position(&self) -> Option<Vector3<f32>> {
+        if self.is_cargo_attached {
+            self.cargo_position
+        } else {
+            None
+        }
+    }
+    
+    /// Сила от груза на крюке (для расчёта сил)
 
     /// Применение управляющих воздействий
     fn apply_controls(&mut self) {
@@ -708,7 +946,7 @@ impl Helicopter {
         let mut total_force = Vector3::zeros();
         let mut total_torque = Vector3::zeros();
         
-        // 1. Гравитация
+        // 1. Гравитация (с учётом массы груза)
         let gravity_force = Vector3::new(0.0, -self.mass * self.gravity, 0.0);
         total_force += gravity_force;
         
@@ -745,6 +983,17 @@ impl Helicopter {
             let (ground_force, ground_torque) = self.calculate_ground_contact();
             total_force += ground_force;
             total_torque += ground_torque;
+        }
+        
+        // 7. Сила от груза на внешней подвеске (реактивная сила на вертолёт)
+        if let Some(cargo_force) = self.cargo_hook_force {
+            // Применяем силу от груза к точке подвески
+            total_force += cargo_force;
+            
+            // Момент от силы груза относительно ЦМ
+            let hook_world_offset = self.rotation.transform_vector(&self.cargo_hook_offset);
+            let cargo_torque = hook_world_offset.cross(&cargo_force);
+            total_torque += cargo_torque;
         }
         
         (total_force, total_torque)

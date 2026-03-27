@@ -1,4 +1,4 @@
-//! Renderer module - Command queue based rendering system
+//! Renderer module - Command queue based rendering system with trait abstraction
 
 use glow::{Context, HasContext};
 use std::sync::Arc;
@@ -8,6 +8,27 @@ use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Textu
 use crate::graphics::lod_system::{LodManager, LodObject};
 use crate::graphics::texture_streaming::TextureStreamingSystem;
 use tracing::warn;
+
+/// Renderer trait for backend abstraction
+pub trait RendererTrait: Send {
+    /// Submit a render command to the queue
+    fn submit(&mut self, command: RenderCommand);
+    
+    /// Flush the render queue - execute all commands
+    fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+    
+    /// Set viewport dimensions
+    fn set_viewport(&mut self, x: i32, y: i32, width: u32, height: u32);
+    
+    /// Clear the screen
+    fn clear(&mut self, color: Option<[f32; 4]>, depth: bool, stencil: bool);
+    
+    /// Get camera reference
+    fn camera(&self) -> &Camera;
+    
+    /// Get mutable camera reference
+    fn camera_mut(&mut self) -> &mut Camera;
+}
 
 /// Handle to a GPU resource
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1490,5 +1511,52 @@ impl Renderer {
         } else {
             self.current_city_index -= 1;
         }
+    }
+}
+
+// Implement RendererTrait for Renderer
+impl RendererTrait for Renderer {
+    fn submit(&mut self, command: RenderCommand) {
+        self.render_queue.submit(command);
+    }
+    
+    fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Call the existing pub fn flush method
+        self.flush()
+    }
+    
+    fn set_viewport(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        unsafe {
+            self.gl.viewport(x, y, width as i32, height as i32);
+        }
+        self.width = width;
+        self.height = height;
+    }
+    
+    fn clear(&mut self, color: Option<[f32; 4]>, depth: bool, stencil: bool) {
+        unsafe {
+            let mut clear_bits = 0;
+            if let Some([r, g, b, a]) = color {
+                self.gl.clear_color(r, g, b, a);
+                clear_bits |= glow::COLOR_BUFFER_BIT;
+            }
+            if depth {
+                clear_bits |= glow::DEPTH_BUFFER_BIT;
+            }
+            if stencil {
+                clear_bits |= glow::STENCIL_BUFFER_BIT;
+            }
+            if clear_bits != 0 {
+                self.gl.clear(clear_bits);
+            }
+        }
+    }
+    
+    fn camera(&self) -> &Camera {
+        &self.camera
+    }
+    
+    fn camera_mut(&mut self) -> &mut Camera {
+        &mut self.camera
     }
 }

@@ -14,6 +14,7 @@ pub mod settlement;
 pub mod russian_names;
 pub mod road_network;
 pub mod buildings;
+pub mod novosibirsk_map;
 
 pub use world_module::OpenWorld;
 pub use chunk::{Chunk, ChunkData, TerrainVertex, generate_chunk_mesh, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
@@ -28,3 +29,4 @@ pub use settlement::{Settlement, SettlementType, BuildingInstance, BuildingType,
 pub use russian_names::generate_name as generate_settlement_name;
 pub use road_network::{RoadNetwork, RoadSegment, RoadType};
 pub use buildings::{BuildingPlacer, BuildingBoxDesc};
+pub use novosibirsk_map::{NovosibirskMap, create_novosibirsk_map, City, Highway, River, Landmark};
