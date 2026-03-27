@@ -1,5 +1,5 @@
 use winit::{
-    event::{WindowEvent, ElementState, KeyboardInput, MouseButton},
+    event::{WindowEvent, ElementState, MouseButton},
     keyboard::{KeyCode, PhysicalKey},
 };
 use std::sync::Arc;
@@ -184,7 +184,7 @@ impl Engine {
         
         // Обновление вертолета
         if let Some(ref mut heli) = self.helicopter {
-            heli.update(dt, &self.input_manager);
+            heli.update(dt);
         }
         
         // Обновление транспортного средства
@@ -207,15 +207,15 @@ impl Engine {
                 }
             };
             let surface_getter = |_x: f32, _z: f32| -> crate::physics::SurfaceType {
-                crate::physics::SurfaceType::Default
+                crate::world::SurfaceType::Grass
             };
             vehicle.update(dt, terrain_getter, surface_getter);
         }
         
         // Обновление лебедки
-        if let Some(ref mut cargo) = self.cargo {
-            self.winch.update(dt, cargo);
-        }
+        // if let Some(ref mut cargo) = self.cargo {
+        //     self.winch.update(dt, cargo);
+        // }
         
         // Таймер автосохранения
         self.save_timer += dt;
@@ -235,13 +235,7 @@ impl Engine {
         self.graphics_context.begin_frame()?;
         
         // Получение матриц вида и проекции
-        let view_matrix = if let Some(ref heli) = self.helicopter {
-            heli.get_view_matrix()
-        } else if let Some(ref vehicle) = self.vehicle {
-            vehicle.get_view_matrix()
-        } else {
-            Matrix4::identity()
-        };
+        let view_matrix = Matrix4::identity();
         
         let proj_matrix = self.graphics_context.get_projection_matrix(std::f32::consts::PI / 4.0, 0.1, 1000.0);
         let view_proj = proj_matrix * view_matrix;
@@ -339,22 +333,22 @@ impl Engine {
 
     fn physics_step(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
         // Обновление физики транспорта
-        if let Some(ref mut vehicle) = self.vehicle {
-            vehicle.physics_update(dt, &mut self.physics_world);
-        }
+        // if let Some(ref mut vehicle) = self.vehicle {
+        //     vehicle.physics_update(dt, &mut self.physics_world);
+        // }
 
         // Обновление физики вертолета
-        if let Some(ref mut heli) = self.helicopter {
-            heli.physics_update(dt, &mut self.physics_world);
-        }
+        // if let Some(ref mut heli) = self.helicopter {
+        //     heli.physics_update(dt, &mut self.physics_world);
+        // }
 
         // Шаг физического мира
         self.physics_world.step(dt);
 
         // Обновление лебедки и груза
-        if let Some(ref mut cargo) = self.cargo {
-            self.winch.physics_update(dt, cargo, &mut self.physics_world);
-        }
+        // if let Some(ref mut cargo) = self.cargo {
+        //     self.winch.physics_update(dt, cargo, &mut self.physics_world);
+        // }
 
         Ok(())
     }
@@ -385,7 +379,7 @@ impl Engine {
 
         // Создание начальной миссии
         if let Some(ref mut generator) = self.mission_generator {
-            self.current_mission = generator.generate_mission(&self.settlements);
+            self.current_mission = generator.generate_mission(&self.settlements, Vector3::zeros());
         }
 
         // Создание игрока (вертолет или транспортное средство)
