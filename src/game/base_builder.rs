@@ -1,6 +1,6 @@
 //! Base Building System for RTGC-0.8
 //! Construction of bases, outposts, and structures in the open world
-//! 
+//!
 //! Features:
 //! - Grid-based placement system
 //! - Multiple structure types (shelter, warehouse, workshop, fence, etc.)
@@ -12,6 +12,9 @@
 use serde::{Deserialize, Serialize};
 use nalgebra::Vector3;
 use std::collections::HashMap;
+
+// Type alias for backwards compatibility
+type Vec3 = Vector3<f32>;
 
 /// Maximum number of structures per base
 pub const MAX_STRUCTURES_PER_BASE: usize = 64;
@@ -320,7 +323,7 @@ pub struct BuiltStructure {
     /// Type of structure
     pub structure_type: StructureType,
     /// Position in world (grid-aligned)
-    pub position: Vec3,
+    pub position: [f32; 3],
     /// Rotation in degrees (0, 90, 180, 270)
     pub rotation: u16,
     /// Current integrity (0.0 - max_integrity)
@@ -338,12 +341,12 @@ pub struct BuiltStructure {
 }
 
 impl BuiltStructure {
-    pub fn new(id: u64, structure_type: StructureType, position: Vec3, owner_id: u64) -> Self {
+    pub fn new(id: u64, structure_type: StructureType, position: Vector3<f32>, owner_id: u64) -> Self {
         let max_integrity = structure_type.max_integrity();
         Self {
             id,
             structure_type,
-            position,
+            position: [position.x, position.y, position.z],
             rotation: 0,
             integrity: max_integrity,
             construction_progress: 1.0, // Instant build by default, can be modified
@@ -404,7 +407,7 @@ pub struct PlayerBase {
     /// Base type
     pub base_type: BaseType,
     /// Center position
-    pub center_position: Vec3,
+    pub center_position: [f32; 3],
     /// Owner player ID
     pub owner_id: u64,
     /// List of structures
@@ -416,12 +419,12 @@ pub struct PlayerBase {
 }
 
 impl PlayerBase {
-    pub fn new(id: u64, name: String, base_type: BaseType, center_position: Vec3, owner_id: u64) -> Self {
+    pub fn new(id: u64, name: String, base_type: BaseType, center_position: Vector3<f32>, owner_id: u64) -> Self {
         Self {
             id,
             name,
             base_type,
-            center_position,
+            center_position: [center_position.x, center_position.y, center_position.z],
             owner_id,
             structures: Vec::with_capacity(MAX_STRUCTURES_PER_BASE),
             created_at: 0,
@@ -459,8 +462,8 @@ impl PlayerBase {
             let ex_half_l = ((ex_w * ex_sin.abs()) + (ex_l * ex_cos.abs())) / 2.0;
             
             // Simple AABB check (conservative)
-            let dx = (structure.position.x - existing.position.x).abs();
-            let dz = (structure.position.z - existing.position.z).abs();
+            let dx = (structure.position[0] - existing.position[0]).abs();
+            let dz = (structure.position[2] - existing.position[2]).abs();
             let min_dist_x = new_half_w + ex_half_w + 0.5; // 0.5m gap
             let min_dist_z = new_half_l + ex_half_l + 0.5;
             
@@ -571,7 +574,7 @@ impl BaseBuildingSystem {
         &mut self,
         name: String,
         base_type: BaseType,
-        position: Vec3,
+        position: Vector3<f32>,
         owner_id: u64,
     ) -> Result<u64, &'static str> {
         // Check player doesn't exceed max bases
@@ -585,7 +588,8 @@ impl BaseBuildingSystem {
         
         // Check minimum distance from other bases
         for existing in self.bases.values() {
-            let dist = (position - existing.center_position).length();
+            let center = Vector3::new(existing.center_position[0], existing.center_position[1], existing.center_position[2]);
+            let dist = (position - center).norm();
             if dist < MIN_BASE_DISTANCE {
                 return Err("Too close to another base");
             }
@@ -628,7 +632,7 @@ impl BaseBuildingSystem {
         &mut self,
         base_id: u64,
         structure_type: StructureType,
-        position: Vec3,
+        position: Vector3<f32>,
         rotation: u16,
         owner_id: u64,
     ) -> Result<u64, &'static str> {
@@ -646,7 +650,6 @@ impl BaseBuildingSystem {
         let mut structure = BuiltStructure::new(structure_id, structure_type, position, owner_id);
         structure.rotation = rotation;
         structure.construction_progress = 1.0;
-        structure.is_complete = true;
         
         base.add_structure(structure)?;
         
@@ -658,7 +661,7 @@ impl BaseBuildingSystem {
         &mut self,
         base_id: u64,
         structure_type: StructureType,
-        position: Vec3,
+        position: Vector3<f32>,
         rotation: u16,
         owner_id: u64,
     ) -> Result<u64, &'static str> {
@@ -671,7 +674,7 @@ impl BaseBuildingSystem {
         &mut self,
         base_id: u64,
         structure_type: StructureType,
-        position: Vec3,
+        position: Vector3<f32>,
         rotation: u16,
         owner_id: u64,
     ) -> Result<u64, &'static str> {
@@ -786,18 +789,23 @@ impl BaseBuildingSystem {
     }
     
     /// Get nearest base to position
-    pub fn get_nearest_base(&self, position: Vec3, max_distance: f32) -> Option<&PlayerBase> {
+    pub fn get_nearest_base(&self, position: Vector3<f32>, max_distance: f32) -> Option<&PlayerBase> {
         self.bases.values()
-            .filter(|b| (b.center_position - position).length() <= max_distance)
+            .filter(|b| {
+                let center = Vector3::new(b.center_position[0], b.center_position[1], b.center_position[2]);
+                (center - position).norm() <= max_distance
+            })
             .min_by(|a, b| {
-                let dist_a = (a.center_position - position).length();
-                let dist_b = (b.center_position - position).length();
+                let center_a = Vector3::new(a.center_position[0], a.center_position[1], a.center_position[2]);
+                let center_b = Vector3::new(b.center_position[0], b.center_position[1], b.center_position[2]);
+                let dist_a = (center_a - position).norm();
+                let dist_b = (center_b - position).norm();
                 dist_a.partial_cmp(&dist_b).unwrap_or(std::cmp::Ordering::Equal)
             })
     }
     
     /// Get save location status at position
-    pub fn is_safe_location(&self, position: Vec3, max_distance: f32) -> bool {
+    pub fn is_safe_location(&self, position: Vector3<f32>, max_distance: f32) -> bool {
         self.get_nearest_base(position, max_distance)
             .map_or(false, |base| base.has_capability(BaseCapability::Sleep))
     }

@@ -107,10 +107,12 @@ impl<T: Clone> AssetCache<T> {
     
     /// Get an asset from cache by path
     pub fn get_by_path(&self, path: &Path) -> Option<Arc<T>> {
-        let path_to_key = self.path_to_key.read();
-        if let Some(key) = path_to_key.get(path) {
-            drop(path_to_key);
-            return self.get(key);
+        let key = {
+            let path_to_key = self.path_to_key.read();
+            path_to_key.get(path).cloned()
+        };
+        if let Some(key) = key {
+            return self.get(&key);
         }
         None
     }
@@ -138,13 +140,17 @@ impl<T: Clone> AssetCache<T> {
     
     /// Remove an asset from cache
     pub fn remove(&self, key: &str) -> bool {
-        let mut cache = self.cache.write();
-        if let Some(asset) = cache.remove(key) {
+        let asset = {
+            let mut cache = self.cache.write();
+            cache.remove(key)
+        };
+        
+        if let Some(asset) = asset {
             *self.total_memory.write() -= asset.size_bytes;
-            
+
             let mut path_to_key = self.path_to_key.write();
             path_to_key.remove(&asset.path);
-            
+
             return true;
         }
         false
@@ -175,20 +181,21 @@ impl<T: Clone> AssetCache<T> {
         
         let mut cache = self.cache.write();
         let mut to_remove = Vec::new();
-        
+
         for (key, asset) in cache.iter() {
             if now.duration_since(asset.last_accessed) > ttl && asset.access_count == 1 {
                 to_remove.push((key.clone(), asset.size_bytes));
             }
         }
-        
+
         for (key, size) in to_remove {
-            if let Some(asset) = cache.remove(&key) {
+            let asset = cache.remove(&key);
+            if let Some(asset) = asset {
                 *self.total_memory.write() -= size;
-                
+
                 let mut path_to_key = self.path_to_key.write();
                 path_to_key.remove(&asset.path);
-                
+
                 removed += 1;
                 debug!("Unloaded unused asset: {}", key);
             }
@@ -205,28 +212,33 @@ impl<T: Clone> AssetCache<T> {
         if current_memory <= max_memory {
             return;
         }
-        
+
         let mut cache = self.cache.write();
-        
-        // Sort by last accessed time and access count
-        let mut entries: Vec<_> = cache.iter().collect();
-        entries.sort_by_key(|(_, asset)| (asset.access_count, asset.last_accessed));
-        
-        for (key, asset) in entries {
+
+        // Collect keys to remove first to avoid borrow conflicts
+        let mut to_remove = Vec::new();
+        for (key, asset) in cache.iter() {
+            if asset.access_count == 1 {
+                to_remove.push((key.clone(), asset.size_bytes));
+            }
+        }
+        drop(cache);
+
+        // Now remove the collected keys
+        let mut cache = self.cache.write();
+        for (key, size) in to_remove {
             if current_memory <= max_memory {
                 break;
             }
-            
-            if asset.access_count == 1 {
-                let size = asset.size_bytes;
-                if let Some(asset) = cache.remove(key) {
-                    current_memory -= size;
-                    
-                    let mut path_to_key = self.path_to_key.write();
-                    path_to_key.remove(&asset.path);
-                    
-                    debug!("Unloaded asset due to memory pressure: {}", key);
-                }
+
+            let asset = cache.remove(&key);
+            if let Some(asset) = asset {
+                current_memory -= size;
+
+                let mut path_to_key = self.path_to_key.write();
+                path_to_key.remove(&asset.path);
+
+                debug!("Unloaded asset due to memory pressure: {}", key);
             }
         }
         

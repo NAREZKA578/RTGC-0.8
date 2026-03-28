@@ -1,6 +1,7 @@
 //! Render Queue - Manages and sorts render commands for efficient rendering
 
-use crate::graphics::render_command::{RenderCommand, Handle, Material};
+use crate::graphics::render_command::RenderCommand;
+use crate::graphics::material::Material;
 use std::collections::HashMap;
 
 /// Render queue for batching and sorting draw calls

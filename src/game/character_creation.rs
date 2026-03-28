@@ -121,7 +121,7 @@ pub struct EducationOption {
 /// UAZ Patriot color option
 #[derive(Debug, Clone)]
 pub struct VehicleColorOption {
-    pub name: String,
+    pub name: &'static str,
     pub rgb: [f32; 3],
 }
 
@@ -599,6 +599,16 @@ impl CharacterCreationManager {
     /// Get total steps
     pub fn get_total_steps(&self) -> usize {
         10
+    }
+    
+    /// Get final character data for player creation
+    pub fn get_final_data(&self) -> Option<&CharacterCreationData> {
+        Some(&self.data)
+    }
+    
+    /// Update character creation (placeholder for future async loading)
+    pub fn update(&mut self, _dt: f32) {
+        // Placeholder for future updates
     }
 }
 

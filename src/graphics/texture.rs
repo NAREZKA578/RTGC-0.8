@@ -47,6 +47,16 @@ impl Texture {
             Ok(Texture { texture })
         }
     }
+    
+    /// Create a placeholder texture (for async loading)
+    pub fn new_placeholder() -> Result<Self, String> {
+        use std::num::NonZero;
+        // Используем unsafe new_unchecked с валидным non-zero значением
+        // Placeholder texture используется как временная заглушка до загрузки реальной текстуры
+        Ok(Self {
+            texture: glow::NativeTexture(unsafe { NonZero::new_unchecked(1) }),
+        })
+    }
 
     pub fn from_rgba8(gl: &Context, width: u32, height: u32, data: &[u8]) -> Result<Self, String> {
         unsafe {

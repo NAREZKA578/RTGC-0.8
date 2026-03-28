@@ -39,8 +39,9 @@ impl Config {
     /// Save configuration to a JSON file
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, content)?;
-        info!("Configuration saved to {:?}", path.as_ref());
+        let path_ref = path.as_ref();
+        std::fs::write(path_ref, content)?;
+        info!("Configuration saved to {:?}", path_ref);
         Ok(())
     }
 }

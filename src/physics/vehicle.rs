@@ -371,11 +371,11 @@ impl Vehicle {
         let friction_multiplier = surface_friction;
         
         // Calculate rolling resistance force (opposes motion)
-        let speed = wheel_vel.length();
+        let speed = wheel_vel.norm();
         let rolling_resistance_force = if speed > 0.01 {
             -rolling_resistance * self.config.mass * 9.81 * (wheel_vel.normalize())
         } else {
-            Vector3::ZERO
+            Vector3::zeros()
         };
 
         // Apply driving/braking force with low range multiplier
@@ -437,11 +437,11 @@ impl Vehicle {
         let friction_multiplier = surface_friction;
         
         // Calculate rolling resistance force (opposes motion)
-        let speed = wheel_vel.length();
+        let speed = wheel_vel.norm();
         let rolling_resistance_force = if speed > 0.01 {
             -rolling_resistance * self.config.mass * 9.81 * (wheel_vel.normalize())
         } else {
-            Vector3::ZERO
+            Vector3::zeros()
         };
 
         // Apply driving/braking force with low range multiplier

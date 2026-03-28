@@ -1,5 +1,7 @@
 use nalgebra::Vector3;
 use crate::physics::{PhysicsWorld, SpringConstraint};
+// Re-export InventoryItem for backwards compatibility
+pub use crate::game::inventory::InventoryItem;
 
 /// Груз — физический объект который можно прицепить к машине
 pub struct Cargo {

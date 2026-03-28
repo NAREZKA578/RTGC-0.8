@@ -30,12 +30,12 @@ impl Winch {
     /// Выстрелить тросом в направлении - использует physics.raycast()
     pub fn shoot(&mut self, origin: Vector3<f32>, direction: Vector3<f32>, physics_world: &PhysicsWorld) -> bool {
         // Perform raycast to find hit point
-        let ray = Ray::new(origin, direction);
+        let ray = Ray::new(Point3::from(origin), direction);
         
-        if let Some(hit) = physics_world.raycast(&ray, self.max_length) {
+        if let Some(hit) = physics_world.raycast(&ray) {
             // Hit something - attach cable
-            self.target_point = Some(hit.point);
-            self.current_length = (hit.point - origin).norm();
+            self.target_point = Some(nalgebra::Vector3::new(hit.point.x, hit.point.y, hit.point.z));
+            self.current_length = (hit.point - origin).coords.norm();
             self.is_active = true;
             return true;
         }

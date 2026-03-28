@@ -190,12 +190,12 @@ impl EcsWorld {
     }
     
     /// Итерация по всем сущностям с данным компонентом
-    pub fn iter_with_component<T: Component>(&self) -> impl Iterator<Item = (Entity, &T)> {
+    pub fn iter_with_component<T: Component + Clone>(&self) -> impl Iterator<Item = (Entity, T)> {
         let type_id = TypeId::of::<T>();
-        
+
         // Собираем все сущности с этим компонентом
         let mut entities_with_component = Vec::new();
-        
+
         for (&entity, &(stored_type_id, index)) in &self.entity_indices {
             if stored_type_id == type_id && self.is_alive(entity) {
                 if let Some(storage) = self.storages.get(&type_id) {
@@ -207,12 +207,14 @@ impl EcsWorld {
                 }
             }
         }
-        
+
         // Безопасно: используем прямой доступ к данным через хранилище
-        entities_with_component.into_iter().filter_map(move |(entity, _)| {
+        let result: Vec<(Entity, T)> = entities_with_component.into_iter().filter_map(move |(entity, _ptr)| {
             // SAFETY: мы получаем компонент напрямую из хранилища без сырых указателей
-            self.get_component::<T>(entity).map(|c| (entity, c))
-        })
+            self.get_component::<T>(entity).map(|c| (entity, c.clone()))
+        }).collect();
+
+        result.into_iter()
     }
     
     /// Получить количество живых сущностей

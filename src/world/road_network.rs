@@ -226,6 +226,7 @@ impl RoadSegment {
 }
 
 /// Road network connecting all settlements
+#[derive(Clone)]
 pub struct RoadNetwork {
     segments: Vec<RoadSegment>,
     settlement_connections: HashMap<u64, Vec<u64>>, // settlement_id -> connected road ids
@@ -233,6 +234,7 @@ pub struct RoadNetwork {
 }
 
 /// Simple grid-based spatial index for road queries
+#[derive(Clone)]
 struct GridSpatialIndex {
     cell_size: f32,
     grid: HashMap<(i32, i32), Vec<usize>>, // cell -> road segment indices
@@ -326,8 +328,8 @@ impl RoadNetwork {
             
             // Generate road path using A* with terrain awareness
             let waypoints = Self::generate_road_path(
-                from.center.x, from.center.z,
-                to.center.x, to.center.z,
+                from.center[0], from.center[2],
+                to.center[0], to.center[2],
                 road_type,
                 terrain_getter,
                 seed,
@@ -397,10 +399,10 @@ impl RoadNetwork {
                 if other.id == settlement.id || !connected.contains(&other.id) {
                     continue;
                 }
-                
-                let dist = ((settlement.center.x - other.center.x).powi(2)
-                    + (settlement.center.z - other.center.z).powi(2)).sqrt();
-                
+
+                let dist = ((settlement.center[0] - other.center[0]).powi(2)
+                    + (settlement.center[2] - other.center[2]).powi(2)).sqrt();
+
                 if dist < best_dist {
                     best_dist = dist;
                     best_target = Some(other.id);

@@ -1,11 +1,11 @@
 //! Save System - Game save/load functionality
 //! Saves only in "safe" locations: beds, vehicle bunks, tents, owned properties
 
-use nalgebra::Vector3;
 use serde::{Serialize, Deserialize};
 use crate::game::player::{Player, PlayerState, CameraMode};
 use crate::game::skills::PlayerSkills;
 use crate::game::mission_save::WorldState;
+use crate::game::InventoryItem;
 
 /// Maximum number of save slots
 pub const MAX_SAVE_SLOTS: usize = 10;
@@ -23,8 +23,8 @@ pub struct SaveMetadata {
     pub timestamp: u64,
     /// Location name where saved
     pub location_name: String,
-    /// Position in world
-    pub position: Vector3<f32>,
+    /// Position in world (E0117 fix: use [f32; 3] instead of Vector3)
+    pub position: [f32; 3],
     /// Money
     pub money_rub: f64,
     /// Playtime in hours
@@ -69,8 +69,8 @@ pub struct PlayerData {
     pub inventory: Vec<InventoryItemData>,
     /// Inventory weight
     pub inventory_weight: f32,
-    /// Position
-    pub position: Vector3<f32>,
+    /// Position (E0117 fix: use [f32; 3] instead of Vector3)
+    pub position: [f32; 3],
     /// Rotation (quaternion as [x, y, z, w])
     pub rotation: [f32; 4],
     /// State (OnFoot / InVehicle)
@@ -135,7 +135,7 @@ pub struct InventoryItemData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PlayerStateData {
     OnFoot,
-    InVehicle { vehicle_index: usize, seat_index: usize },
+    InVehicle { vehicle_index: usize, vehicle_id: u64, seat_index: usize },
 }
 
 /// Serialized camera mode
@@ -180,14 +180,14 @@ pub struct MissionSaveData {
 pub struct VehicleSaveData {
     /// Vehicle ID/name
     pub name: String,
-    /// Position
-    pub position: Vector3<f32>,
+    /// Position (E0117 fix: use [f32; 3] instead of Vector3)
+    pub position: [f32; 3],
     /// Rotation
     pub rotation: [f32; 4],
-    /// Velocity
-    pub velocity: Vector3<f32>,
-    /// Angular velocity
-    pub angular_velocity: Vector3<f32>,
+    /// Velocity (E0117 fix: use [f32; 3] instead of Vector3)
+    pub velocity: [f32; 3],
+    /// Angular velocity (E0117 fix: use [f32; 3] instead of Vector3)
+    pub angular_velocity: [f32; 3],
     /// Engine integrity
     pub engine_integrity: f32,
     /// Transmission integrity
@@ -366,7 +366,7 @@ impl SaveSystem {
     }
     
     /// Convert Player to PlayerData for saving
-    pub fn player_to_save_data(player: &Player, position: Vector3<f32>, rotation: [f32; 4]) -> PlayerData {
+    pub fn player_to_save_data(player: &Player, position: [f32; 3], rotation: [f32; 4]) -> PlayerData {
         PlayerData {
             name: player.name.clone(),
             is_male: player.is_male,
@@ -431,11 +431,11 @@ impl SaveSystem {
     }
     
     /// Convert inventory to save data
-    pub fn inventory_to_save_data(inventory: &[crate::game::cargo::InventoryItem]) -> Vec<InventoryItemData> {
+    pub fn inventory_to_save_data(inventory: &[InventoryItem]) -> Vec<InventoryItemData> {
         inventory.iter().map(|item| InventoryItemData {
-            name: item.name.clone(),
-            weight: item.weight,
-            item_type: item.item_type.clone(),
+            name: format!("{:?}", item.item_type),
+            weight: item.total_weight(),
+            item_type: format!("{:?}", item.item_type),
             quantity: item.quantity,
         }).collect()
     }
@@ -444,9 +444,10 @@ impl SaveSystem {
     pub fn state_to_save_data(state: &PlayerState) -> PlayerStateData {
         match state {
             PlayerState::OnFoot => PlayerStateData::OnFoot,
-            PlayerState::InVehicle { vehicle_index, seat_index } => {
+            PlayerState::InVehicle { vehicle_index, vehicle_id, seat_index } => {
                 PlayerStateData::InVehicle {
                     vehicle_index: *vehicle_index,
+                    vehicle_id: *vehicle_id,
                     seat_index: *seat_index,
                 }
             }

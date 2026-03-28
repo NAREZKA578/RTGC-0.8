@@ -1,6 +1,6 @@
 use nalgebra::{Vector3, Matrix3, UnitQuaternion};
 use crate::physics::RigidBody;
-use crate::physics_module::Shape;
+use crate::physics::physics_module::Shape;
 
 /// Interface for deformable terrain operations
 /// This trait defines the contract for terrain deformation functionality

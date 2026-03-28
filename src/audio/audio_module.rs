@@ -39,8 +39,8 @@ pub struct AudioSource {
 impl Default for AudioSource {
     fn default() -> Self {
         Self {
-            position: Vec3::ZERO,
-            velocity: Vec3::ZERO,
+            position: Vector3::zeros(),
+            velocity: Vector3::zeros(),
             volume: 1.0,
             pitch: 1.0,
             min_distance: 1.0,
@@ -73,10 +73,10 @@ pub struct AudioListener {
 impl Default for AudioListener {
     fn default() -> Self {
         Self {
-            position: Vec3::ZERO,
-            forward: Vec3::Z,
-            up: Vec3::Y,
-            velocity: Vec3::ZERO,
+            position: Vector3::zeros(),
+            forward: Vector3::new(0.0, 0.0, -1.0),
+            up: Vector3::new(0.0, 1.0, 0.0),
+            velocity: Vector3::zeros(),
             master_volume: 1.0,
             doppler_factor: 1.0,
         }
@@ -84,7 +84,7 @@ impl Default for AudioListener {
 }
 
 impl AudioListener {
-    pub fn new(position: Vec3, forward: Vec3, up: Vec3) -> Self {
+    pub fn new(position: nalgebra::Vector3<f32>, forward: nalgebra::Vector3<f32>, up: nalgebra::Vector3<f32>) -> Self {
         Self {
             position,
             forward: forward.normalize(),
@@ -97,8 +97,8 @@ impl AudioListener {
     pub fn get_audio_matrix(&self) -> [[f32; 4]; 4] {
         let forward = self.forward.normalize();
         let up = self.up.normalize();
-        let right = forward.cross(up).normalize();
-        
+        let right = forward.cross(&up).normalize();
+
         [
             [right.x, right.y, right.z, 0.0],
             [up.x, up.y, up.z, 0.0],
@@ -170,7 +170,7 @@ impl Default for EnvironmentParams {
             temperature: 20.0, // Celsius
             humidity: 50.0,    // %
             pressure: 101325.0, // Pascal
-            wind_velocity: Vec3::ZERO,
+            wind_velocity: Vector3::zeros(),
         }
     }
 }
@@ -246,14 +246,14 @@ impl AudioSystem {
     }
     
     /// Обновляет позицию источника
-    pub fn set_source_position(&mut self, id: u32, position: Vec3) {
+    pub fn set_source_position(&mut self, id: u32, position: nalgebra::Vector3<f32>) {
         if let Some(source) = self.sources.get_mut(&id) {
             source.position = position;
         }
     }
     
     /// Обновляет позицию слушателя
-    pub fn set_listener_position(&mut self, position: Vec3, forward: Vec3, up: Vec3) {
+    pub fn set_listener_position(&mut self, position: nalgebra::Vector3<f32>, forward: nalgebra::Vector3<f32>, up: nalgebra::Vector3<f32>) {
         self.listener.position = position;
         self.listener.forward = forward;
         self.listener.up = up;
@@ -262,31 +262,31 @@ impl AudioSystem {
     /// Вычисляет 3D параметры для источника (панорамирование, громкость, питч)
     pub fn calculate_3d_params(&self, source_id: u32) -> Option<(f32, f32, f32)> {
         let source = self.sources.get(&source_id)?;
-        
+
         if !source.spatial {
             return Some((source.volume, 1.0, 0.0));
         }
-        
+
         // Вектор от слушателя к источнику
         let to_source = source.position - self.listener.position;
-        let distance = to_source.length();
-        
+        let distance = to_source.norm();
+
         // Проверка на максимальную дистанцию
         if distance > source.max_distance {
             return Some((0.0, 1.0, 0.0));
         }
-        
+
         // Затухание по расстоянию (обратное квадратичное)
         let distance_attenuation = if distance < source.min_distance {
             1.0
         } else {
             (source.min_distance / distance).powi(2)
         };
-        
+
         // Доплер эффект
         let relative_velocity = source.velocity - self.listener.velocity;
         let doppler_shift = self.calculate_doppler(relative_velocity, to_source.normalize(), distance);
-        
+
         // Окклюзия
         let occlusion = if self.occlusion_enabled {
             self.calculate_occlusion(self.listener.position, source.position)
@@ -298,64 +298,64 @@ impl AudioSystem {
                 material: OcclusionMaterial::Air,
             }
         };
-        
+
         // Поглощение средой
         let air_absorption = self.environment.air_absorption(1000.0, distance);
-        
+
         // Итоговая громкость
-        let final_volume = source.volume 
-            * distance_attenuation 
+        let final_volume = source.volume
+            * distance_attenuation
             * (1.0 - occlusion.occlusion_factor * 0.8)
             * air_absorption
             * self.listener.master_volume;
-        
+
         // Панорамирование (лево/право)
-        let right = self.listener.forward.cross(self.listener.up).normalize();
-        let pan = to_source.normalize().dot(right).clamp(-1.0, 1.0);
-        
+        let right = self.listener.forward.cross(&self.listener.up).normalize();
+        let pan = to_source.normalize().dot(&right).clamp(-1.0, 1.0);
+
         Some((final_volume, doppler_shift, pan))
     }
-    
+
     /// Вычисляет Doppler сдвиг
-    fn calculate_doppler(&self, relative_velocity: Vec3, direction: Vec3, distance: f32) -> f32 {
+    fn calculate_doppler(&self, relative_velocity: nalgebra::Vector3<f32>, direction: nalgebra::Vector3<f32>, distance: f32) -> f32 {
         if distance < 0.001 {
             return 1.0;
         }
-        
+
         let speed_of_sound = self.environment.speed_of_sound();
-        let velocity_toward_listener = -relative_velocity.dot(direction);
-        
+        let velocity_toward_listener = -relative_velocity.dot(&direction);
+
         // Формула Доплера: f' = f * (c / (c - v))
         let doppler = speed_of_sound / (speed_of_sound - velocity_toward_listener * self.listener.doppler_factor);
         doppler.clamp(0.5, 2.0) // Ограничиваем эффект
     }
-    
+
     /// Трассировка луча для проверки окклюзии
-    pub fn calculate_occlusion(&self, from: Vec3, to: Vec3) -> OcclusionResult {
+    pub fn calculate_occlusion(&self, from: nalgebra::Vector3<f32>, to: nalgebra::Vector3<f32>) -> OcclusionResult {
         // В реальной реализации здесь была бы трассировка луча через физический движок
         // Для примера возвращаем простую заглушку
-        
+
         let direction = to - from;
-        let distance = direction.length();
-        
+        let distance = direction.norm();
+
         // Заглушка - проверяем "препятствия" на фиксированных позициях
         let obstacles = [
-            (Vec3::new(5.0, 0.0, 5.0), 2.0, OcclusionMaterial::Concrete),
-            (Vec3::new(-3.0, 0.0, 2.0), 1.5, OcclusionMaterial::Wood),
+            (nalgebra::Vector3::new(5.0, 0.0, 5.0), 2.0, OcclusionMaterial::Concrete),
+            (nalgebra::Vector3::new(-3.0, 0.0, 2.0), 1.5, OcclusionMaterial::Wood),
         ];
-        
+
         let mut total_occlusion = 0.0;
         let mut obstacle_count = 0;
         let mut last_material = OcclusionMaterial::Air;
-        
+
         for (obs_pos, obs_radius, material) in &obstacles {
             // Простейшая проверка пересечения луча со сферой
             let to_obs = *obs_pos - from;
-            let projection = to_obs.dot(direction.normalize());
-            
+            let projection = to_obs.dot(&direction.normalize());
+
             if projection > 0.0 && projection < distance {
                 let closest_point = from + direction.normalize() * projection;
-                let dist_to_line = (closest_point - *obs_pos).length();
+                let dist_to_line = (closest_point - *obs_pos).norm();
                 
                 if dist_to_line < *obs_radius {
                     total_occlusion += material.absorption_coefficient(1000.0);

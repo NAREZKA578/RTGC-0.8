@@ -63,6 +63,8 @@ pub struct GamepadState {
     pub connected: bool,
     /// Player index (0-3)
     pub player_index: usize,
+    /// Gamepad ID
+    pub id: u32,
 }
 
 impl Default for GamepadState {
@@ -74,6 +76,7 @@ impl Default for GamepadState {
             right_trigger: 0.0,
             connected: false,
             player_index: 0,
+            id: 0,
         }
     }
 }
@@ -82,13 +85,14 @@ impl GamepadState {
     pub fn new(player_index: usize) -> Self {
         let mut state = Self::default();
         state.player_index = player_index;
-        
+        state.id = player_index as u32;
+
         // Initialize axes to zero
         state.axes.insert(GamepadAxis::LeftStickX, 0.0);
         state.axes.insert(GamepadAxis::LeftStickY, 0.0);
         state.axes.insert(GamepadAxis::RightStickX, 0.0);
         state.axes.insert(GamepadAxis::RightStickY, 0.0);
-        
+
         state
     }
     

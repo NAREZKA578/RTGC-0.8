@@ -4,8 +4,12 @@
 use crate::game::player::{PlayerState, CameraMode};
 use crate::game::skills::PlayerSkills;
 use crate::game::interaction::{InteractableType, InteractionResult};
-use crate::game::weather::WeatherState;
-use nalgebra::Vector2;
+use crate::game::weather::{WeatherState, PrecipitationType};
+use nalgebra::{Vector2, Vector3};
+
+// Type aliases for backwards compatibility
+type Vec2 = Vector2<f32>;
+type Vec3 = Vector3<f32>;
 
 /// UI visibility flags
 #[derive(Debug, Clone, Copy)]
@@ -71,7 +75,7 @@ pub struct HUDData {
     /// Compass heading (0-359 degrees)
     pub heading: f32,
     /// Coordinates (X, Y, Z)
-    pub position: Vec2,
+    pub position: Vector2<f32>,
     /// Altitude (meters)
     pub altitude: f32,
 }
@@ -88,12 +92,12 @@ impl Default for HUDData {
             weather: "Clear".to_string(),
             location: "Novosibirsk".to_string(),
             player_state: PlayerState::OnFoot,
-            camera_mode: CameraMode::ThirdPerson,
+            camera_mode: CameraMode::ThirdPerson { distance: 4.0, yaw: 0.0, pitch: 0.3 },
             gear: 0,
             rpm: 0.0,
             engine_temp: 0.5,
             heading: 0.0,
-            position: Vec2::ZERO,
+            position: Vector2::zeros(),
             altitude: 0.0,
         }
     }
@@ -131,7 +135,7 @@ pub struct InteractionPrompt {
 #[derive(Debug, Clone)]
 pub struct MinimapData {
     /// Player position on map (normalized 0-1)
-    pub player_pos: Vec2,
+    pub player_pos: Vector2<f32>,
     /// Player rotation (radians)
     pub player_rotation: f32,
     /// Zoom level (1.0 = max zoom)
@@ -147,7 +151,7 @@ pub struct MinimapData {
 #[derive(Debug, Clone)]
 pub struct Waypoint {
     pub name: String,
-    pub position: Vec2,
+    pub position: Vector2<f32>,
     pub waypoint_type: WaypointType,
 }
 
@@ -164,7 +168,7 @@ pub enum WaypointType {
 #[derive(Debug, Clone)]
 pub struct VehicleMarker {
     pub vehicle_id: u32,
-    pub position: Vec2,
+    pub position: Vector2<f32>,
     pub vehicle_type: String,
     pub is_player_owned: bool,
 }
@@ -172,7 +176,7 @@ pub struct VehicleMarker {
 #[derive(Debug, Clone)]
 pub struct NPCMarker {
     pub npc_id: u32,
-    pub position: Vec2,
+    pub position: Vector2<f32>,
     pub name: String,
 }
 
@@ -381,12 +385,11 @@ impl Default for UIManager {
 impl WeatherState {
     pub fn description(&self) -> &str {
         match self {
-            WeatherState::Clear => "Clear",
-            WeatherState::Cloudy => "Cloudy",
-            WeatherState::Rain { .. } => "Rain",
-            WeatherState::Snow { .. } => "Snow",
-            WeatherState::Fog { .. } => "Fog",
-            WeatherState::Storm { .. } => "Storm",
+            WeatherState { precipitation_type: PrecipitationType::None, cloud_coverage, .. } if *cloud_coverage < 0.3 => "Clear",
+            WeatherState { precipitation_type: PrecipitationType::None, .. } => "Cloudy",
+            WeatherState { precipitation_type: PrecipitationType::Rain, .. } => "Rain",
+            WeatherState { precipitation_type: PrecipitationType::Snow, .. } => "Snow",
+            _ => "Unknown",
         }
     }
 }

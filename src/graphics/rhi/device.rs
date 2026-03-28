@@ -240,7 +240,10 @@ pub trait ICommandQueue: Send + Sync {
 pub trait IFence: Send + Sync {
     /// Get current fence value
     fn get_value(&self) -> u64;
-    
+
+    /// Set fence value (called by command queue when signal is submitted)
+    fn set_value(&self, value: u64);
+
     /// Set event to be signaled when fence reaches value
     fn set_event_on_completion(&self, value: u64) -> RhiResult<Arc<dyn std::any::Any + Send + Sync>>;
 }

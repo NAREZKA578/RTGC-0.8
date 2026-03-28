@@ -6,6 +6,7 @@ use std::any::Any;
 pub struct OpenWorldScene {
     name: String,
     world_loaded: bool,
+    seed: u64,  // Seed for terrain generation
 }
 
 impl OpenWorldScene {
@@ -13,12 +14,35 @@ impl OpenWorldScene {
         Self {
             name: "Open World".to_string(),
             world_loaded: false,
+            seed: 42,  // Default seed
         }
     }
 
     pub fn load_world(&mut self) {
         self.world_loaded = true;
         tracing::info!("Open world loaded");
+    }
+
+    /// Get terrain height at given coordinates
+    pub fn get_height(&self, x: f32, z: f32) -> f32 {
+        // Simple procedural height - can be replaced with proper terrain generation
+        0.0
+    }
+
+    /// Generate terrain data
+    pub fn generate_terrain(&mut self) {
+        // Terrain generation stub - can be expanded with proper implementation
+        tracing::debug!("Terrain generated with seed {}", self.seed);
+    }
+
+    /// Get the world seed
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    /// Set the world seed
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed;
     }
 }
 

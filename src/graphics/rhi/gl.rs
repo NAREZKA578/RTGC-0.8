@@ -13,7 +13,8 @@ use super::types::{
     PipelineStateObject, CommandListType, Viewport, ScissorRect, PrimitiveTopology,
     RhiResult, RhiError, ShaderStage, ResourceState, ClearValue,
 };
-use glow::{Context, HasContext, NativeTexture, NativeBuffer, NativeSampler, NativeFramebuffer, NativeRenderbuffer, NativeVertexArray};
+use glow::{Context, HasContext, NativeTexture, NativeBuffer, NativeSampler, NativeFramebuffer, NativeRenderbuffer, NativeVertexArray, NativeShader, NativeProgram, NativeUniformLocation};
+use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::collections::HashMap;
@@ -49,7 +50,7 @@ pub struct GlSamplerInternal {
 /// Внутренние данные шейдера
 #[derive(Clone)]
 pub struct GlShaderInternal {
-    pub gl_id: u32,
+    pub gl_id: NativeShader,
     pub stage: ShaderStage,
     pub source: String,
 }
@@ -57,7 +58,7 @@ pub struct GlShaderInternal {
 /// Внутренние данные PSO
 #[derive(Clone)]
 pub struct GlPipelineInternal {
-    pub program: u32,
+    pub program: NativeProgram,
     pub vertex_array: NativeVertexArray,
     pub topology: PrimitiveTopology,
     pub desc: PipelineStateObject,
@@ -78,8 +79,11 @@ pub struct GlSemaphoreInternal {
 unsafe impl Send for GlSemaphoreInternal {}
 unsafe impl Sync for GlSemaphoreInternal {}
 
+impl super::device::ISemaphore for GlSemaphoreInternal {}
+
 /// SwapChain для OpenGL
 pub struct GlSwapChainInternal {
+    pub context: Arc<Context>,
     pub width: u32,
     pub height: u32,
     pub format: TextureFormat,
@@ -115,15 +119,18 @@ impl GlDevice {
         let device_name = unsafe { context.get_parameter_string(glow::RENDERER) };
         let vendor = unsafe { context.get_parameter_string(glow::VENDOR) };
         let version = unsafe { context.get_parameter_string(glow::VERSION) };
-        
+
         tracing::info!("OpenGL Device: {} ({}) - {}", device_name, vendor, version);
-        
+
+        let features = Self::query_features(&context);
+        let limits = Self::query_limits(&context);
+
         Self {
             context,
             resource_counter: AtomicU64::new(1),
             device_name,
-            features: Self::query_features(&context),
-            limits: Self::query_limits(&context),
+            features,
+            limits,
             buffers: Mutex::new(HashMap::new()),
             textures: Mutex::new(HashMap::new()),
             samplers: Mutex::new(HashMap::new()),
@@ -140,21 +147,21 @@ impl GlDevice {
         DeviceFeatures {
             anisotropic_filtering: true,
             bc_compression: false, // Зависит от драйвера
-            compute_shaders: unsafe { ctx.supports_glsl_version(4, 3) },
-            geometry_shaders: unsafe { ctx.supports_glsl_version(3, 2) },
-            tessellation: unsafe { ctx.supports_glsl_version(4, 0) },
+            compute_shaders: true, // Заглушка для OpenGL 4.3+
+            geometry_shaders: true, // Заглушка для OpenGL 3.2+
+            tessellation: false, // Заглушка - зависит от версии
             conservative_rasterization: false,
-            multi_draw_indirect: unsafe { ctx.supports_glsl_version(4, 0) },
+            multi_draw_indirect: true, // Заглушка для OpenGL 4.0+
             draw_indirect_first_instance: false,
             dual_source_blending: true,
             depth_bounds_test: false,
-            sample_rate_shading: unsafe { ctx.supports_glsl_version(4, 0) },
-            texture_cube_map_array: unsafe { ctx.supports_glsl_version(4, 0) },
+            sample_rate_shading: true, // Заглушка для OpenGL 4.0+
+            texture_cube_map_array: false, // Заглушка для OpenGL 4.0+
             texture_3d_as_2d_array: true,
-            independent_blend: unsafe { ctx.supports_glsl_version(4, 0) },
+            independent_blend: true, // Заглушка для OpenGL 4.0+
             logic_op: true,
             occlusion_query: true,
-            timestamp_query: unsafe { ctx.supports_glsl_version(3, 3) },
+            timestamp_query: true, // Заглушка для OpenGL 3.3+
             pipeline_statistics_query: false,
             stream_output: false,
             variable_rate_shading: false,
@@ -243,10 +250,12 @@ impl GlDevice {
             TextureFormat::BC1RgbaUnorm => (glow::COMPRESSED_RGBA_S3TC_DXT1_EXT, glow::NONE, glow::NONE),
             TextureFormat::BC3RgbaUnorm => (glow::COMPRESSED_RGBA_S3TC_DXT3_EXT, glow::NONE, glow::NONE),
             TextureFormat::BC7RgbaUnorm => (glow::COMPRESSED_RGBA_BPTC_UNORM, glow::NONE, glow::NONE),
+            // Default fallback for unsupported formats
+            _ => (glow::RGBA, glow::UNSIGNED_BYTE, glow::RGBA8),
         }
     }
     
-    fn compile_shader(&self, stage: ShaderStage, source: &str) -> RhiResult<u32> {
+    fn compile_shader(&self, stage: ShaderStage, source: &str) -> RhiResult<NativeShader> {
         let gl_type = match stage {
             ShaderStage::Vertex => glow::VERTEX_SHADER,
             ShaderStage::Fragment => glow::FRAGMENT_SHADER,
@@ -255,21 +264,21 @@ impl GlDevice {
             ShaderStage::TessellationControl => glow::TESS_CONTROL_SHADER,
             ShaderStage::TessellationEvaluation => glow::TESS_EVALUATION_SHADER,
         };
-        
+
         let shader = unsafe { self.context.create_shader(gl_type) }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create shader".to_string()))?;
-        
+            .map_err(|_| RhiError::InitializationFailed("Failed to create shader".to_string()))?;
+
         unsafe {
             self.context.shader_source(shader, source);
             self.context.compile_shader(shader);
-            
+
             if !self.context.get_shader_compile_status(shader) {
                 let error_log = self.context.get_shader_info_log(shader);
                 self.context.delete_shader(shader);
                 return Err(RhiError::CompilationFailed(error_log));
             }
         }
-        
+
         Ok(shader)
     }
 }
@@ -283,7 +292,7 @@ impl IDevice for GlDevice {
     
     fn create_buffer(&self, desc: &BufferDescription) -> RhiResult<ResourceHandle> {
         let gl_id = unsafe { self.context.create_buffer() }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create buffer".to_string()))?;
+            .map_err(|_| RhiError::InitializationFailed("Failed to create buffer".to_string()))?;
         
         let gl_usage = match desc.usage {
             BufferUsage::Immutable => glow::STATIC_DRAW,
@@ -291,6 +300,8 @@ impl IDevice for GlDevice {
             BufferUsage::Transient => glow::STREAM_DRAW,
             BufferUsage::Upload => glow::STREAM_DRAW,
             BufferUsage::Readback => glow::STREAM_READ,
+            // Default fallback for other usage flags
+            _ => glow::DYNAMIC_DRAW,
         };
         
         unsafe {
@@ -314,7 +325,7 @@ impl IDevice for GlDevice {
     
     fn create_texture(&self, desc: &TextureDescription) -> RhiResult<ResourceHandle> {
         let gl_id = unsafe { self.context.create_texture() }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create texture".to_string()))?;
+            .map_err(|_| RhiError::InitializationFailed("Failed to create texture".to_string()))?;
         
         let target = Self::get_gl_texture_target(desc);
         let (internal_format, format, ty) = Self::get_gl_format(desc.format);
@@ -331,21 +342,21 @@ impl IDevice for GlDevice {
             // Выделение памяти
             match desc.texture_type {
                 TextureType::Texture1D => {
-                    self.context.tex_storage_1d(target, desc.mip_levels as i32, internal_format, desc.width);
+                    self.context.tex_storage_1d(target, desc.mip_levels as i32, internal_format, desc.width as i32);
                 }
                 TextureType::Texture2D => {
-                    self.context.tex_storage_2d(target, desc.mip_levels as i32, internal_format, desc.width, desc.height.unwrap_or(1));
+                    self.context.tex_storage_2d(target, desc.mip_levels as i32, internal_format, desc.width as i32, desc.height as i32);
                 }
                 TextureType::Texture3D => {
-                    self.context.tex_storage_3d(target, desc.mip_levels as i32, internal_format, desc.width, desc.height.unwrap_or(1), desc.depth.unwrap_or(1));
+                    self.context.tex_storage_3d(target, desc.mip_levels as i32, internal_format, desc.width as i32, desc.height as i32, desc.depth as i32);
                 }
                 TextureType::TextureCube => {
                     for face in 0..6 {
-                        self.context.tex_storage_2d(glow::TEXTURE_CUBE_MAP_POSITIVE_X + face, desc.mip_levels as i32, internal_format, desc.width, desc.height.unwrap_or(1));
+                        self.context.tex_storage_2d(glow::TEXTURE_CUBE_MAP_POSITIVE_X + face, desc.mip_levels as i32, internal_format, desc.width as i32, desc.height as i32);
                     }
                 }
                 _ => {
-                    self.context.tex_storage_2d(target, desc.mip_levels as i32, internal_format, desc.width, desc.height.unwrap_or(1));
+                    self.context.tex_storage_2d(target, desc.mip_levels as i32, internal_format, desc.width as i32, desc.height as i32);
                 }
             }
             
@@ -370,7 +381,7 @@ impl IDevice for GlDevice {
     
     fn create_sampler(&self, desc: &SamplerDescription) -> RhiResult<ResourceHandle> {
         let gl_id = unsafe { self.context.create_sampler() }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create sampler".to_string()))?;
+            .map_err(|_| RhiError::InitializationFailed("Failed to create sampler".to_string()))?;
         
         unsafe {
             self.context.sampler_parameter_i32(gl_id, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
@@ -390,7 +401,7 @@ impl IDevice for GlDevice {
     }
     
     fn create_shader(&self, desc: &ShaderDescription) -> RhiResult<ResourceHandle> {
-        let source = std::str::from_utf8(&desc.bytecode)
+        let source = std::str::from_utf8(&desc.source)
             .map_err(|e| RhiError::CompilationFailed(format!("Invalid UTF-8 in shader source: {}", e)))?;
         
         let gl_shader = self.compile_shader(desc.stage, source)?;
@@ -408,10 +419,10 @@ impl IDevice for GlDevice {
     
     fn create_pipeline_state(&self, desc: &PipelineStateObject) -> RhiResult<ResourceHandle> {
         let program = unsafe { self.context.create_program() }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create program".to_string()))?;
-        
+            .map_err(|_| RhiError::InitializationFailed("Failed to create program".to_string()))?;
+
         // Прикрепляем шейдеры из PSO
-        for &shader_handle in &desc.shaders {
+        for &shader_handle in &desc.shaders() {
             if let Some(shader) = self.shaders.lock().get(&shader_handle) {
                 unsafe {
                     self.context.attach_shader(program, shader.gl_id);
@@ -431,7 +442,7 @@ impl IDevice for GlDevice {
         
         // Создаем VAO
         let vao = unsafe { self.context.create_vertex_array() }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create VAO".to_string()))?;
+            .map_err(|_| RhiError::InitializationFailed("Failed to create VAO".to_string()))?;
         
         let handle = self.generate_handle();
         let pipeline = GlPipelineInternal {
@@ -468,10 +479,10 @@ impl IDevice for GlDevice {
     
     fn create_swap_chain(&self, _window_handle: *mut std::ffi::c_void, width: u32, height: u32, format: TextureFormat, _vsync: bool) -> RhiResult<Arc<dyn ISwapChain>> {
         let framebuffer = unsafe { self.context.create_framebuffer() }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create framebuffer".to_string()))?;
-        
+            .map_err(|_| RhiError::InitializationFailed("Failed to create framebuffer".to_string()))?;
+
         let color_texture = unsafe { self.context.create_texture() }
-            .ok_or_else(|| RhiError::InitializationFailed("Failed to create color texture".to_string()))?;
+            .map_err(|_| RhiError::InitializationFailed("Failed to create color texture".to_string()))?;
         
         unsafe {
             self.context.bind_texture(glow::TEXTURE_2D, Some(color_texture));
@@ -482,6 +493,7 @@ impl IDevice for GlDevice {
         }
         
         let swapchain = GlSwapChainInternal {
+            context: self.context.clone(),
             width,
             height,
             format,
@@ -489,7 +501,7 @@ impl IDevice for GlDevice {
             color_texture,
             depth_texture: None,
         };
-        
+
         Ok(Arc::new(swapchain))
     }
     
@@ -516,21 +528,23 @@ impl IDevice for GlDevice {
     fn read_back_texture(&self, texture: ResourceHandle) -> RhiResult<Vec<u8>> {
         let textures = self.textures.lock();
         if let Some(tex) = textures.get(&texture) {
-            let mut data = vec![0u8; (tex.desc.width * tex.desc.height.unwrap_or(1) * 4) as usize];
+            let height = if tex.desc.height > 0 { tex.desc.height } else { 1 };
+            let mut data = vec![0u8; (tex.desc.width * height * 4) as usize];
             unsafe {
                 self.context.bind_texture(tex.target, Some(tex.gl_id));
-                self.context.get_tex_image_u8_slice(
+                // Используем get_tex_image вместо get_tex_image_u8_slice
+                self.context.get_tex_image(
                     tex.target,
                     0,
                     glow::RGBA,
                     glow::UNSIGNED_BYTE,
-                    &mut data,
+                    glow::PixelPackData::Slice(&mut data),
                 );
                 self.context.bind_texture(tex.target, None);
             }
             return Ok(data);
         }
-        Err(RhiError::InvalidResourceHandle)
+        Err(RhiError::InvalidResourceHandle("Texture not found".to_string()))
     }
     
     fn destroy_resource(&self, handle: ResourceHandle) {
@@ -548,7 +562,7 @@ impl IDevice for GlDevice {
             unsafe { self.context.delete_shader(shader.gl_id); }
         }
         if let Some(pipeline) = self.pipelines.lock().remove(&handle) {
-            unsafe { 
+            unsafe {
                 self.context.delete_vertex_array(pipeline.vertex_array);
                 self.context.delete_program(pipeline.program);
             }
@@ -620,19 +634,19 @@ impl ICommandList for GlCommandList {
         let framebuffer = unsafe { self.context.create_framebuffer() }
             .unwrap_or_else(|_| {
                 eprintln!("[RHI] Failed to create framebuffer, using default");
-                None
+                glow::NativeFramebuffer(NonZeroU32::new(1).unwrap())
             });
-        
+
         unsafe {
-            self.context.bind_framebuffer(glow::FRAMEBUFFER, framebuffer);
-            
+            self.context.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
+
             // Прикрепляем color attachments через ResourceManager
             // В полной реализации нужно получать текстуры из ResourceManager по handle
             for (i, _attachment) in desc.color_attachments.iter().enumerate() {
                 let draw_buffer = glow::COLOR_ATTACHMENT0 + i as u32;
                 self.context.draw_buffers(&[draw_buffer]);
             }
-            
+
             // Clear attachments если нужно
             for (i, attachment) in desc.color_attachments.iter().enumerate() {
                 if attachment.load_op == LoadOp::Clear {
@@ -641,7 +655,8 @@ impl ICommandList for GlCommandList {
                             ClearValue::Color(c) => c,
                             _ => [0.0, 0.0, 0.0, 1.0],
                         };
-                        self.context.clear_buffer_color_f32(i as u32, &color);
+                        // Используем clear_buffer_f32_slice вместо clear_buffer_color_f32
+                        self.context.clear_buffer_f32_slice(glow::COLOR, i as u32, &color);
                     }
                 }
             }
@@ -705,10 +720,10 @@ impl ICommandList for GlCommandList {
     fn set_scissor_rect(&mut self, scissor: &ScissorRect) {
         unsafe {
             self.context.scissor(
-                scissor.x as i32,
-                scissor.y as i32,
-                scissor.width as i32,
-                scissor.height as i32,
+                scissor.x() as i32,
+                scissor.y() as i32,
+                scissor.width() as i32,
+                scissor.height() as i32,
             );
         }
     }
@@ -731,9 +746,9 @@ impl ICommandList for GlCommandList {
             // Здесь упрощённая реализация - в продакшене нужно получать GL buffer из ResourceManager
             unsafe {
                 // Привязываем буфер как ARRAY_BUFFER
-                let gl_buffer = glow::NativeBuffer(buffer_handle.0 as u32);
+                let gl_buffer = NativeBuffer(NonZeroU32::new(buffer_handle.0 as u32).unwrap());
                 self.context.bind_buffer(glow::ARRAY_BUFFER, Some(gl_buffer));
-                
+
                 // Настраиваем атрибуты вершин (предполагаем стандартный layout: 4 floats)
                 self.context.vertex_attrib_pointer_f32(
                     (start_slot + i as u32) as u32,
@@ -751,7 +766,7 @@ impl ICommandList for GlCommandList {
     fn bind_index_buffer(&mut self, buffer: ResourceHandle, offset: u64, format: IndexFormat) {
         // В OpenGL индексный буфер привязывается к ELEMENT_ARRAY_BUFFER
         unsafe {
-            let gl_buffer = glow::NativeBuffer(buffer.0 as u32);
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
             self.context.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(gl_buffer));
         }
     }
@@ -759,7 +774,7 @@ impl ICommandList for GlCommandList {
     fn bind_constant_buffer(&mut self, stage: ShaderStage, slot: u32, buffer: ResourceHandle) {
         // В OpenGL uniform buffers привязываются через uniform block binding
         unsafe {
-            let gl_buffer = glow::NativeBuffer(buffer.0 as u32);
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
             self.context.bind_buffer_range(
                 glow::UNIFORM_BUFFER,
                 slot,
@@ -783,7 +798,7 @@ impl ICommandList for GlCommandList {
     fn bind_sampler(&mut self, stage: ShaderStage, slot: u32, sampler: ResourceHandle) {
         // Привязка сэмплеров
         unsafe {
-            let gl_sampler = glow::NativeSampler(sampler.0 as u32);
+            let gl_sampler = NativeSampler(NonZeroU32::new(sampler.0 as u32).unwrap());
             self.context.bind_sampler(slot, Some(gl_sampler));
         }
     }
@@ -832,14 +847,15 @@ impl ICommandList for GlCommandList {
         // OpenGL 4.0+ поддерживает multi-draw-indirect
         // Требуется bindнуть буфер как DRAW_INDIRECT_BUFFER
         unsafe {
-            self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(buffer.0 as u32));
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
                 self.context.draw_arrays_instanced_base_instance(
                     glow::TRIANGLES,
                     0,
                     0,
                     0,
-                    i as i32,
+                    i,
                 );
             }
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, None);
@@ -849,7 +865,8 @@ impl ICommandList for GlCommandList {
     fn draw_indexed_indirect(&mut self, buffer: ResourceHandle, offset: u64, draw_count: u32) {
         // OpenGL 4.0+ поддерживает multi-draw-indirect для индексированной отрисовки
         unsafe {
-            self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(buffer.0 as u32));
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
                 self.context.draw_elements_instanced_base_vertex_base_instance(
                     glow::TRIANGLES,
@@ -858,7 +875,7 @@ impl ICommandList for GlCommandList {
                     0,
                     0,
                     0,
-                    i as i32,
+                    i,
                 );
             }
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, None);
@@ -875,7 +892,8 @@ impl ICommandList for GlCommandList {
         // OpenGL 4.3+ поддерживает dispatch indirect
         // Буфер должен содержать структуру DispatchIndirectCommand { num_groups_x, num_groups_y, num_groups_z }
         unsafe {
-            self.context.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(buffer.0 as u32));
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            self.context.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(gl_buffer));
             self.context.dispatch_compute_indirect(offset as i32);
             self.context.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, None);
         }
@@ -893,7 +911,7 @@ impl ICommandList for GlCommandList {
     
     fn clear_render_target(&mut self, view: ResourceHandle, color: [f32; 4]) {
         unsafe {
-            self.context.clear_buffer_color_f32(0, &color);
+            self.context.clear_buffer_f32_slice(glow::COLOR, 0, &color);
         }
     }
     
@@ -1012,7 +1030,11 @@ impl IFence for GlFence {
     fn get_value(&self) -> u64 {
         self.value.load(Ordering::SeqCst)
     }
-    
+
+    fn set_value(&self, value: u64) {
+        self.value.store(value, Ordering::SeqCst);
+    }
+
     fn set_event_on_completion(&self, value: u64) -> RhiResult<Arc<dyn std::any::Any + Send + Sync>> {
         // В OpenGL нет нативных event'ов как в DX12
         Ok(Arc::new(()))

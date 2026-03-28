@@ -157,7 +157,7 @@ pub struct InputMapping {
     /// Mouse button bindings
     mouse_bindings: HashMap<MouseButton, InputAction>,
     /// Gamepad button bindings
-    gamepad_bindings: HashMap<crate::gamepad::GamepadButton, InputAction>,
+    gamepad_bindings: HashMap<crate::input::gamepad::GamepadButton, InputAction>,
 }
 
 impl InputMapping {
@@ -167,6 +167,7 @@ impl InputMapping {
             key_bindings: HashMap::new(),
             key_to_action: HashMap::new(),
             mouse_bindings: HashMap::new(),
+            gamepad_bindings: HashMap::new(),
         };
         
         // Set up default key bindings
@@ -240,12 +241,12 @@ impl InputMapping {
     }
     
     /// Gets the action bound to a gamepad button
-    pub fn get_action_for_gamepad_button(&self, button: crate::gamepad::GamepadButton) -> Option<InputAction> {
+    pub fn get_action_for_gamepad_button(&self, button: crate::input::gamepad::GamepadButton) -> Option<InputAction> {
         self.gamepad_bindings.get(&button).copied()
     }
     
     /// Binds a gamepad button to an action
-    pub fn bind_gamepad_button(&mut self, action: InputAction, button: crate::gamepad::GamepadButton) {
+    pub fn bind_gamepad_button(&mut self, action: InputAction, button: crate::input::gamepad::GamepadButton) {
         self.gamepad_bindings.insert(button, action);
     }
     

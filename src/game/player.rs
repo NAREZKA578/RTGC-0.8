@@ -13,7 +13,33 @@ pub const LAYER_PLAYER: u32 = 0b10000;
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlayerState {
     OnFoot,
-    InVehicle { vehicle_index: usize, seat_index: usize },
+    InVehicle { vehicle_index: usize, vehicle_id: u64, seat_index: usize },
+}
+
+impl PlayerState {
+    /// Get vehicle id if in vehicle
+    pub fn vehicle_id(&self) -> Option<u64> {
+        match self {
+            PlayerState::OnFoot => None,
+            PlayerState::InVehicle { vehicle_id, .. } => Some(*vehicle_id),
+        }
+    }
+
+    /// Get vehicle index if in vehicle
+    pub fn vehicle_index(&self) -> Option<usize> {
+        match self {
+            PlayerState::OnFoot => None,
+            PlayerState::InVehicle { vehicle_index, .. } => Some(*vehicle_index),
+        }
+    }
+
+    /// Get seat index if in vehicle
+    pub fn seat_index(&self) -> Option<usize> {
+        match self {
+            PlayerState::OnFoot => None,
+            PlayerState::InVehicle { seat_index, .. } => Some(*seat_index),
+        }
+    }
 }
 
 /// Camera mode for player
@@ -205,12 +231,13 @@ impl Player {
     }
     
     /// Enter vehicle
-    pub fn enter_vehicle(&mut self, vehicle_index: usize, seat_index: usize) {
+    pub fn enter_vehicle(&mut self, vehicle_index: usize, vehicle_id: u64, seat_index: usize) {
         self.state = PlayerState::InVehicle {
             vehicle_index,
+            vehicle_id,
             seat_index,
         };
-        
+
         // Disable physics body when in vehicle
         if let Some(idx) = self.body_index {
             self.body_index = None;
@@ -288,21 +315,21 @@ impl Player {
     
     /// Add item to inventory
     pub fn add_to_inventory(&mut self, item: InventoryItem) -> bool {
-        let total_weight = self.inventory_weight + item.weight;
+        let total_weight = self.inventory_weight + item.total_weight();
         if total_weight > self.max_inventory_weight {
             return false;
         }
-        
+
         self.inventory.push(item);
         self.inventory_weight = total_weight;
         true
     }
-    
+
     /// Remove item from inventory
     pub fn remove_from_inventory(&mut self, index: usize) -> Option<InventoryItem> {
         if index < self.inventory.len() {
             let item = self.inventory.remove(index);
-            self.inventory_weight -= item.weight;
+            self.inventory_weight -= item.total_weight();
             Some(item)
         } else {
             None

@@ -53,6 +53,12 @@ pub struct Ray {
     pub direction: Vector3<f32>,
 }
 
+impl Ray {
+    pub fn new(origin: Point3<f32>, direction: Vector3<f32>) -> Self {
+        Self { origin, direction }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RaycastHit {
     pub point: Point3<f32>,
@@ -1939,12 +1945,14 @@ impl PhysicsWorld {
             if t > 0.0 {
                 let hit_point = ray.origin + ray.direction * t;
                 let normal = (hit_point.coords - Vector3::new(0.0, 0.0, 0.0)).normalize();
-                
+
                 Some(RaycastHit {
                     point: hit_point,
                     normal,
                     distance: t,
                     body_index: 0, // Will be set by raycast_single_body caller
+                    layer: 0,
+                    object_id: 0,
                 })
             } else {
                 None
@@ -1981,12 +1989,14 @@ impl PhysicsWorld {
                 } else {
                     Vector3::new(0.0, 0.0, hit_coords.z.signum())
                 }.normalize();
-                
+
                 Some(RaycastHit {
                     point: hit_point,
                     normal,
                     distance: t,
                     body_index: 0, // Will be set by raycast_single_body caller
+                    layer: 0,
+                    object_id: 0,
                 })
             } else {
                 None
@@ -2050,18 +2060,20 @@ impl PhysicsWorld {
             let sqrt_discriminant = discriminant.sqrt();
             let t1 = (-b - sqrt_discriminant) / (2.0 * a);
             let t2 = (-b + sqrt_discriminant) / (2.0 * a);
-            
+
             let t = if t1 > 0.0 { t1 } else { t2 };
-            
+
             if t > 0.0 {
                 let hit_point = ray.origin + ray.direction * t;
                 let normal = (hit_point.coords - closest_on_segment).normalize();
-                
+
                 Some(RaycastHit {
                     point: hit_point,
                     normal,
                     distance: t,
                     body_index: 0, // Will be set by raycast_single_body caller
+                    layer: 0,
+                    object_id: 0,
                 })
             } else {
                 None
@@ -2083,17 +2095,17 @@ impl PhysicsWorld {
         }
         
         let t = -ray.origin.y / ray.direction.y;
-        
+
         if t < 0.0 {
             return None; // Intersection behind ray origin
         }
-        
+
         let hit_pos = ray.origin + ray.direction * t;
-        
+
         // Check if the hit position is within the terrain bounds
         let half_size_x = scale.x / 2.0;
         let half_size_z = scale.z / 2.0;
-        
+
         if hit_pos.x >= -half_size_x && hit_pos.x <= half_size_x &&
            hit_pos.z >= -half_size_z && hit_pos.z <= half_size_z {
             Some(RaycastHit {
@@ -2101,6 +2113,8 @@ impl PhysicsWorld {
                 normal: Vector3::new(0.0, 1.0, 0.0),
                 distance: t,
                 body_index: 0, // Will be set by raycast_single_body caller
+                layer: 0,
+                object_id: 0,
             })
         } else {
             None
@@ -2162,22 +2176,24 @@ impl PhysicsWorld {
         
         let q = s.cross(&edge1);
         let v = f * ray.direction.dot(&q);
-        
+
         if v < 0.0 || u + v > 1.0 {
             return None;
         }
-        
+
         let t = f * edge2.dot(&q);
-        
+
         if t > f32::EPSILON {
             let hit_point = ray.origin + ray.direction * t;
             let normal = edge1.cross(&edge2).normalize();
-            
+
             Some(RaycastHit {
                 point: hit_point,
                 normal,
                 distance: t,
                 body_index: 0, // Will be set by raycast_single_body caller
+                layer: 0,
+                object_id: 0,
             })
         } else {
             None

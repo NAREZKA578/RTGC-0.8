@@ -45,9 +45,9 @@ void main() {
 }"#;
         
         unsafe {
-            let program = gl.create_program().ok_or("Failed to create program")?;
-            
-            let vert_shader = gl.create_shader(glow::VERTEX_SHADER).ok_or("Failed to create vertex shader")?;
+            let program = gl.create_program().map_err(|e| format!("Failed to create program: {}", e))?;
+
+            let vert_shader = gl.create_shader(glow::VERTEX_SHADER).map_err(|e| format!("Failed to create vertex shader: {}", e))?;
             gl.shader_source(vert_shader, vert_src);
             gl.compile_shader(vert_shader);
             if !gl.get_shader_compile_status(vert_shader) {
@@ -56,8 +56,8 @@ void main() {
                 return Err(format!("Vertex shader compile error: {}", log));
             }
             gl.attach_shader(program, vert_shader);
-            
-            let frag_shader = gl.create_shader(glow::FRAGMENT_SHADER).ok_or("Failed to create fragment shader")?;
+
+            let frag_shader = gl.create_shader(glow::FRAGMENT_SHADER).map_err(|e| format!("Failed to create fragment shader: {}", e))?;
             gl.shader_source(frag_shader, frag_src);
             gl.compile_shader(frag_shader);
             if !gl.get_shader_compile_status(frag_shader) {
@@ -136,8 +136,9 @@ void main() {
                 // Use the debug shader and pass view_proj
                 if let Some(shader) = self.shader {
                     gl.use_program(Some(shader));
-                    let u_view_proj = gl.get_uniform_location(shader, "u_view_proj");
-                    gl.uniform_matrix_4_f32_slice(Some(&u_view_proj), false, view_proj.as_slice());
+                    if let Some(u_view_proj) = gl.get_uniform_location(shader, "u_view_proj") {
+                        gl.uniform_matrix_4_f32_slice(Some(&u_view_proj), false, view_proj.as_slice());
+                    }
                 }
                 
                 gl.draw_arrays(glow::LINES, 0, (self.line_vertices.len() / 6) as i32);

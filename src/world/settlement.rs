@@ -194,16 +194,16 @@ impl Settlement {
 
     /// Check if a point is inside this settlement's bounds
     pub fn contains_point(&self, x: f32, z: f32) -> bool {
-        let dx = x - self.center.x;
-        let dz = z - self.center.z;
+        let dx = x - self.center[0];
+        let dz = z - self.center[2];
         let dist_sq = dx * dx + dz * dz;
         dist_sq <= self.radius * self.radius
     }
 
     /// Get distance from settlement center to a point
     pub fn distance_to(&self, x: f32, z: f32) -> f32 {
-        let dx = x - self.center.x;
-        let dz = z - self.center.z;
+        let dx = x - self.center[0];
+        let dz = z - self.center[2];
         (dx * dx + dz * dz).sqrt()
     }
 
@@ -274,13 +274,12 @@ pub fn place_buildings_in_settlement(
         // Place gas station at edge of settlement
         let azs_angle = rng.gen_range(0.0..std::f32::consts::PI * 2.0);
         let azs_dist = settlement.radius * 0.7;
+        let azs_x = settlement.center[0] + azs_angle.cos() * azs_dist;
+        let azs_z = settlement.center[2] + azs_angle.sin() * azs_dist;
         let azs_pos = Vector3::new(
-            settlement.center.x + azs_angle.cos() * azs_dist,
-            terrain_heights(
-                settlement.center.x + azs_angle.cos() * azs_dist,
-                settlement.center.z + azs_angle.sin() * azs_dist,
-            ),
-            settlement.center.z + azs_angle.sin() * azs_dist,
+            azs_x,
+            terrain_heights(azs_x, azs_z),
+            azs_z,
         );
 
         buildings.push(BuildingInstance {

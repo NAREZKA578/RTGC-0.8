@@ -306,9 +306,9 @@ impl AssetLoader {
         };
 
         Ok(AssetData::Texture {
-            width,
-            height,
-            channels,
+            width: width as u32,
+            height: height as u32,
+            channels: channels as u8,
             data: pixel_data,
         })
     }

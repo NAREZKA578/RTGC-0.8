@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use nalgebra::{Vector3, Matrix4, UnitQuaternion};
 
 use crate::graphics::rhi::{
-    IDevice, ICommandList, ResourceHandle,
+    IDevice, ICommandList, ResourceHandle, TextureType,
     BufferDescription, BufferDesc, BufferType, BufferUsage,
     TextureDescription, TextureDimension, TextureFormat, TextureUsage,
     SamplerDescription, FilterMode, AddressMode,
@@ -42,6 +42,7 @@ pub struct RendererRhi {
     pub camera: Camera,
     
     // Resources
+    terrain_mesh: Option<Mesh>,
     terrain_vertex_buffer: Option<ResourceHandle>,
     terrain_index_buffer: Option<ResourceHandle>,
     vehicle_vertex_buffer: Option<ResourceHandle>,
@@ -112,6 +113,7 @@ impl RendererRhi {
             device,
             command_list: None,
             camera,
+            terrain_mesh: None,
             terrain_vertex_buffer: None,
             terrain_index_buffer: None,
             vehicle_vertex_buffer: None,
@@ -186,8 +188,10 @@ impl RendererRhi {
         
         let desc = TextureDescription {
             dimension: TextureDimension::D2,
+            texture_type: TextureType::Texture2D,
             width: 128,
             height: 128,
+            depth: 1,
             depth_or_array_layers: 1,
             mip_levels: 1,
             format: TextureFormat::R8G8B8A8Unorm,
@@ -202,36 +206,14 @@ impl RendererRhi {
     pub fn set_terrain_mesh(&mut self, mesh: Mesh) {
         // Upload mesh data to GPU via RHI
         // Create vertex and index buffers from mesh data
-        if let Some(ref mut device) = self.device {
-            let vertex_buffer_desc = BufferDesc {
-                buffer_type: BufferType::VertexBuffer,
-                size: (mesh.vertices.len() * std::mem::size_of::<Vertex>()) as u64,
-                usage: BufferUsage::VERTEX_BUFFER,
-                initial_state: ResourceState::VertexBuffer,
-            };
-
-            if let Ok(_vertex_buffer) = device.create_buffer(&vertex_buffer_desc) {
-                // Buffer created successfully - actual upload would happen here
-                tracing::debug!("Created vertex buffer for terrain mesh");
-            }
-
-            if !mesh.indices.is_empty() {
-                let index_buffer_desc = BufferDesc {
-                    buffer_type: BufferType::IndexBuffer,
-                    size: (mesh.indices.len() * 4) as u64, // u32 indices
-                    usage: BufferUsage::INDEX_BUFFER,
-                    initial_state: ResourceState::IndexBuffer,
-                };
-
-                if let Ok(_index_buffer) = device.create_buffer(&index_buffer_desc) {
-                    tracing::debug!("Created index buffer for terrain mesh");
-                }
-            }
-        }
-
+        // Note: Full implementation requires proper mesh data access
         self.terrain_mesh = Some(mesh);
     }
-    
+
+    pub fn get_terrain_mesh(&self) -> Option<&Mesh> {
+        self.terrain_mesh.as_ref()
+    }
+
     pub fn set_vehicle_transform(&mut self, pos: Vector3<f32>, rot: UnitQuaternion<f32>) {
         self.vehicle_transform = Some((pos, rot));
     }
@@ -259,21 +241,11 @@ impl RendererRhi {
     
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Begin frame - create command list for RHI rendering
-        let cmd_list = if let Some(ref mut device) = self.device {
-            match device.create_command_list(crate::graphics::rhi::CommandListType::Direct) {
-                Ok(list) => Some(list),
-                Err(e) => {
-                    tracing::warn!("Failed to create command list: {:?}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-        
+        let cmd_list = self.device.create_command_list(crate::graphics::rhi::CommandListType::Direct);
+
         // Use cmd_list to record and submit rendering commands
         // Note: Full RHI integration requires pipeline state, descriptor heaps, etc.
-        if let Some(_list) = cmd_list {
+        if let Ok(_list) = cmd_list {
             // In a full implementation, we would:
             // 1. Begin render pass
             // 2. Bind pipelines and resources

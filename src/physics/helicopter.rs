@@ -671,6 +671,7 @@ pub struct Helicopter {
     // Внешняя подвеска (грузовой крюк)
     pub has_cargo_hook: bool,               // Наличие грузового крюка
     pub cargo_hook_offset: Vector3<f32>,    // Позиция крюка относительно ЦМ
+    pub cargo_hook_force: Vector3<f32>,     // Сила от подвешенного груза
     pub cargo_mass: f32,                    // Текущая масса груза на подвеске
     pub max_cargo_mass: f32,                // Максимальная масса груза
     pub cargo_cable_length: f32,            // Длина троса
@@ -716,6 +717,7 @@ impl Helicopter {
             // Внешняя подвеска (по умолчанию отключена для лёгких вертолётов)
             has_cargo_hook: false,
             cargo_hook_offset: Vector3::new(0.0, -0.5, 0.0),
+            cargo_hook_force: Vector3::zeros(),
             cargo_mass: 0.0,
             max_cargo_mass: 0.0,
             cargo_cable_length: 0.0,
@@ -773,6 +775,7 @@ impl Helicopter {
             // Внешняя подвеска из конфигурации
             has_cargo_hook: config.has_cargo_hook,
             cargo_hook_offset: config.cargo_hook_offset,
+            cargo_hook_force: Vector3::zeros(),
             cargo_mass: 0.0,
             max_cargo_mass: config.max_cargo_mass,
             cargo_cable_length: config.cargo_cable_length,
@@ -877,7 +880,7 @@ impl Helicopter {
             }
             
             // Сила реакции на вертолёт от груза (третий закон Ньютона)
-            self.cargo_hook_force = Some(-tension_force);
+            self.cargo_hook_force = -tension_force;
         }
     }
     
@@ -908,8 +911,8 @@ impl Helicopter {
         self.cargo_velocity = Vector3::zeros();
         self.is_cargo_attached = false;
         self.mass -= self.cargo_mass;
-        self.cargo_hook_force = None;
-        
+        self.cargo_hook_force = Vector3::zeros();
+
         cargo_pos
     }
     
@@ -986,13 +989,13 @@ impl Helicopter {
         }
         
         // 7. Сила от груза на внешней подвеске (реактивная сила на вертолёт)
-        if let Some(cargo_force) = self.cargo_hook_force {
+        if self.cargo_hook_force.norm() > 0.001 {
             // Применяем силу от груза к точке подвески
-            total_force += cargo_force;
-            
+            total_force += self.cargo_hook_force;
+
             // Момент от силы груза относительно ЦМ
             let hook_world_offset = self.rotation.transform_vector(&self.cargo_hook_offset);
-            let cargo_torque = hook_world_offset.cross(&cargo_force);
+            let cargo_torque = hook_world_offset.cross(&self.cargo_hook_force);
             total_torque += cargo_torque;
         }
         

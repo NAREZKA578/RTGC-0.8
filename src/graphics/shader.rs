@@ -4,6 +4,23 @@ pub struct Shader {
     program: glow::Program,
 }
 
+impl Clone for Shader {
+    fn clone(&self) -> Self {
+        // Note: This creates a shallow clone - actual GPU resources are not duplicated
+        Self {
+            program: self.program,
+        }
+    }
+}
+
+impl std::fmt::Debug for Shader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Shader")
+            .field("program", &"glow::Program")
+            .finish()
+    }
+}
+
 impl Shader {
     pub fn new(
         gl: &Context,

@@ -6,6 +6,9 @@ use crate::physics::{Ray, RaycastHit};
 use crate::physics::physics_module::raycast_world;
 use nalgebra::Vector3;
 
+// Type alias for backwards compatibility
+type Vec3 = Vector3<f32>;
+
 /// Interaction layers bitmask
 pub const LAYER_INTERACTABLE_DOOR: u32 = 0b00001;
 pub const LAYER_INTERACTABLE_VEHICLE: u32 = 0b00010;
@@ -21,7 +24,7 @@ pub const MAX_INTERACTION_DISTANCE: f32 = 3.0;
 pub enum InteractableType {
     /// Vehicle door (enter/exit)
     VehicleDoor {
-        vehicle_id: u32,
+        vehicle_id: u64,
         door_index: usize,
         is_open: bool,
     },
@@ -133,7 +136,7 @@ impl InteractionSystem {
         }
 
         // Raycast from camera position
-        let ray_origin = player_pos + Vec3::new(0.0, 1.7, 0.0); // Eye height
+        let ray_origin = player_pos + Vector3::new(0.0, 1.7, 0.0); // Eye height
         let ray_direction = player_forward.normalize();
 
         // Cast ray and find closest interactable
@@ -141,7 +144,7 @@ impl InteractionSystem {
 
         self.highlighted = hit.and_then(|h| {
             if h.distance < MAX_INTERACTION_DISTANCE {
-                self.identify_interactable(h)
+                self.identify_interactable(&h)
                     .map(|interactable| (interactable, h.distance))
             } else {
                 None
@@ -150,7 +153,7 @@ impl InteractionSystem {
     }
 
     /// Identify what type of interactable was hit
-    fn identify_interactable(&self, hit: RaycastHit) -> Option<InteractableType> {
+    fn identify_interactable(&self, hit: &RaycastHit) -> Option<InteractableType> {
         // This would check collision layers and object metadata
         // Placeholder implementation
         match hit.layer {
@@ -160,7 +163,7 @@ impl InteractionSystem {
                 locked: false,
             }),
             LAYER_INTERACTABLE_VEHICLE => Some(InteractableType::VehicleDoor {
-                vehicle_id: hit.object_id,
+                vehicle_id: hit.object_id as u64,
                 door_index: 0,
                 is_open: false,
             }),
@@ -244,7 +247,7 @@ impl InteractionSystem {
     /// Handle vehicle enter/exit
     fn handle_vehicle_interaction(
         &self,
-        vehicle_id: u32,
+        vehicle_id: u64,
         door_index: usize,
         player_state: &mut crate::game::player::PlayerState,
     ) -> InteractionResult {
@@ -254,11 +257,14 @@ impl InteractionSystem {
             PState::OnFoot => {
                 // Enter vehicle
                 *player_state = PState::InVehicle {
+                    vehicle_index: 0,
                     vehicle_id,
                     seat_index: door_index,
                 };
 
                 publish_event(GameEvent::PlayerEnteredVehicle {
+                    player_name: "Player".to_string(),
+                    vehicle_index: 0,
                     vehicle_id,
                     seat_index: door_index,
                 });
@@ -270,12 +276,15 @@ impl InteractionSystem {
                 }
             }
             PState::InVehicle { vehicle_id: current_vid, .. } => {
-                if *current_vid == vehicle_id {
+                if *current_vid == vehicle_id as u64 {
                     // Exit current vehicle
                     *player_state = PState::OnFoot;
 
                     publish_event(GameEvent::PlayerExitedVehicle {
-                        vehicle_id,
+                        player_name: "Player".to_string(),
+                        vehicle_index: 0,
+                        vehicle_id: vehicle_id as u64,
+                        exit_position: nalgebra::Vector3::zeros(),
                     });
 
                     InteractionResult {

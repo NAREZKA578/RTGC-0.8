@@ -46,8 +46,8 @@ pub enum LoadResult<T> {
 pub struct AssetPreloader<T> {
     pending_jobs: RwLock<VecDeque<LoadJob>>,
     processing_jobs: RwLock<Vec<LoadJob>>,
-    completed_count: RwLock<usize>,
-    failed_count: RwLock<usize>,
+    completed_count: Arc<RwLock<usize>>,
+    failed_count: Arc<RwLock<usize>>,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -56,8 +56,8 @@ impl<T: Send + Sync + 'static> AssetPreloader<T> {
         Self {
             pending_jobs: RwLock::new(VecDeque::with_capacity(256)),
             processing_jobs: RwLock::new(Vec::new()),
-            completed_count: RwLock::new(0),
-            failed_count: RwLock::new(0),
+            completed_count: Arc::new(RwLock::new(0)),
+            failed_count: Arc::new(RwLock::new(0)),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -123,12 +123,12 @@ impl<T: Send + Sync + 'static> AssetPreloader<T> {
                     match load_fn(path.clone()) {
                         LoadResult::Success(_) => {
                             *completed_count.write() += 1;
-                            debug!("Loaded: {:?}", path);
+                            tracing::debug!("Loaded: {:?}", path);
                             Some(path)
                         }
                         LoadResult::Failed(err) => {
                             *failed_count.write() += 1;
-                            warn!("Failed to load {:?}: {}", path, err);
+                            tracing::warn!("Failed to load {:?}: {}", path, err);
                             None
                         }
                     }
@@ -200,7 +200,7 @@ impl<T: Send + Sync + 'static> AssetPreloader<T> {
     }
 }
 
-impl<T> Default for AssetPreloader<T> {
+impl<T: Send + Sync + 'static> Default for AssetPreloader<T> {
     fn default() -> Self {
         Self::new()
     }

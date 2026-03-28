@@ -181,7 +181,7 @@ impl DebugMenu {
         
         let state_str = match player.state {
             PlayerState::OnFoot => "On Foot",
-            PlayerState::InVehicle { vehicle_index, seat_index } => {
+            PlayerState::InVehicle { vehicle_index, vehicle_id: _, seat_index } => {
                 &format!("In Vehicle ({}:{})", vehicle_index, seat_index)
             }
         };

@@ -48,6 +48,26 @@ pub struct AudioSource {
     pub max_distance: f32,
     pub rolloff_factor: f32,
     pub sound_handle: Option<SoundHandle>,
+    is_playing: bool,
+}
+
+impl AudioSource {
+    /// Update audio source state
+    pub fn update(&mut self) {
+        // Placeholder update logic
+    }
+    
+    /// Check if sound is finished playing
+    pub fn is_finished(&self) -> bool {
+        !self.is_playing && !self.is_looping
+    }
+    
+    /// Update 3D position based on listener
+    pub fn update_3d_position(&mut self, listener_pos: &Vector3<f32>, listener_dir: &Vector3<f32>) {
+        // Placeholder for 3D audio positioning
+        let _distance = (self.position - *listener_pos).norm();
+        let _direction = listener_dir;
+    }
 }
 
 impl Default for AudioSource {
@@ -61,6 +81,7 @@ impl Default for AudioSource {
             max_distance: 100.0,
             rolloff_factor: 1.0,
             sound_handle: None,
+            is_playing: false,
         }
     }
 }
@@ -71,6 +92,8 @@ pub struct AudioEngine {
     sources: Vec<(SoundHandle, AudioSource)>,
     loaded_sounds: HashMap<SoundHandle, LoadedSound>,
     next_handle_id: u32,
+    listener_position: Vector3<f32>,
+    listener_orientation: Vector3<f32>,
 }
 
 impl AudioEngine {
@@ -81,6 +104,8 @@ impl AudioEngine {
             sources: Vec::new(),
             loaded_sounds: HashMap::new(),
             next_handle_id: 0,
+            listener_position: Vector3::zeros(),
+            listener_orientation: Vector3::new(0.0, 0.0, -1.0),
         })
     }
 
@@ -91,6 +116,8 @@ impl AudioEngine {
             sources: Vec::new(),
             loaded_sounds: HashMap::new(),
             next_handle_id: 0,
+            listener_position: Vector3::zeros(),
+            listener_orientation: Vector3::new(0.0, 0.0, -1.0),
         })
     }
 
@@ -246,7 +273,7 @@ impl AudioEngine {
         Ok(LoadedSound {
             samples,
             sample_rate,
-            channels: num_channels as u32,
+            channels: num_channels as u16,
         })
     }
 
@@ -354,14 +381,14 @@ impl AudioEngine {
     /// Updates all audio sources
     pub fn update(&mut self) {
         // Update all active sound sources
-        self.sources.retain_mut(|source| {
+        self.sources.retain_mut(|(_, source)| {
             source.update();
             !source.is_finished()
         });
-        
+
         // Update 3D audio positions based on listener position
-        for source in &mut self.sources {
-            source.update_3d_position(&self.listener_position, self.listener_orientation);
+        for (_, source) in &mut self.sources {
+            source.update_3d_position(&self.listener_position, &self.listener_orientation);
         }
     }
 

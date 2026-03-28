@@ -30,3 +30,5 @@ pub use deformable_terrain::DeformableTerrainComponent;
 pub use constraints::{SpringConstraint, RaycastSuspension};
 pub use tracked_vehicle::{TrackedVehicle, TrackedVehicleType, TrackedControls, TrackedVehicleState};
 pub use crane_arm::{CraneArm, CraneConfig, CraneState};
+// Re-export SurfaceType for engine.rs compatibility
+pub use crate::world::terrain_generator::SurfaceType;

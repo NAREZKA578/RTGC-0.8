@@ -3,6 +3,8 @@
 use glow::{Context, HasContext};
 use std::sync::Arc;
 use std::collections::HashMap;
+use std::num::NonZeroU32;
+use std::path::PathBuf;
 use nalgebra::{Vector3, Matrix4, UnitQuaternion};
 use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Texture};
 use crate::graphics::lod_system::{LodManager, LodObject};
@@ -10,7 +12,8 @@ use crate::graphics::texture_streaming::TextureStreamingSystem;
 use tracing::warn;
 
 /// Renderer trait for backend abstraction
-pub trait RendererTrait: Send {
+/// Примечание: не требуем Send так как glow::Context не реализует Send/Sync
+pub trait RendererTrait {
     /// Submit a render command to the queue
     fn submit(&mut self, command: RenderCommand);
     
@@ -267,8 +270,11 @@ pub struct Renderer {
     vehicle_box_mesh: Option<Mesh>,
     vehicle_transform: Option<(Vector3<f32>, UnitQuaternion<f32>)>,
     // Window dimensions for HUD rendering
-    width: u32,
-    height: u32,
+    pub width: u32,
+    pub height: u32,
+    // Mouse position for UI interaction
+    pub mouse_x: f32,
+    pub mouse_y: f32,
     // HUD Manager reference for rendering
     hud_data: Option<crate::ui::hud::VehicleHudData>,
     // Weather and Day/Night cycle support
@@ -279,6 +285,8 @@ pub struct Renderer {
     vehicle_lights_enabled: bool,
     // Задача 2: Vehicle shader
     vehicle_shader: Option<Shader>,
+    // UI шейдер для отрисовки интерфейса
+    ui_shader: Option<Shader>,
     // Исп-2: Sky shader (separate from terrain shader)
     sky_shader: Option<Shader>,
     // Задача 3: Sky VAO
@@ -307,6 +315,34 @@ pub enum MenuState {
     Paused,  // Ввод-2: Пауза внутри игры
 }
 
+/// Получить директорию исполняемого файла
+fn get_exe_dir() -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Получить путь к директории assets
+fn get_assets_dir() -> PathBuf {
+    // Сначала пробуем найти assets рядом с exe
+    let exe_dir = get_exe_dir();
+    let exe_assets = exe_dir.join("assets");
+    if exe_assets.join("shaders").exists() {
+        return exe_assets;
+    }
+    
+    // Потом пробуем текущую директорию
+    let cwd = std::env::current_dir().unwrap_or_else(|_| exe_dir.clone());
+    let current_assets = cwd.join("assets");
+    if current_assets.join("shaders").exists() {
+        return current_assets;
+    }
+    
+    // Фолбэк: assets рядом с exe
+    exe_assets
+}
+
 impl Renderer {
     pub fn new(gl: Arc<Context>) -> Result<Self, Box<dyn std::error::Error>> {
 
@@ -317,19 +353,33 @@ impl Renderer {
             gl.cull_face(glow::BACK);
         }
 
-        // Исп-4: Загружать шейдер из файла
-        let vertex_src = std::fs::read_to_string("assets/shaders/terrain.vert")
-            .unwrap_or_else(|_| include_str!("../assets/shaders/terrain.vert").to_string());
-        let fragment_src = std::fs::read_to_string("assets/shaders/terrain.frag")
-            .unwrap_or_else(|_| include_str!("../assets/shaders/terrain.frag").to_string());
+        // Исп-4: Загружать шейдер из файла относительно exe-файла или текущей директории
+        let assets_dir = get_assets_dir();
+        let shader_path = assets_dir.join("shaders");
+        
+        // Загрузка terrain shader с обработкой ошибок
+        let vertex_src = std::fs::read_to_string(shader_path.join("terrain.vert"))
+            .map_err(|e| format!("Failed to load terrain.vert: {}", e))?;
+        let fragment_src = std::fs::read_to_string(shader_path.join("terrain.frag"))
+            .map_err(|e| format!("Failed to load terrain.frag: {}", e))?;
         let shader = Shader::new(&gl, &vertex_src, &fragment_src)?;
 
         // Задача 2: Загрузить vehicle shader
-        let vehicle_vertex_src = std::fs::read_to_string("assets/shaders/vehicle.vert")
-            .unwrap_or_else(|_| include_str!("../assets/shaders/vehicle.vert").to_string());
-        let vehicle_fragment_src = std::fs::read_to_string("assets/shaders/vehicle.frag")
-            .unwrap_or_else(|_| include_str!("../assets/shaders/vehicle.frag").to_string());
+        let vehicle_vertex_src = std::fs::read_to_string(shader_path.join("vehicle.vert"))
+            .map_err(|e| format!("Failed to load vehicle.vert: {}", e))?;
+        let vehicle_fragment_src = std::fs::read_to_string(shader_path.join("vehicle.frag"))
+            .map_err(|e| format!("Failed to load vehicle.frag: {}", e))?;
         let vehicle_shader = Shader::new(&gl, &vehicle_vertex_src, &vehicle_fragment_src).ok();
+
+        // UI шейдер для отрисовки интерфейса
+        let ui_vertex_src = std::fs::read_to_string(shader_path.join("ui.vert"))
+            .map_err(|e| format!("Failed to load ui.vert: {}", e))?;
+        let ui_fragment_src = std::fs::read_to_string(shader_path.join("ui.frag"))
+            .map_err(|e| format!("Failed to load ui.frag: {}", e))?;
+        let ui_shader = match Shader::new(&gl, &ui_vertex_src, &ui_fragment_src) {
+            Ok(s) => { eprintln!("DEBUG: UI shader loaded successfully"); Some(s) },
+            Err(e) => { eprintln!("DEBUG: UI shader failed: {}", e); None }
+        };
 
         // Исп-2: Создать простой шейдер для неба
         let sky_shader = Shader::new(&gl,
@@ -375,7 +425,8 @@ impl Renderer {
         };
         
         // Граф-1: Создать bitmap font texture (процедурно, 128x128, 16x16 сетка символов)
-        let (font_texture, font_chars) = Self::create_bitmap_font(&gl);
+        let (font_texture, font_chars) = Self::create_bitmap_font(&gl)
+            .map_err(|e| format!("Failed to create bitmap font: {}", e))?;
         
         // Граф-2: Создать VAO/VBO для батчинга HUD
         let (hud_vao, hud_vbo) = unsafe {
@@ -422,6 +473,8 @@ impl Renderer {
             vehicle_lights_enabled: false,
             // Задача 2: Vehicle shader
             vehicle_shader,
+            // UI шейдер для отрисовки интерфейса
+            ui_shader,
             // Исп-2: Sky shader
             sky_shader,
             // Задача 3: Sky VAO
@@ -439,6 +492,9 @@ impl Renderer {
             minimap_size: 128,
             width: 800,
             height: 600,
+            // Mouse position for UI interaction
+            mouse_x: 0.0,
+            mouse_y: 0.0,
             // Render queue
             render_queue: RenderQueue::new(),
         })
@@ -452,11 +508,12 @@ impl Renderer {
     /// Flush the render queue - execute all commands
     pub fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.render_queue.sort();
-        
-        for command in self.render_queue.commands() {
-            self.execute_command(command)?;
+
+        let commands: Vec<_> = self.render_queue.commands().iter().cloned().collect();
+        for command in commands {
+            self.execute_command(&command)?;
         }
-        
+
         self.render_queue.clear();
         Ok(())
     }
@@ -496,7 +553,7 @@ impl Renderer {
                 }
             }
             RenderCommand::UIElement { rect, texture, color, depth } => {
-                self.draw_ui_element(*rect, *texture, *color, *depth);
+                self.draw_ui_element(*rect, texture.clone(), *color, *depth);
             }
             // Other commands handled by existing render methods
             _ => {}
@@ -513,14 +570,195 @@ impl Renderer {
     fn draw_ui_element(&mut self, rect: [f32; 4], texture: Option<Handle<Texture>>, color: [f32; 4], depth: f32) {
         // Implementation using existing HUD rendering
     }
-    
+
+    // ========================================================================
+    // Заглушки методов для 2D рендеринга (E0599 fix)
+    // Эти методы используются HUD системой для отрисовки интерфейса
+    // ========================================================================
+
+    /// Draw a 2D line (for HUD elements)
+    pub unsafe fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: [f32; 4]) {
+        // Рисуем линию как тонкий прямоугольник
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let length = (dx * dx + dy * dy).sqrt();
+        if length < 0.001 {
+            return;
+        }
+        let angle = (dy / length).atan2(dx);
+        let cos = angle.cos();
+        let sin = angle.sin();
+        
+        // Рисуем прямоугольник повёрнутый вдоль линии
+        let half_thickness = thickness / 2.0;
+        let vertices: [f32; 8] = [
+            x1 - sin * half_thickness, y1 - cos * half_thickness,
+            x2 - sin * half_thickness, y2 - cos * half_thickness,
+            x2 + sin * half_thickness, y2 + cos * half_thickness,
+            x1 + sin * half_thickness, y1 + cos * half_thickness,
+        ];
+        let indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
+        
+        let vao = match self.gl.create_vertex_array() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let vbo = match self.gl.create_buffer() {
+            Ok(v) => v,
+            Err(_) => { self.gl.delete_vertex_array(vao); return; },
+        };
+        let ebo = match self.gl.create_buffer() {
+            Ok(v) => v,
+            Err(_) => { self.gl.delete_vertex_array(vao); self.gl.delete_buffer(vbo); return; },
+        };
+
+        self.gl.bind_vertex_array(Some(vao));
+        self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+        self.gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::STREAM_DRAW);
+        self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+        self.gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytemuck::cast_slice(&indices), glow::STREAM_DRAW);
+        
+        self.gl.enable_vertex_attrib_array(0);
+        self.gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
+            self.gl.uniform_1_i32(Some(&u), 1);
+        }
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_color") {
+            self.gl.uniform_4_f32(Some(&u), color[0], color[1], color[2], color[3]);
+        }
+
+        self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
+
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
+            self.gl.uniform_1_i32(Some(&u), 0);
+        }
+
+        self.gl.delete_vertex_array(vao);
+        self.gl.delete_buffer(vbo);
+        self.gl.delete_buffer(ebo);
+    }
+
+    /// Draw a 2D circle (for map markers)
+    pub unsafe fn draw_circle(&mut self, center_x: f32, center_y: f32, radius: f32, color: [f32; 4]) {
+        const SEGMENTS: u32 = 32;
+        let mut vertices: Vec<f32> = Vec::with_capacity(((SEGMENTS + 2) * 2) as usize);
+        let mut indices: Vec<u32> = Vec::with_capacity((SEGMENTS * 3) as usize);
+        
+        // Центр круга
+        vertices.push(center_x);
+        vertices.push(center_y);
+        
+        // Вершины по окружности
+        for i in 0..=SEGMENTS {
+            let angle = 2.0 * std::f32::consts::PI * (i as f32) / (SEGMENTS as f32);
+            let x = center_x + radius * angle.cos();
+            let y = center_y + radius * angle.sin();
+            vertices.push(x);
+            vertices.push(y);
+        }
+        
+        // Индексы для треугольного веера
+        for i in 0..SEGMENTS {
+            indices.push(0);
+            indices.push(i + 1);
+            indices.push(i + 2);
+        }
+        
+        let vao = match self.gl.create_vertex_array() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let vbo = match self.gl.create_buffer() {
+            Ok(v) => v,
+            Err(_) => { self.gl.delete_vertex_array(vao); return; },
+        };
+        let ebo = match self.gl.create_buffer() {
+            Ok(v) => v,
+            Err(_) => { self.gl.delete_vertex_array(vao); self.gl.delete_buffer(vbo); return; },
+        };
+
+        self.gl.bind_vertex_array(Some(vao));
+        self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+        self.gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::STREAM_DRAW);
+        self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+        self.gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytemuck::cast_slice(&indices), glow::STREAM_DRAW);
+        
+        self.gl.enable_vertex_attrib_array(0);
+        self.gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
+            self.gl.uniform_1_i32(Some(&u), 1);
+        }
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_color") {
+            self.gl.uniform_4_f32(Some(&u), color[0], color[1], color[2], color[3]);
+        }
+
+        self.gl.draw_elements(glow::TRIANGLES, indices.len() as i32, glow::UNSIGNED_INT, 0);
+
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
+            self.gl.uniform_1_i32(Some(&u), 0);
+        }
+
+        self.gl.delete_vertex_array(vao);
+        self.gl.delete_buffer(vbo);
+        self.gl.delete_buffer(ebo);
+    }
+
+    /// Draw a 2D triangle - публичная версия для HUD
+    pub unsafe fn draw_triangle(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, color: [f32; 4]) {
+        let ortho = Matrix4::new_orthographic(
+            0.0, self.width as f32,
+            0.0, self.height as f32,
+            -1.0, 1.0
+        );
+
+        let vertices: [f32; 6] = [x1, y1, x2, y2, x3, y3];
+
+        let vao = match self.gl.create_vertex_array() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let vbo = match self.gl.create_buffer() {
+            Ok(v) => v,
+            Err(_) => { self.gl.delete_vertex_array(vao); return; },
+        };
+
+        self.gl.bind_vertex_array(Some(vao));
+        self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+        self.gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::STREAM_DRAW);
+        self.gl.enable_vertex_attrib_array(0);
+        self.gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
+            self.gl.uniform_1_i32(Some(&u), 1);
+        }
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_color") {
+            self.gl.uniform_4_f32(Some(&u), color[0], color[1], color[2], color[3]);
+        }
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_projection") {
+            self.gl.uniform_matrix_4_f32_slice(Some(&u), false, ortho.as_slice());
+        }
+
+        self.gl.draw_arrays(glow::TRIANGLES, 0, 3);
+
+        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
+            self.gl.uniform_1_i32(Some(&u), 0);
+        }
+
+        self.gl.delete_vertex_array(vao);
+        self.gl.delete_buffer(vbo);
+    }
+
+    // Старое приватное определение draw_triangle_internal удалено
+
     /// Граф-1: Создать процедурную bitmap font текстуру 128x128
-    fn create_bitmap_font(gl: &Arc<Context>) -> (Texture, HashMap<char, [f32; 4]>) {
+    fn create_bitmap_font(gl: &Arc<Context>) -> Result<(Texture, HashMap<char, [f32; 4]>), String> {
         use std::collections::HashMap;
         // Создаём текстуру 128x128 с символами 8x8 в сетке 16x16
         let mut pixels = vec![255u8; 128 * 128 * 4]; // RGBA
         let mut font_chars = HashMap::new();
-        
+
         // Простые глифы для ASCII 32-127 (96 символов)
         // Каждый символ 8x8 пикселей, сетка 16 колонок × 6 рядов = 96 мест
         for (idx, c) in (32..=127).enumerate() {
@@ -528,21 +766,21 @@ impl Renderer {
             let row = idx / 16;
             let base_x = col * 8;
             let base_y = row * 8;
-            
+
             // UV координаты для этого символа
             let u = col as f32 / 16.0;
             let v = row as f32 / 16.0;
             let w = 1.0 / 16.0;
             let h = 1.0 / 16.0;
             font_chars.insert(c as char, [u, v, w, h]);
-            
+
             // Рисуем простой глиф (паттерн на основе кода символа)
             for dy in 0..8 {
                 for dx in 0..8 {
                     let px = base_x + dx;
                     let py = base_y + dy;
                     let pidx = (py * 128 + px) * 4;
-                    
+
                     // Простой паттерн: некоторые пиксели чёрные, некоторые белые
                     let pattern = match c {
                         b'0'..=b'9' => (dx + dy) % 3 == 0,
@@ -550,7 +788,7 @@ impl Renderer {
                         b' ' => false,
                         _ => (dx + dy) % 2 == 0,
                     };
-                    
+
                     if pattern {
                         pixels[pidx] = 0;
                         pixels[pidx + 1] = 0;
@@ -565,17 +803,22 @@ impl Renderer {
                 }
             }
         }
-        
-        let texture = Texture::from_rgba8(gl, 128, 128, &pixels).unwrap_or_else(|_| {
-            // Fallback: создать пустую текстуру с предупреждением
-            warn!("Failed to create font texture, using fallback");
-            Texture::from_rgba8(gl, 1, 1, &[255, 255, 255, 255]).unwrap_or_else(|e| {
-                warn!("Failed to create fallback texture: {}", e);
-                panic!("Cannot create even fallback texture - critical graphics error")
-            })
-        });
-        
-        (texture, font_chars)
+
+        // Попытка создать основную текстуру
+        match Texture::from_rgba8(gl, 128, 128, &pixels) {
+            Ok(texture) => Ok((texture, font_chars)),
+            Err(e) => {
+                warn!("Failed to create font texture, using fallback: {}", e);
+                // Fallback: создать пустую текстуру 1x1
+                match Texture::from_rgba8(gl, 1, 1, &[255, 255, 255, 255]) {
+                    Ok(texture) => {
+                        // Пустой font_chars для fallback
+                        Ok((texture, HashMap::new()))
+                    },
+                    Err(e) => Err(format!("Failed to create fallback font texture: {}", e))
+                }
+            }
+        }
     }
     
     /// Set the terrain mesh for rendering
@@ -686,8 +929,11 @@ impl Renderer {
             16, 17, 18, 16, 18, 19, // Right
             20, 21, 22, 20, 22, 23, // Left
         ];
-        
-        self.vehicle_box_mesh = Some(Mesh::new_raw(&self.gl, &vertices, &indices)?);
+
+        match Mesh::new_raw(&self.gl, &vertices, &indices) {
+            Ok(mesh) => self.vehicle_box_mesh = Some(mesh),
+            Err(e) => tracing::warn!("Failed to create vehicle box mesh: {}", e),
+        }
         Ok(())
     }
     
@@ -748,11 +994,17 @@ impl Renderer {
     }
     
     fn render_main_menu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Задача 7: Меню рисуется, а не println!
+        // DEBUG: Отладка рендеринга главного меню
+        eprintln!("DEBUG [renderer]: Rendering MAIN MENU at {}x{}", self.width, self.height);
+
         unsafe {
             self.gl.disable(glow::DEPTH_TEST);
             self.gl.clear_color(0.05, 0.05, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
+
+            // Включаем blending для прозрачности UI элементов
+            self.gl.enable(glow::BLEND);
+            self.gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
             let w = self.width as f32;
             let h = self.height as f32;
@@ -760,16 +1012,73 @@ impl Renderer {
             // Центральная панель
             self.draw_rect(w/2.0 - 150.0, h/2.0 - 120.0, 300.0, 240.0, [0.1, 0.1, 0.15, 0.9]);
 
-            // Пункты меню как цветные полосы
-            // "Новая игра" — зелёная
-            self.draw_rect(w/2.0 - 120.0, h/2.0 - 80.0, 240.0, 40.0, [0.2, 0.6, 0.2, 0.8]);
-            // "Продолжить" — синяя
-            self.draw_rect(w/2.0 - 120.0, h/2.0 - 30.0, 240.0, 40.0, [0.2, 0.3, 0.6, 0.8]);
-            // "Настройки" — серая
-            self.draw_rect(w/2.0 - 120.0, h/2.0 + 20.0, 240.0, 40.0, [0.3, 0.3, 0.3, 0.8]);
-            // "Выход" — красная
-            self.draw_rect(w/2.0 - 120.0, h/2.0 + 70.0, 240.0, 40.0, [0.6, 0.2, 0.2, 0.8]);
+            // Получаем позицию мыши для hover-эффектов
+            // Теперь используется экранная система координат (Y=0 сверху), инверсия не нужна
+            let mouse_x = self.mouse_x;
+            let mouse_y = self.mouse_y;
 
+            let button_width = 240.0;
+            let button_height = 40.0;
+            let center_x = w / 2.0;
+
+            // Функция для проверки hover
+            let is_hovered = |mouse_x: f32, mouse_y: f32, y: f32| -> bool {
+                mouse_x >= center_x - button_width / 2.0
+                    && mouse_x <= center_x + button_width / 2.0
+                    && mouse_y >= y && mouse_y <= y + button_height
+            };
+
+            // Пункты меню с текстом и hover-эффектами
+            // "Новая игра" — ЗЕЛЁНАЯ ЯРКАЯ (тест)
+            let new_game_y = h/2.0 - 80.0;
+            let new_game_hover = is_hovered(mouse_x, mouse_y, new_game_y);
+            let new_game_color = if new_game_hover {
+                [0.0, 1.0, 0.0, 1.0] // ЯРКО-ЗЕЛЁНЫЙ при наведении
+            } else {
+                [0.0, 0.8, 0.0, 1.0] // ЯРКО-ЗЕЛЁНЫЙ без прозрачности
+            };
+            eprintln!("DEBUG: Drawing NEW GAME button at y={} color={:?}", new_game_y, new_game_color);
+            self.draw_rect(w/2.0 - 120.0, new_game_y, 240.0, 40.0, new_game_color);
+            self.draw_text("НОВАЯ ИГРА", w/2.0 - 60.0, new_game_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+
+            // "Продолжить" — СИНЯЯ ЯРКАЯ (тест)
+            let continue_y = h/2.0 - 30.0;
+            let continue_hover = is_hovered(mouse_x, mouse_y, continue_y);
+            let continue_color = if continue_hover {
+                [0.0, 0.5, 1.0, 1.0] // ЯРКО-СИНИЙ при наведении
+            } else {
+                [0.0, 0.3, 0.8, 1.0] // ЯРКО-СИНИЙ без прозрачности
+            };
+            self.draw_rect(w/2.0 - 120.0, continue_y, 240.0, 40.0, continue_color);
+            self.draw_text("ПРОДОЛЖИТЬ", w/2.0 - 60.0, continue_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+
+            // "Настройки" — СЕРЫЙ ЯРКИЙ (тест)
+            let settings_y = h/2.0 + 20.0;
+            let settings_hover = is_hovered(mouse_x, mouse_y, settings_y);
+            let settings_color = if settings_hover {
+                [0.7, 0.7, 0.7, 1.0] // СВЕТЛО-СЕРЫЙ при наведении
+            } else {
+                [0.5, 0.5, 0.5, 1.0] // СЕРЫЙ без прозрачности
+            };
+            self.draw_rect(w/2.0 - 120.0, settings_y, 240.0, 40.0, settings_color);
+            self.draw_text("НАСТРОЙКИ", w/2.0 - 55.0, settings_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+
+            // "Выход" — КРАСНАЯ ЯРКАЯ (тест)
+            let exit_y = h/2.0 + 70.0;
+            let exit_hover = is_hovered(mouse_x, mouse_y, exit_y);
+            let exit_color = if exit_hover {
+                [1.0, 0.0, 0.0, 1.0] // ЯРКО-КРАСНЫЙ при наведении
+            } else {
+                [0.8, 0.0, 0.0, 1.0] // КРАСНЫЙ без прозрачности
+            };
+            self.draw_rect(w/2.0 - 120.0, exit_y, 240.0, 40.0, exit_color);
+            self.draw_text("ВЫХОД", w/2.0 - 35.0, exit_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+
+            eprintln!("DEBUG [renderer]: Main menu rendered with 4 buttons (hover: new={}, cont={}, set={}, exit={})",
+                new_game_hover, continue_hover, settings_hover, exit_hover);
+            
+            // Отключаем blending после рендеринга UI
+            self.gl.disable(glow::BLEND);
             self.gl.enable(glow::DEPTH_TEST);
         }
         Ok(())
@@ -788,22 +1097,97 @@ impl Renderer {
         }
         Ok(())
     }
-    
+
+    /// Render a billboard (textured quad facing camera)
+    fn render_billboard(&mut self, texture_id: u32, size: f32) {
+        unsafe {
+            // Bind billboard texture
+            self.gl.active_texture(glow::TEXTURE0);
+            if let Some(tid) = NonZeroU32::new(texture_id) {
+                self.gl.bind_texture(glow::TEXTURE_2D, Some(glow::NativeTexture(tid)));
+            }
+
+            // Simple billboard shader setup
+            self.shader.bind(&self.gl);
+            if let Some(loc) = self.gl.get_uniform_location(self.shader.program(), "u_texture") {
+                self.gl.uniform_1_i32(Some(&loc), 0);
+            }
+
+            // Create billboard quad facing camera
+            let cam_pos = self.camera.position;
+            let up = Vector3::y();
+            let forward = (cam_pos - self.camera.target).normalize();
+            let right = up.cross(&forward).normalize();
+            let up_billboard = forward.cross(&right).normalize();
+
+            let half_size = size / 2.0;
+            let corners = [
+                // Position, normal, texcoord
+                cam_pos - right * half_size - up_billboard * half_size,  // bottom-left
+                cam_pos + right * half_size - up_billboard * half_size,  // bottom-right
+                cam_pos + right * half_size + up_billboard * half_size,  // top-right
+                cam_pos - right * half_size + up_billboard * half_size,  // top-left
+            ];
+
+            // Simple quad vertices
+            let vertices: Vec<f32> = vec![
+                corners[0].x, corners[0].y, corners[0].z,  0.0, 0.0, 1.0,  0.0, 0.0,
+                corners[1].x, corners[1].y, corners[1].z,  0.0, 0.0, 1.0,  1.0, 0.0,
+                corners[2].x, corners[2].y, corners[2].z,  0.0, 0.0, 1.0,  1.0, 1.0,
+                corners[0].x, corners[0].y, corners[0].z,  0.0, 0.0, 1.0,  0.0, 0.0,
+                corners[2].x, corners[2].y, corners[2].z,  0.0, 0.0, 1.0,  1.0, 1.0,
+                corners[3].x, corners[3].y, corners[3].z,  0.0, 0.0, 1.0,  0.0, 1.0,
+            ];
+
+            // Draw using immediate mode (simple fallback)
+            // In production, use VBO/VAO
+            let vao = self.gl.create_vertex_array().ok();
+            let vbo = self.gl.create_buffer().ok();
+
+            if let (Some(vao), Some(vbo)) = (vao, vbo) {
+                self.gl.bind_vertex_array(Some(vao));
+                self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+                self.gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::STATIC_DRAW);
+                self.gl.enable_vertex_attrib_array(0);
+                self.gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 32, 0);
+                self.gl.enable_vertex_attrib_array(1);
+                self.gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 32, 12);
+                self.gl.enable_vertex_attrib_array(2);
+                self.gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, 32, 24);
+                
+                self.gl.draw_arrays(glow::TRIANGLES, 0, 6);
+                
+                self.gl.bind_vertex_array(None);
+                self.gl.bind_buffer(glow::ARRAY_BUFFER, None);
+                self.gl.delete_vertex_array(vao);
+                self.gl.delete_buffer(vbo);
+            }
+
+            self.gl.bind_texture(glow::TEXTURE_2D, None);
+        }
+    }
+
     fn render_game(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Render the actual game scene with proper OpenGL rendering
-        
+
         // Get visible objects from LOD system
-        let visible_objects = self.lod_manager.get_objects_in_view(&self.camera.position, 100.0);
-        
-        // Use visible_objects for LOD-based culling instead of rendering all objects
+        let camera_pos = self.camera.position;
+        let visible_objects = self.lod_manager.get_objects_in_view(&camera_pos, 100.0);
+        let visible_vec: Vec<_> = visible_objects.into_iter().collect();
+
+        // Collect billboards to render after the loop to avoid borrow conflicts
+        let mut billboards_to_render = Vec::new();
+
+        // Use visible_vec for LOD-based culling instead of rendering all objects
         // Render each visible object using appropriate LOD model
-        for (_index, lod_model) in visible_objects {
+        for (_index, lod_model) in visible_vec {
             match lod_model {
                 crate::graphics::lod_system::LodModel::HighPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
                         // Convert vertices to proper format for mesh creation
+                        // vertices are just positions, need to generate normals
                         let vert_data: Vec<f32> = vertices.iter()
-                            .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
+                            .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
                             .collect();
                         match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
                             Ok(mesh) => mesh.draw(&self.gl),
@@ -814,7 +1198,7 @@ impl Renderer {
                 crate::graphics::lod_system::LodModel::MediumPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
                         let vert_data: Vec<f32> = vertices.iter()
-                            .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
+                            .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
                             .collect();
                         match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
                             Ok(mesh) => mesh.draw(&self.gl),
@@ -825,7 +1209,7 @@ impl Renderer {
                 crate::graphics::lod_system::LodModel::LowPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
                         let vert_data: Vec<f32> = vertices.iter()
-                            .flat_map(|v| [v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z])
+                            .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
                             .collect();
                         match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
                             Ok(mesh) => mesh.draw(&self.gl),
@@ -834,10 +1218,15 @@ impl Renderer {
                     }
                 },
                 crate::graphics::lod_system::LodModel::Billboard { texture_id, size } => {
-                    // Render billboards as simple quads facing the camera
-                    self.render_billboard(texture_id, size);
+                    // Collect billboards to render after the loop
+                    billboards_to_render.push((*texture_id, *size));
                 },
             }
+        }
+
+        // Render collected billboards - use into_iter() to take ownership
+        for (texture_id, size) in billboards_to_render.into_iter() {
+            self.render_billboard(texture_id, size);
         }
 
         // Use the shader
@@ -953,27 +1342,37 @@ impl Renderer {
     
     /// Ввод-2: Оверлей паузы
     fn render_pause_overlay(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // DEBUG: Отладка рендеринга меню паузы
+        eprintln!("DEBUG [renderer]: Rendering PAUSE OVERLAY");
+        
         unsafe {
             self.gl.disable(glow::DEPTH_TEST);
-            
+
             let w = self.width as f32;
             let h = self.height as f32;
-            
+
             // Полупрозрачный фон
             self.draw_rect(0.0, 0.0, w, h, [0.0, 0.0, 0.0, 0.5]);
-            
+
             // Центральная панель
             self.draw_rect(w/2.0 - 150.0, h/2.0 - 100.0, 300.0, 200.0, [0.1, 0.1, 0.15, 0.95]);
-            
-            // Кнопка "Продолжить" (зелёная)
-            self.draw_rect(w/2.0 - 120.0, h/2.0 - 40.0, 240.0, 40.0, [0.2, 0.6, 0.2, 0.8]);
-            
-            // Кнопка "Настройки" (серая)
-            self.draw_rect(w/2.0 - 120.0, h/2.0 + 10.0, 240.0, 40.0, [0.3, 0.3, 0.3, 0.8]);
-            
-            // Кнопка "Выход в меню" (красная)
-            self.draw_rect(w/2.0 - 120.0, h/2.0 + 60.0, 240.0, 40.0, [0.6, 0.2, 0.2, 0.8]);
 
+            // Кнопка "Продолжить" (зелёная)
+            let resume_y = h/2.0 - 40.0;
+            self.draw_rect(w/2.0 - 120.0, resume_y, 240.0, 40.0, [0.2, 0.6, 0.2, 0.8]);
+            self.draw_text("ПРОДОЛЖИТЬ", w/2.0 - 60.0, resume_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+
+            // Кнопка "Настройки" (серая)
+            let settings_y = h/2.0 + 10.0;
+            self.draw_rect(w/2.0 - 120.0, settings_y, 240.0, 40.0, [0.3, 0.3, 0.3, 0.8]);
+            self.draw_text("НАСТРОЙКИ", w/2.0 - 55.0, settings_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+
+            // Кнопка "Выход в меню" (красная)
+            let menu_y = h/2.0 + 60.0;
+            self.draw_rect(w/2.0 - 120.0, menu_y, 240.0, 40.0, [0.6, 0.2, 0.2, 0.8]);
+            self.draw_text("В МЕНЮ", w/2.0 - 40.0, menu_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+
+            eprintln!("DEBUG [renderer]: Pause overlay rendered with 3 buttons");
             self.gl.enable(glow::DEPTH_TEST);
         }
         Ok(())
@@ -1097,37 +1496,39 @@ impl Renderer {
 			let center_y = compass_y + compass_height / 2.0;
 
 			// Рисуем основные направления (N, E, S, W)
-			let directions = [
+			let mut directions = [
 				(0.0, "N", [1.0, 0.2, 0.2, 1.0]),      // Север - красный
 				(90.0, "E", [1.0, 1.0, 1.0, 0.7]),     // Восток
 				(180.0, "S", [1.0, 1.0, 1.0, 0.7]),    // Юг
 				(270.0, "W", [1.0, 1.0, 1.0, 0.7]),    // Запад
 			];
 
-			for (angle_deg, label, mut color) in directions.iter() {
+			for (angle_deg, label, color) in directions.iter() {
 				// Вычисляем относительный угол с учётом поворота игрока
 				let rel_angle = (angle_deg - player_heading + 720.0) % 360.0; // нормализуем 0-360
-				
+
 				// Преобразуем в позицию на полоске компаса (0-360 -> 0-width)
 				let x_offset = ((rel_angle / 360.0) - 0.5) * compass_width;
 				let x = center_x + x_offset;
-				
+
 				// Рисуем только если маркер в пределах видимости
 				if x > compass_x + 10.0 && x < compass_x + compass_width - 10.0 {
 					// Увеличиваем яркость для ближайших направлений
-					if rel_angle < 30.0 || rel_angle > 330.0 {
-						color = &[1.0, 1.0, 1.0, 1.0];
-					}
-					
+					let draw_color = if rel_angle < 30.0 || rel_angle > 330.0 {
+						[1.0, 1.0, 1.0, 1.0]
+					} else {
+						*color
+					};
+
 					// Рисуем метку направления
-					self.draw_text(label, x - 6.0, center_y + 4.0, 0.7, *color);
-					
+					self.draw_text(label, x - 6.0, center_y + 4.0, 0.7, draw_color);
+
 					// Рисуем деление
 					let tick_height = if rel_angle < 30.0 || rel_angle > 330.0 { 10.0 } else { 5.0 };
-					let tick_color = if rel_angle < 30.0 || rel_angle > 330.0 { 
-						[1.0, 0.5, 0.0, 1.0] 
-					} else { 
-						[0.7, 0.7, 0.7, 0.8] 
+					let tick_color = if rel_angle < 30.0 || rel_angle > 330.0 {
+						[1.0, 0.5, 0.0, 1.0]
+					} else {
+						[0.7, 0.7, 0.7, 0.8]
 					};
 					self.draw_rect(x - 1.0, compass_y + compass_height - tick_height, 2.0, tick_height, tick_color);
 				}
@@ -1188,27 +1589,39 @@ impl Renderer {
 	}
 
     /// Draw a 2D rectangle (simple quad) with proper VAO/VBO implementation
-    pub unsafe fn draw_rect(&self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
-        // Create orthographic projection for UI
+    pub unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
+        // Use UI shader if available, otherwise fall back to main shader
+        let shader_name = if self.ui_shader.is_some() { "UI" } else { "MAIN" };
+        let shader = self.ui_shader.as_ref().unwrap_or(&self.shader);
+
+        // DEBUG: Логирование первого вызова draw_rect
+        static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("DEBUG [draw_rect]: Using {} shader, color={:?}", shader_name, color);
+        }
+
+        // Create orthographic projection for UI with Y=0 at top (screen coordinates)
         let ortho = Matrix4::new_orthographic(
-            0.0, self.width as f32,
-            0.0, self.height as f32,
+            0.0, self.width as f32,      // left, right
+            self.height as f32, 0.0,     // bottom, top (Y=0 at top for screen coords)
             -1.0, 1.0
         );
-        
-        // Set up vertices for a quad (2 triangles)
-        let vertices: [f32; 8] = [
-            x, y,                    // bottom-left
-            x + width, y,            // bottom-right
-            x + width, y + height,   // top-right
-            x, y + height,           // top-left
+
+        // Set up vertices for a quad (2 triangles) with position, color, and uv
+        // Format: pos (2) + color (4) + uv (2) = 8 floats per vertex
+        let vertices: [f32; 32] = [
+            // Position          // Color                 // UV
+            x, y,                 color[0], color[1], color[2], color[3],   0.0, 0.0,  // bottom-left
+            x + width, y,         color[0], color[1], color[2], color[3],   1.0, 0.0,  // bottom-right
+            x + width, y + height, color[0], color[1], color[2], color[3],  1.0, 1.0,  // top-right
+            x, y + height,        color[0], color[1], color[2], color[3],   0.0, 1.0,  // top-left
         ];
-        
+
         let indices: [u32; 6] = [
             0, 1, 2,
             0, 2, 3,
         ];
-        
+
         // Create temporary VAO/VBO for the rect
         let vao = match self.gl.create_vertex_array() {
             Ok(v) => v,
@@ -1222,46 +1635,51 @@ impl Renderer {
             Ok(v) => v,
             Err(_) => { self.gl.delete_vertex_array(vao); self.gl.delete_buffer(vbo); return; },
         };
-        
+
         self.gl.bind_vertex_array(Some(vao));
-        
+
         self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         self.gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
             bytemuck::cast_slice(&vertices),
             glow::STREAM_DRAW,
         );
-        
+
         self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
         self.gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
             bytemuck::cast_slice(&indices),
             glow::STREAM_DRAW,
         );
-        
+
         // Position attribute (location 0) - 2 floats per vertex
         self.gl.enable_vertex_attrib_array(0);
-        self.gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+        self.gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 32, 0);
         
-        // Исп-1: Pass color and uniforms to shader before drawing
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
-            self.gl.uniform_1_i32(Some(&u), 1); // enable solid color mode
-        }
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_color") {
+        // Color attribute (location 1) - 4 floats per vertex
+        self.gl.enable_vertex_attrib_array(1);
+        self.gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, 32, 8);
+        
+        // UV attribute (location 2) - 2 floats per vertex
+        self.gl.enable_vertex_attrib_array(2);
+        self.gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, 32, 24);
+
+        // Bind shader and set uniforms
+        shader.bind(&self.gl);
+
+        if let Some(u) = self.gl.get_uniform_location(shader.program(), "u_color") {
             self.gl.uniform_4_f32(Some(&u), color[0], color[1], color[2], color[3]);
         }
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_projection") {
+        if let Some(u) = self.gl.get_uniform_location(shader.program(), "u_projection") {
             self.gl.uniform_matrix_4_f32_slice(Some(&u), false, ortho.as_slice());
         }
-        
+        if let Some(u) = self.gl.get_uniform_location(shader.program(), "u_use_texture") {
+            self.gl.uniform_1_i32(Some(&u), 0); // No texture for rect
+        }
+
         // Draw the quad
         self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
-        
-        // Исп-1: Reset to terrain mode after drawing
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
-            self.gl.uniform_1_i32(Some(&u), 0); // back to terrain mode
-        }
-        
+
         // Cleanup
         self.gl.delete_vertex_array(vao);
         self.gl.delete_buffer(vbo);
@@ -1269,7 +1687,7 @@ impl Renderer {
     }
 
     /// Draw a 2D rectangle border
-    pub unsafe fn draw_rect_border(&self, x: f32, y: f32, width: f32, height: f32, thickness: f32, color: [f32; 4]) {
+    pub unsafe fn draw_rect_border(&mut self, x: f32, y: f32, width: f32, height: f32, thickness: f32, color: [f32; 4]) {
         // Top
         self.draw_rect(x, y, width, thickness, color);
         // Bottom
@@ -1280,50 +1698,7 @@ impl Renderer {
         self.draw_rect(x + width - thickness, y, thickness, height, color);
     }
 
-    /// Draw a 2D triangle (for minimap player icon)
-    unsafe fn draw_triangle(&self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32, color: [f32; 4]) {
-        let ortho = Matrix4::new_orthographic(
-            0.0, self.width as f32,
-            0.0, self.height as f32,
-            -1.0, 1.0
-        );
-        
-        let vertices: [f32; 6] = [x1, y1, x2, y2, x3, y3];
-        
-        let vao = match self.gl.create_vertex_array() {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-        let vbo = match self.gl.create_buffer() {
-            Ok(v) => v,
-            Err(_) => { self.gl.delete_vertex_array(vao); return; },
-        };
-        
-        self.gl.bind_vertex_array(Some(vao));
-        self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-        self.gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::STREAM_DRAW);
-        self.gl.enable_vertex_attrib_array(0);
-        self.gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
-        
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
-            self.gl.uniform_1_i32(Some(&u), 1);
-        }
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_color") {
-            self.gl.uniform_4_f32(Some(&u), color[0], color[1], color[2], color[3]);
-        }
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_projection") {
-            self.gl.uniform_matrix_4_f32_slice(Some(&u), false, ortho.as_slice());
-        }
-        
-        self.gl.draw_arrays(glow::TRIANGLES, 0, 3);
-        
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
-            self.gl.uniform_1_i32(Some(&u), 0);
-        }
-        
-        self.gl.delete_vertex_array(vao);
-        self.gl.delete_buffer(vbo);
-    }
+    // Старое приватное определение draw_triangle удалено - теперь используется публичная версия выше
     
     /// Граф-3: Рендеринг мини-карты
     fn render_minimap(&mut self, hud_data: &crate::ui::hud::VehicleHudData) {
@@ -1362,23 +1737,38 @@ impl Renderer {
         let char_size = size; // 8x8 scaled
         let mut cursor_x = x;
 
+        // Use UI shader if available, otherwise fall back to main shader
+        let shader = self.ui_shader.as_ref().unwrap_or(&self.shader);
+
+        // Create orthographic projection for UI with Y=0 at top (screen coordinates)
+        let ortho = Matrix4::new_orthographic(
+            0.0, self.width as f32,
+            self.height as f32, 0.0,  // Y=0 at top
+            -1.0, 1.0
+        );
+
         // Bind font texture
         if let Some(ref tex) = self.font_texture {
             tex.bind(&self.gl);
         }
-        
-        // Use shader with texturing mode
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_solid_color") {
-            self.gl.uniform_1_i32(Some(&u), 0); // use texture mode
+
+        // Bind shader and set uniforms
+        shader.bind(&self.gl);
+
+        if let Some(u) = self.gl.get_uniform_location(shader.program(), "u_projection") {
+            self.gl.uniform_matrix_4_f32_slice(Some(&u), false, ortho.as_slice());
         }
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_texture") {
-            self.gl.uniform_1_i32(Some(&u), 1);
+        if let Some(u) = self.gl.get_uniform_location(shader.program(), "u_color") {
+            self.gl.uniform_4_f32(Some(&u), color[0], color[1], color[2], color[3]);
         }
-        
+        if let Some(u) = self.gl.get_uniform_location(shader.program(), "u_use_texture") {
+            self.gl.uniform_1_i32(Some(&u), 1); // use texture mode for font
+        }
+
         for ch in text.chars() {
             if let Some(uv) = self.font_chars.get(&ch) {
                 let [u, v, w, h] = *uv;
-                
+
                 // Draw textured quad for this character
                 let vertices: [f32; 32] = [
                     // pos (2) + color (4) + uv (2) = 8 floats per vertex, 4 vertices
@@ -1387,20 +1777,20 @@ impl Renderer {
                     cursor_x + char_size, y,              color[0], color[1], color[2], color[3],   u + w, v,
                     cursor_x, y,                          color[0], color[1], color[2], color[3],   u, v,
                 ];
-                
+
                 let indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
-                
+
                 let vao = self.gl.create_vertex_array().ok();
                 let vbo = self.gl.create_buffer().ok();
                 let ebo = self.gl.create_buffer().ok();
-                
+
                 if let (Some(vao), Some(vbo), Some(ebo)) = (vao, vbo, ebo) {
                     self.gl.bind_vertex_array(Some(vao));
                     self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
                     self.gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::STREAM_DRAW);
                     self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
                     self.gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytemuck::cast_slice(&indices), glow::STREAM_DRAW);
-                    
+
                     // pos: loc 0, 2 floats
                     self.gl.enable_vertex_attrib_array(0);
                     self.gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 32, 0);
@@ -1410,22 +1800,22 @@ impl Renderer {
                     // uv: loc 2, 2 floats
                     self.gl.enable_vertex_attrib_array(2);
                     self.gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, 32, 24);
-                    
+
                     self.gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
-                    
+
                     self.gl.delete_vertex_array(vao);
                     self.gl.delete_buffer(vbo);
                     self.gl.delete_buffer(ebo);
                 }
-                
+
                 cursor_x += char_size;
             } else if ch == ' ' {
                 cursor_x += char_size;
             }
         }
-        
+
         // Reset shader state
-        if let Some(u) = self.gl.get_uniform_location(self.shader.program(), "u_use_texture") {
+        if let Some(u) = self.gl.get_uniform_location(shader.program(), "u_use_texture") {
             self.gl.uniform_1_i32(Some(&u), 0);
         }
     }

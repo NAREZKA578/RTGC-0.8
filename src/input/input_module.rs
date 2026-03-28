@@ -1,11 +1,15 @@
 //! Input System - Enhanced action-based input with gamepad support
+//! DEBUG: Исправлен импорт Gamepad
 
 use std::collections::HashMap;
 use winit::event::{KeyEvent, ElementState, MouseButton as WinitMouseButton};
 use winit::keyboard::{KeyCode, PhysicalKey, NamedKey};
 
 pub use crate::input::mapping::{InputAction, InputMapping, MouseButton};
-pub use crate::input::gamepad::{Gamepad, GamepadButton, GamepadAxis, GamepadState};
+// DEBUG: Импорт Gamepad из mod.rs
+pub use crate::input::gamepad::{GamepadButton, GamepadAxis, GamepadState};
+// Gamepad type alias for backwards compatibility
+pub use crate::input::Gamepad;
 
 /// State of an input action
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -267,62 +271,87 @@ impl InputManager {
             state: InputState::new(),
         }
     }
-    
+
     /// Begin a new frame
     pub fn begin_frame(&mut self) {
         self.state.begin_frame();
     }
-    
+
+    /// Update input state (alias for begin_frame for backwards compatibility)
+    pub fn update(&mut self) {
+        self.state.begin_frame();
+    }
+
     /// Handle keyboard input
     pub fn handle_keyboard(&mut self, event: &KeyEvent) {
         self.state.handle_keyboard(event);
     }
-    
+
+    /// Set key state directly
+    pub fn set_key_state(&mut self, key: PhysicalKey, pressed: bool) {
+        let state = if pressed {
+            ActionState::JustPressed
+        } else {
+            ActionState::JustReleased
+        };
+        self.state.key_states.insert(key, state);
+    }
+
     /// Handle mouse button
     pub fn handle_mouse_button(&mut self, button: WinitMouseButton, pressed: bool) {
         self.state.handle_mouse_button(button, pressed);
     }
-    
+
+    /// Set mouse button state directly
+    pub fn set_mouse_button_state(&mut self, button: MouseButton, pressed: bool) {
+        let state = if pressed {
+            ActionState::JustPressed
+        } else {
+            ActionState::JustReleased
+        };
+        self.state.mouse_states.insert(button, state);
+    }
+
     /// Handle mouse motion
     pub fn handle_mouse_motion(&mut self, position: (f64, f64), delta: (f64, f64)) {
         self.state.handle_mouse_motion(position, delta);
     }
-    
+
     /// Handle scroll
     pub fn handle_scroll(&mut self, delta: (f64, f64)) {
         self.state.handle_scroll(delta);
     }
-    
+
     /// Handle gamepad state
     pub fn handle_gamepad(&mut self, state: GamepadState) {
         self.state.handle_gamepad(state);
     }
-    
+
     /// Check if action is just pressed
     pub fn is_action_just_pressed(&self, action: InputAction) -> bool {
         self.state.is_action_just_pressed(action)
     }
-    
+
     /// Check if action is held
     pub fn is_action_held(&self, action: InputAction) -> bool {
         self.state.is_action_held(action)
     }
-    
+
     /// Check if action is released
     pub fn is_action_released(&self, action: InputAction) -> bool {
         self.state.is_action_released(action)
     }
-    
+
     /// Get action state
     pub fn get_action_state(&self, action: InputAction) -> Option<ActionState> {
         self.state.get_action_state(action)
     }
-    
+
     /// Get input state reference
     pub fn state(&self) -> &InputState {
         &self.state
     }
-    
+
     /// Get mutable input state
     pub fn state_mut(&mut self) -> &mut InputState {
         &mut self.state

@@ -1,4 +1,5 @@
 //! Render Command - Encapsulates rendering operations for the render queue
+//! DEBUG: Handle использует только Clone (без Copy) для избежания конфликтов
 
 use crate::graphics::mesh::Mesh;
 use crate::graphics::texture::Texture;
@@ -7,8 +8,14 @@ use crate::graphics::particles::ParticleSystem;
 use nalgebra::{Matrix4, Vector3};
 
 /// Unique handle for resources
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Handle<T>(u64, std::marker::PhantomData<T>);
+
+impl<T> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        Self(self.0, std::marker::PhantomData)
+    }
+}
 
 impl<T> Handle<T> {
     pub fn new(id: u64) -> Self {
@@ -27,8 +34,6 @@ impl<T> Handle<T> {
         self.0 == 0
     }
 }
-
-impl<T> Copy for Handle<T> {}
 
 /// Render command types for the render queue
 #[derive(Debug, Clone)]
@@ -106,8 +111,8 @@ impl RenderCommand {
     /// Get the material handle if applicable
     pub fn material_handle(&self) -> Option<Handle<Material>> {
         match self {
-            RenderCommand::Mesh { material, .. } => Some(*material),
-            RenderCommand::TerrainChunk { material, .. } => Some(*material),
+            RenderCommand::Mesh { material, .. } => Some(material.clone()),
+            RenderCommand::TerrainChunk { material, .. } => Some(material.clone()),
             _ => None,
         }
     }

@@ -24,12 +24,12 @@ pub fn init_events() {
 
 /// Get the global event sender
 pub fn get_event_sender() -> Option<Sender<GameEvent>> {
-    unsafe { EVENT_SENDER.clone() }
+    unsafe { EVENT_SENDER.as_ref().cloned() }
 }
 
 /// Get the global event receiver
 pub fn get_event_receiver() -> Option<Receiver<GameEvent>> {
-    unsafe { EVENT_RECEIVER.clone() }
+    unsafe { EVENT_RECEIVER.as_ref().cloned() }
 }
 
 /// Publish an event to all subscribers
@@ -62,13 +62,15 @@ pub enum GameEvent {
     PlayerEnteredVehicle {
         player_name: String,
         vehicle_index: usize,
+        vehicle_id: u64, // Alias for backwards compatibility
         seat_index: usize,
     },
-    
+
     /// Player exited a vehicle
     PlayerExitedVehicle {
         player_name: String,
         vehicle_index: usize,
+        vehicle_id: u64,
         exit_position: Vector3<f32>,
     },
     

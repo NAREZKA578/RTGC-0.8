@@ -25,7 +25,7 @@ impl<T> RefCountedHandle<T> {
     }
 
     pub fn handle(&self) -> Handle<T> {
-        self.handle
+        self.handle.clone()
     }
 
     pub fn add_ref(&self) {
@@ -105,7 +105,7 @@ impl AssetManager {
     }
 
     /// Load or get a mesh asset
-    pub fn load_or_get_mesh(&mut self, path: &str) -> Result<Handle<Mesh>, Box<dyn std::error::Error>> {
+    pub fn load_or_get_mesh(&mut self, path: &str) -> Result<Handle<Mesh>, String> {
         // Check cache first
         if let Some(handle) = self.meshes.get(path) {
             handle.add_ref();
@@ -121,11 +121,11 @@ impl AssetManager {
         let start_time = std::time::Instant::now();
 
         // For now, create a placeholder - in real implementation, load from file
-        let mesh = Mesh::new_placeholder()?;
-        
+        let mesh = Mesh::new_placeholder();
+
         let load_time = start_time.elapsed().as_millis() as u64;
         let handle = Handle::<Mesh>::new(self.generate_handle_id());
-        let ref_handle = RefCountedHandle::new(handle);
+        let ref_handle = RefCountedHandle::new(handle.clone());
 
         self.meshes.insert(path.to_string(), ref_handle);
         self.metadata.insert(path.to_string(), AssetMetadata {
@@ -143,7 +143,7 @@ impl AssetManager {
     }
 
     /// Load or get a texture asset
-    pub fn load_or_get_texture(&mut self, path: &str) -> Result<Handle<Texture>, Box<dyn std::error::Error>> {
+    pub fn load_or_get_texture(&mut self, path: &str) -> Result<Handle<Texture>, String> {
         // Check cache first
         if let Some(handle) = self.textures.get(path) {
             handle.add_ref();
@@ -159,11 +159,11 @@ impl AssetManager {
         let start_time = std::time::Instant::now();
 
         // For now, create a placeholder - in real implementation, load from file
-        let texture = Texture::new_placeholder()?;
-        
+        let texture = Texture::new_placeholder();
+
         let load_time = start_time.elapsed().as_millis() as u64;
         let handle = Handle::<Texture>::new(self.generate_handle_id());
-        let ref_handle = RefCountedHandle::new(handle);
+        let ref_handle = RefCountedHandle::new(handle.clone());
 
         self.textures.insert(path.to_string(), ref_handle);
         self.metadata.insert(path.to_string(), AssetMetadata {
@@ -212,24 +212,18 @@ impl AssetManager {
     pub fn preload_scene_assets(&mut self, asset_paths: &[&str]) {
         info!("Preloading {} assets for scene", asset_paths.len());
 
-        let results: Vec<_> = asset_paths
-            .par_iter()
-            .map(|path| {
-                let start = std::time::Instant::now();
-                // In real implementation, determine type from extension or manifest
-                let result = if path.ends_with(".png") || path.ends_with(".jpg") || path.ends_with(".dds") {
-                    self.load_or_get_texture(path).map(|h| ("texture", h.id()))
-                } else {
-                    self.load_or_get_mesh(path).map(|h| ("mesh", h.id()))
-                };
-                (path, result, start.elapsed())
-            })
-            .collect();
-
-        for (path, result, time) in results {
+        // Load assets sequentially (parallel would require Arc<Mutex> wrapper)
+        for path in asset_paths {
+            let start = std::time::Instant::now();
+            // In real implementation, determine type from extension or manifest
+            let result = if path.ends_with(".png") || path.ends_with(".jpg") || path.ends_with(".dds") {
+                self.load_or_get_texture(path).map(|h| ("texture", h.id()))
+            } else {
+                self.load_or_get_mesh(path).map(|h| ("mesh", h.id()))
+            };
             match result {
                 Ok((asset_type, id)) => {
-                    debug!("Preloaded {} '{}' (id: {}, time: {:?})", asset_type, path, id, time);
+                    debug!("Preloaded {} '{}' (id: {}, time: {:?})", asset_type, path, id, start.elapsed());
                 }
                 Err(e) => {
                     warn!("Failed to preload '{}': {}", path, e);

@@ -39,6 +39,8 @@ pub struct OpenWorld {
     load_radius: u32,
     /// Unload radius (must be >= load_radius)
     unload_radius: u32,
+    /// World seed
+    pub seed: u64,
 }
 
 impl OpenWorld {
@@ -77,7 +79,18 @@ impl OpenWorld {
             player_position: Vector3::zeros(),
             load_radius,
             unload_radius,
+            seed,
         }
+    }
+
+    /// Get terrain height at given coordinates
+    pub fn get_height(&self, _x: f32, _z: f32) -> f32 {
+        0.0 // заглушка
+    }
+
+    /// Generate terrain data
+    pub fn generate_terrain(&mut self) {
+        // заглушка
     }
     
     /// Update the world based on player position

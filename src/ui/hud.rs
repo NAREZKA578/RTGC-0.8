@@ -535,28 +535,30 @@ impl HudManager {
             ];
 
             // Рисуем деления и буквы
-            for (angle, label, mut color) in directions.iter() {
+            for (angle, label, color) in directions.iter() {
                 // Вычисляем относительное положение относительно текущего heading
                 let mut rel_angle = *angle - heading;
-                
+
                 // Нормализуем угол (-180 до +180)
                 while rel_angle > 180.0 { rel_angle -= 360.0; }
                 while rel_angle < -180.0 { rel_angle += 360.0; }
-                
+
                 // Если в пределах видимой области (±90° от центра)
                 if rel_angle.abs() <= 90.0 {
                     let x = center_x + rel_angle * scale_pixels_per_degree;
-                    
+
                     // Делаем цвет тусклее если далеко от центра
-                    if rel_angle.abs() > 60.0 {
-                        color = &[0.5, 0.5, 0.5, 0.5];
-                    }
-                    
+                    let draw_color = if rel_angle.abs() > 60.0 {
+                        [0.5, 0.5, 0.5, 0.5]
+                    } else {
+                        *color
+                    };
+
                     let font_size = if rel_angle.abs() < 15.0 { 16.0 } else { 12.0 };
                     let text_y = compass_y + 4.0;
                     let text_x = x - (label.len() as f32 * font_size * 0.3);
-                    
-                    unsafe { renderer.draw_text(label, text_x, text_y, font_size, *color); }
+
+                    unsafe { renderer.draw_text(label, text_x, text_y, font_size, draw_color); }
                 }
             }
 
@@ -903,8 +905,8 @@ impl HudManager {
             for i in 1..10 {
                 let line_x = map_x + (map_size / 10.0) * i as f32;
                 let line_y = map_y + (map_size / 10.0) * i as f32;
-                renderer.draw_line(line_x, map_y, line_x, map_y + map_size, [0.2, 0.2, 0.25, 0.5]);
-                renderer.draw_line(map_x, line_y, map_x + map_size, line_y, [0.2, 0.2, 0.25, 0.5]);
+                renderer.draw_line(line_x, map_y, line_x, map_y + map_size, 1.0, [0.2, 0.2, 0.25, 0.5]);
+                renderer.draw_line(map_x, line_y, map_x + map_size, line_y, 1.0, [0.2, 0.2, 0.25, 0.5]);
             }
         }
 

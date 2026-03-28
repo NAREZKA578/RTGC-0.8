@@ -68,12 +68,14 @@ impl MainMenu {
                         // Parse metadata from save file
                         // For now, just count them
                         self.saves.push(SaveMetadata {
-                            slot: self.saves.len() as u32,
+                            slot: self.saves.len() as u8,
                             player_name: "Player".to_string(),
-                            location: "Unknown".to_string(),
-                            playtime_seconds: 0,
-                            real_time_saved: Local::now(),
-                            money: 0,
+                            game_time_hours: 0.0,
+                            timestamp: 0,
+                            location_name: "Unknown".to_string(),
+                            position: [0.0; 3], // E0117 fix: use [f32; 3] instead of Vector3
+                            money_rub: 0.0,
+                            playtime_hours: 0.0,
                         });
                     }
                 }

@@ -287,15 +287,22 @@ impl VehiclePartsSystem {
         for category in affected_categories {
             if let Some(part_ids) = self.by_category.get(&category) {
                 for part_id in part_ids {
+                    // Get damage multiplier first to avoid borrow conflicts
+                    let multiplier = if let Some(part) = self.parts.get(part_id) {
+                        self.get_damage_multiplier(part, impact_point, &damage_vector)
+                    } else {
+                        1.0
+                    };
+                    
                     if let Some(part) = self.parts.get_mut(part_id) {
-                        let damage = base_damage * self.get_damage_multiplier(part, impact_point, &damage_vector);
+                        let damage = base_damage * multiplier;
                         part.apply_damage(damage);
-                        
+
                         // Frame damage reduces max_integrity permanently
                         if category == PartCategory::Frame && force > 5000.0 {
                             let max_reduction = base_damage * 0.3;
                             part.reduce_max_integrity(max_reduction);
-                            self.frame_integrity = self.frame_integrity.saturating_sub(max_reduction);
+                            self.frame_integrity = (self.frame_integrity - max_reduction).max(0.0);
                         }
                     }
                 }
@@ -387,7 +394,7 @@ impl VehiclePartsSystem {
         
         let min_tire_integrity = wheel_parts.iter()
             .map(|p| p.integrity_percent())
-            .fold(100.0, |min, val| min.min(val));
+            .fold(100.0_f32, |min: f32, val| min.min(val));
         
         if min_tire_integrity < 20.0 {
             0.4 // Severely reduced grip

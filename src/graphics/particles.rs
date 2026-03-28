@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 use glow::{Context, HasContext};
 
 /// Тип частицы
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParticleType {
     Rain,
     Snow,
@@ -105,11 +105,10 @@ impl ParticleSystem {
                 
                 // Pass view_proj to shader as u_view_proj uniform
                 // Note: Shader must have this uniform defined
-                if let Some(program) = gl.get_parameter_i32(glow::CURRENT_PROGRAM) {
-                    let program = program as u32;
-                    if let Ok(loc) = gl.get_uniform_location(program, "u_view_proj") {
-                        gl.uniform_matrix_4_f32_slice(&loc, false, view_proj.as_slice());
-                    }
+                let program = gl.get_parameter_i32(glow::CURRENT_PROGRAM);
+                let native_program = glow::NativeProgram(std::num::NonZero::new(program as u32).unwrap());
+                if let Some(loc) = gl.get_uniform_location(native_program, "u_view_proj") {
+                    gl.uniform_matrix_4_f32_slice(Some(&loc), false, view_proj.as_slice());
                 }
                 
                 gl.draw_arrays(glow::POINTS, 0, active.len() as i32);

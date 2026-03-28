@@ -161,8 +161,8 @@ impl MissionGenerator {
         let cargo_type = self.determine_cargo_type(&pickup_settlement, &mut rng);
         
         // Calculate distance
-        let dx = pickup_settlement.center.x - delivery_settlement.center.x;
-        let dz = pickup_settlement.center.z - delivery_settlement.center.z;
+        let dx = pickup_settlement.center[0] - delivery_settlement.center[0];
+        let dz = pickup_settlement.center[2] - delivery_settlement.center[2];
         let distance_km = (dx * dx + dz * dz).sqrt() / 1000.0; // meters to km
 
         // Calculate base reward
@@ -213,10 +213,10 @@ impl MissionGenerator {
                 continue;
             }
 
-            let dist = ((player_pos.x - settlement.center.x).powi(2)
-                + (player_pos.z - settlement.center.z).powi(2)).sqrt();
+            let dist = ((player_pos.x - settlement.center[0]).powi(2)
+                + (player_pos.z - settlement.center[2]).powi(2)).sqrt();
 
-            if best.is_none() || dist < best.map_or(f64::MAX, |(_, d)| d) {
+            if best.is_none() || dist < best.map_or(f32::MAX, |(_, d)| d) {
                 best = Some((settlement, dist));
             }
         }
@@ -243,8 +243,8 @@ impl MissionGenerator {
         // Weight by distance (prefer medium distances)
         let mut weights = Vec::new();
         for candidate in &candidates {
-            let dx = pickup.center.x - candidate.center.x;
-            let dz = pickup.center.z - candidate.center.z;
+            let dx = pickup.center[0] - candidate.center[0];
+            let dz = pickup.center[2] - candidate.center[2];
             let dist = (dx * dx + dz * dz).sqrt();
             
             // Prefer 5-50km distances
@@ -338,9 +338,9 @@ impl MissionGenerator {
         // Fallback to settlement center with offset
         let offset = if is_pickup { 10.0 } else { -10.0 };
         Vector3::new(
-            settlement.center.x + offset,
-            settlement.center.y,
-            settlement.center.z,
+            settlement.center[0] + offset,
+            settlement.center[1],
+            settlement.center[2],
         )
     }
 

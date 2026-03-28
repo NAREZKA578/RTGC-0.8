@@ -228,7 +228,7 @@ impl HotReloadManager {
 
     /// Check if a specific file has pending reload
     pub fn is_pending_reload(&self, path: &Path) -> bool {
-        self.pending_reloads.contains(path)
+        self.pending_reloads.contains(&path.to_path_buf())
     }
 
     /// Remove a file from watching

@@ -88,6 +88,13 @@ pub struct ShaderDescription {
     pub entry_point: String,
 }
 
+impl ShaderDescription {
+    /// Alias for source field for backwards compatibility
+    pub fn bytecode(&self) -> &[u8] {
+        &self.source
+    }
+}
+
 /// Blend mode for color blending
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlendMode {
@@ -290,6 +297,21 @@ pub struct PipelineStateObject {
     pub sample_count: u32,
 }
 
+impl PipelineStateObject {
+    /// Get all shaders as a vector for backwards compatibility
+    pub fn shaders(&self) -> Vec<ResourceHandle> {
+        let mut shaders = Vec::new();
+        shaders.push(self.vertex_shader);
+        if let Some(fs) = self.fragment_shader {
+            shaders.push(fs);
+        }
+        if let Some(cs) = self.compute_shader {
+            shaders.push(cs);
+        }
+        shaders
+    }
+}
+
 /// Primitive topology for drawing
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrimitiveTopology {
@@ -329,24 +351,86 @@ pub enum TextureFormat {
     R8G8B8Unorm,
     R8G8B8A8Unorm,
     R8G8B8A8Srgb,
+    R8Uint,
     R16Float,
     R16G16Float,
     R16G16B16A16Float,
     R32Float,
     R32G32Float,
     R32G32B32A32Float,
+    Rg8Unorm,
+    Rg16Float,
+    Rg32Float,
+    Rgba8Unorm,
+    Rgba8Uint,
+    Rgba8Snorm,
+    Rgba16Float,
+    Rgba32Float,
+    Bgra8Unorm,
     D16Unorm,
     D24UnormS8Uint,
     D32Float,
     D32FloatS8UintX24,
+    Depth16Unorm,
+    Depth24Plus,
+    Depth32Float,
+    Stencil8,
+    Depth24PlusStencil8,
+    Depth32FloatStencil8,
     BC1RgbUnorm,
     BC1RgbaUnorm,
     BC2Unorm,
     BC3Unorm,
+    BC3RgbaUnorm,
     BC4Unorm,
     BC5Unorm,
     BC6HUfloat,
     BC7Unorm,
+    BC7RgbaUnorm,
+    // Дополнительные форматы для совместимости с gl.rs
+    R8G8B8UnormSrgb,
+    R8G8B8A8UnormSrgb,
+    R16Uint,
+    R16Sint,
+    R16G16Uint,
+    R16G16Sint,
+    R16G16B16A16Uint,
+    R16G16B16A16Sint,
+    R32Uint,
+    R32Sint,
+    R32G32Uint,
+    R32G32Sint,
+    R32G32B32A32Uint,
+    R32G32B32A32Sint,
+    Rg8Uint,
+    Rg8Sint,
+    Rg16Uint,
+    Rg16Sint,
+    Rg32Uint,
+    Rg32Sint,
+    Rgba8Sint,
+    Rgba16Uint,
+    Rgba16Sint,
+    Rgba32Uint,
+    Rgba32Sint,
+    Bgra8UnormSrgb,
+    Bgr8Unorm,
+    Bgr8UnormSrgb,
+    Rgb10A2Unorm,
+    R11G11B10Float,
+    R9G9B9E5Float,
+    Depth16,
+    Depth24,
+    Depth32,
+    Depth24Stencil8,
+    Depth32Stencil8,
+    BC1RgbaUnormSrgb,
+    BC2UnormSrgb,
+    BC3UnormSrgb,
+    BC4Snorm,
+    BC5Snorm,
+    BC6HFloat,
+    BC7UnormSrgb,
 }
 
 impl TextureFormat {
@@ -357,20 +441,40 @@ impl TextureFormat {
                 | TextureFormat::D24UnormS8Uint
                 | TextureFormat::D32Float
                 | TextureFormat::D32FloatS8UintX24
+                | TextureFormat::Depth16Unorm
+                | TextureFormat::Depth24Plus
+                | TextureFormat::Depth32Float
+                | TextureFormat::Stencil8
+                | TextureFormat::Depth24PlusStencil8
+                | TextureFormat::Depth32FloatStencil8
+                | TextureFormat::Depth16
+                | TextureFormat::Depth24
+                | TextureFormat::Depth32
+                | TextureFormat::Depth24Stencil8
+                | TextureFormat::Depth32Stencil8
         )
     }
-    
+
     pub fn is_compressed(&self) -> bool {
         matches!(
             self,
             TextureFormat::BC1RgbUnorm
                 | TextureFormat::BC1RgbaUnorm
+                | TextureFormat::BC1RgbaUnormSrgb
                 | TextureFormat::BC2Unorm
+                | TextureFormat::BC2UnormSrgb
                 | TextureFormat::BC3Unorm
+                | TextureFormat::BC3UnormSrgb
+                | TextureFormat::BC3RgbaUnorm
                 | TextureFormat::BC4Unorm
+                | TextureFormat::BC4Snorm
                 | TextureFormat::BC5Unorm
+                | TextureFormat::BC5Snorm
                 | TextureFormat::BC6HUfloat
+                | TextureFormat::BC6HFloat
                 | TextureFormat::BC7Unorm
+                | TextureFormat::BC7UnormSrgb
+                | TextureFormat::BC7RgbaUnorm
         )
     }
 }
@@ -379,13 +483,22 @@ impl TextureFormat {
 #[derive(Debug, Clone)]
 pub struct TextureDescription {
     pub dimension: TextureDimension,
+    pub texture_type: TextureType,
     pub width: u32,
     pub height: u32,
+    pub depth: u32,
     pub depth_or_array_layers: u32,
     pub mip_levels: u32,
     pub format: TextureFormat,
     pub usage: TextureUsage,
     pub initial_state: ResourceState,
+}
+
+impl TextureDescription {
+    /// Get depth value (alias for depth_or_array_layers)
+    pub fn depth(&self) -> u32 {
+        self.depth_or_array_layers
+    }
 }
 
 /// Texture usage flags
@@ -457,7 +570,25 @@ bitflags::bitflags! {
         const TRANSFER_DST = 1 << 6;
         const STORAGE_BUFFER = 1 << 7;
         const INDIRECT_BUFFER = 1 << 8;
+        const IMMUTABLE = 1 << 9;
+        const DYNAMIC = 1 << 10;
+        const TRANSIENT = 1 << 11;
+        const UPLOAD = 1 << 12;
+        const READBACK = 1 << 13;
     }
+}
+
+impl BufferUsage {
+    /// Alias for IMMUTABLE for backwards compatibility
+    pub const Immutable: BufferUsage = BufferUsage::IMMUTABLE;
+    /// Alias for DYNAMIC for backwards compatibility
+    pub const Dynamic: BufferUsage = BufferUsage::DYNAMIC;
+    /// Alias for TRANSIENT for backwards compatibility
+    pub const Transient: BufferUsage = BufferUsage::TRANSIENT;
+    /// Alias for UPLOAD for backwards compatibility
+    pub const Upload: BufferUsage = BufferUsage::UPLOAD;
+    /// Alias for READBACK for backwards compatibility
+    pub const Readback: BufferUsage = BufferUsage::READBACK;
 }
 
 /// Sampler filter mode
@@ -569,6 +700,26 @@ pub struct ScissorRect {
 }
 
 impl ScissorRect {
+    /// Get x position (alias for left)
+    pub fn x(&self) -> i32 {
+        self.left
+    }
+    
+    /// Get y position (alias for top)
+    pub fn y(&self) -> i32 {
+        self.top
+    }
+    
+    /// Get width (right - left)
+    pub fn width(&self) -> i32 {
+        self.right - self.left
+    }
+    
+    /// Get height (bottom - top)
+    pub fn height(&self) -> i32 {
+        self.bottom - self.top
+    }
+    
     pub fn new(left: i32, top: i32, right: i32, bottom: i32) -> Self {
         Self { left, top, right, bottom }
     }
@@ -621,6 +772,8 @@ pub enum RhiError {
     DeviceLost,
     InvalidParameter(String),
     ShaderCompilationFailed(String),
+    CompilationFailed(String),
+    InvalidResourceHandle(String),
     ResourceCreationFailed(String),
     QueueFull,
     Timeout,
@@ -635,6 +788,8 @@ impl fmt::Display for RhiError {
             RhiError::DeviceLost => write!(f, "Device lost"),
             RhiError::InvalidParameter(msg) => write!(f, "Invalid parameter: {}", msg),
             RhiError::ShaderCompilationFailed(msg) => write!(f, "Shader compilation failed: {}", msg),
+            RhiError::CompilationFailed(msg) => write!(f, "Compilation failed: {}", msg),
+            RhiError::InvalidResourceHandle(msg) => write!(f, "Invalid resource handle: {}", msg),
             RhiError::ResourceCreationFailed(msg) => write!(f, "Resource creation failed: {}", msg),
             RhiError::QueueFull => write!(f, "Command queue full"),
             RhiError::Timeout => write!(f, "Operation timeout"),

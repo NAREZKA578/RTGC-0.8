@@ -1,6 +1,7 @@
 use nalgebra::{Vector3, Matrix3, UnitQuaternion};
 use crate::physics::RigidBody;
-use crate::physics_module::Shape;
+// DEBUG: Исправлен импорт Shape из physics_module
+use crate::physics::physics_module::Shape;
 use rand::Rng;
 
 /// Abstract component for destructible objects

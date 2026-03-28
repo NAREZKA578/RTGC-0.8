@@ -438,10 +438,18 @@ impl TrackedVehicle {
         
         // Сопротивление качению
         let rolling_resistance = self.mass * 9.81 * 0.05; // Коэффициент для гусениц
-        let rolling_force = -self.linear_velocity.normalize() * rolling_resistance;
-        
+        let rolling_force = if self.linear_velocity.norm() > 0.001 {
+            -self.linear_velocity.normalize() * rolling_resistance
+        } else {
+            Vector3::zeros()
+        };
+
         // Тормозная сила
-        let brake_vector = -self.linear_velocity.normalize_or_zero() * brake_force;
+        let brake_vector = if self.linear_velocity.norm() > 0.001 {
+            -self.linear_velocity.normalize() * brake_force
+        } else {
+            Vector3::zeros()
+        };
         
         // Суммарная сила
         let total_force = traction_force + rolling_force + brake_vector;
@@ -520,17 +528,18 @@ impl TrackedVehicle {
         normal_force: f32,
     ) {
         let pressure = normal_force / (
-            self.vehicle_type.track_width() * 
+            self.vehicle_type.track_width() *
             self.vehicle_type.track_length()
         );
-        
+
         // Глубина колеи зависит от давления и типа грунта
         let depth = pressure * 0.0001; // Упрощённая модель
-        
-        for suspension in &self.suspensions {
-            let world_pos = self.position + self.orientation * suspension.local_position;
-            terrain.deform(world_pos.x, world_pos.z, depth, 0.3);
-        }
+
+        // TODO: реализовать deform в DeformableTerrainComponent
+        // for suspension in &self.suspensions {
+        //     let world_pos = self.position + self.orientation * suspension.local_position;
+        //     terrain.deform(world_pos.x, world_pos.z, depth, 0.3);
+        // }
     }
 
     /// Получить состояние для рендеринга

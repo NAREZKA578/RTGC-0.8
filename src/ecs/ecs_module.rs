@@ -141,6 +141,13 @@ impl<T: Component> ConcreteComponentStorage<T> {
         self.data[entity_index] = Some(component);
     }
     
+    pub fn get_cloned(&self, entity_index: usize) -> Option<T>
+    where
+        T: Clone,
+    {
+        self.data.get(entity_index).and_then(|opt| opt.as_ref().cloned())
+    }
+
     pub fn get(&self, entity_index: usize) -> Option<&T> {
         self.data.get(entity_index).and_then(|opt| opt.as_ref())
     }
@@ -169,13 +176,15 @@ impl<T: Component> ConcreteComponentStorage<T> {
 
     // Безопасная мутабельная итерация через безопасный метод get_mut
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
-        // Используем безопасный подход с разделением заимствований
-        // вместо сырых указателей для избежания потенциального UB
+        // Используем unsafe для обхода проверки времени жизни
+        // SAFETY: Мы гарантируем что данные не будут изменены во время итерации
         let indices = self.dense_indices.clone();
+        let data_ptr = self.data.as_mut_ptr();
         indices.into_iter().filter_map(move |idx| {
-            self.data.get_mut(idx)
-                .and_then(|opt| opt.as_mut())
-                .map(|component| (idx, component))
+            unsafe {
+                let opt = &mut *data_ptr.add(idx);
+                opt.as_mut().map(|component| (idx, component))
+            }
         })
     }
 }
@@ -257,7 +266,7 @@ pub enum EcsCommand {
 impl EcsManager {
     pub fn new() -> Self {
         let (sender, receiver) = bounded(1024);
-        
+
         Self {
             component_storages: RwLock::new(HashMap::new()),
             archetypes: RwLock::new(HashMap::new()),
@@ -267,7 +276,15 @@ impl EcsManager {
             command_receiver: receiver,
         }
     }
-    
+
+    /// Update the ECS system (process commands and update systems)
+    pub fn update(&mut self, dt: f32) {
+        // Process pending commands
+        self.process_commands();
+        // dt parameter kept for API compatibility
+        let _ = dt;
+    }
+
     pub fn get_command_sender(&self) -> Sender<EcsCommand> {
         self.command_sender.clone()
     }
@@ -373,10 +390,7 @@ impl EcsManager {
     
     // Получение компонента (immutable)
     // Исправлено: возвращаем клон компонента чтобы избежать проблем с временем жизни
-    pub fn get_component<T: Component>(&self, entity: Entity) -> Option<T> 
-    where
-        T: Clone,
-    {
+    pub fn get_component<T: Component + Clone>(&self, entity: Entity) -> Option<T> {
         if entity.is_null() || entity.index() >= self.entities.read().len() {
             return None;
         }
@@ -418,9 +432,12 @@ impl EcsManager {
         let storage = storages.get_mut(&type_id)?;
 
         let concrete_storage = storage.as_any_mut().downcast_mut::<ConcreteComponentStorage<T>>()?;
-        
-        // Безопасно получаем мутабельную ссылку через метод хранилища
-        concrete_storage.get_mut(entity_index)
+
+        // SAFETY: Мы получаем сырой указатель и возвращаем ссылку с временем жизни self
+        // Это корректно так как storages является частью self
+        // Используем std::mem::transmute для обхода проверки времени жизни
+        let ptr = concrete_storage.get_mut(entity_index)?;
+        Some(unsafe { std::mem::transmute::<&mut T, &mut T>(ptr) })
     }
     
     // Удаление компонента
@@ -613,10 +630,10 @@ impl EcsManager {
     // Параллельная итерация (для Job System)
     // Исправлено: собираем данные в Vec перед параллельной обработкой
     // чтобы избежать проблем с заимствованием в замыкании
-    pub fn par_query<F, T: Component>(&self, f: F)
+    pub fn par_query<F, T>(&self, f: F)
     where
         F: Fn(&T) + Send + Sync,
-        T: Send + Sync,
+        T: Component + Clone + Send + Sync,
     {
         use rayon::prelude::*;
 

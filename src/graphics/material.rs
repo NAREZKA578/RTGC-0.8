@@ -44,7 +44,7 @@ impl TextureQuality {
 }
 
 /// Слои текстур материала
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MaterialLayers {
     pub albedo: Option<AssetHandle>,    // Всегда загружен
     pub normal: Option<AssetHandle>,    // Если quality >= Low
@@ -54,7 +54,7 @@ pub struct MaterialLayers {
 }
 
 /// Параметры материала
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MaterialParams {
     pub roughness_scale: f32,
     pub metallic_scale: f32,
@@ -74,7 +74,7 @@ impl Default for MaterialParams {
 }
 
 /// Материал с поддержкой уровней качества
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Material {
     pub name: String,
     pub layers: MaterialLayers,

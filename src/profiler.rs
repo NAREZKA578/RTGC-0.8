@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::time::Instant;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
+// DEBUG: Отладка экспортов profiler - добавлено в Profiler::new()
+
 /// GPU timing query result
 #[derive(Debug, Clone)]
 pub struct GpuTiming {
@@ -220,7 +222,7 @@ impl Profiler {
         println!();
         println!("--- Allocations by Tag ---");
         for (tag, size) in &self.memory_stats.allocations_by_tag {
-            println!("{}: {} bytes ({:.2} MB)", tag, size, size as f64 / 1024.0 / 1024.0);
+            println!("{}: {} bytes ({:.2} MB)", tag, size, *size as f64 / 1024.0 / 1024.0);
         }
         println!("===================================");
     }
