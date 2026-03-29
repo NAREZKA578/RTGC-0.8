@@ -70,8 +70,9 @@ impl Scene for OpenWorldScene {
         // Update world entities, physics, etc.
     }
 
-    fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Render the open world
+    fn render(&mut self, _renderer: &mut crate::graphics::renderer::Renderer) -> Result<(), Box<dyn std::error::Error>> {
+        // Render the open world - handled by engine renderer
+        // This scene uses the full 3D renderer, not UI
         Ok(())
     }
 

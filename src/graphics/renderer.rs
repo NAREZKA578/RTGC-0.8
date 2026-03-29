@@ -517,7 +517,17 @@ impl Renderer {
         self.render_queue.clear();
         Ok(())
     }
-    
+
+    /// Проблема 11: Get orthographic projection matrix for UI rendering
+    /// Используется для draw_text/draw_rect/UI элементов
+    pub fn get_ortho_matrix(&self) -> Matrix4<f32> {
+        Matrix4::new_orthographic(
+            0.0, self.width as f32,
+            self.height as f32, 0.0,  // Y=0 at top (screen coordinates)
+            -1.0, 1.0
+        )
+    }
+
     /// Execute a single render command
     fn execute_command(&mut self, command: &RenderCommand) -> Result<(), Box<dyn std::error::Error>> {
         match command {
@@ -996,11 +1006,14 @@ impl Renderer {
     fn render_main_menu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // DEBUG: Отладка рендеринга главного меню
         eprintln!("DEBUG [renderer]: Rendering MAIN MENU at {}x{}", self.width, self.height);
+        eprintln!("DEBUG [renderer]: mouse_x={}, mouse_y={}", self.mouse_x, self.mouse_y);
 
         unsafe {
             self.gl.disable(glow::DEPTH_TEST);
             self.gl.clear_color(0.05, 0.05, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
+
+            eprintln!("DEBUG [renderer]: Screen cleared, drawing buttons");
 
             // Включаем blending для прозрачности UI элементов
             self.gl.enable(glow::BLEND);
@@ -1010,12 +1023,13 @@ impl Renderer {
             let h = self.height as f32;
 
             // Центральная панель
+            eprintln!("DEBUG [renderer]: Drawing central panel at ({}, {})", w/2.0 - 150.0, h/2.0 - 120.0);
             self.draw_rect(w/2.0 - 150.0, h/2.0 - 120.0, 300.0, 240.0, [0.1, 0.1, 0.15, 0.9]);
 
             // Получаем позицию мыши для hover-эффектов
-            // Теперь используется экранная система координат (Y=0 сверху), инверсия не нужна
+            // Инвертируем Y для координат OpenGL (Y=0 снизу)
             let mouse_x = self.mouse_x;
-            let mouse_y = self.mouse_y;
+            let mouse_y = self.height as f32 - self.mouse_y; // Инверсия Y
 
             let button_width = 240.0;
             let button_height = 40.0;
@@ -1037,7 +1051,7 @@ impl Renderer {
             } else {
                 [0.0, 0.8, 0.0, 1.0] // ЯРКО-ЗЕЛЁНЫЙ без прозрачности
             };
-            eprintln!("DEBUG: Drawing NEW GAME button at y={} color={:?}", new_game_y, new_game_color);
+            eprintln!("DEBUG [renderer]: NEW GAME button: mouse=({:.1}, {:.1}), y={:.1}, hover={}, color={:?}", mouse_x, mouse_y, new_game_y, new_game_hover, new_game_color);
             self.draw_rect(w/2.0 - 120.0, new_game_y, 240.0, 40.0, new_game_color);
             self.draw_text("НОВАЯ ИГРА", w/2.0 - 60.0, new_game_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
 

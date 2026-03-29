@@ -7,6 +7,15 @@ use crate::graphics::material::Material;
 use crate::graphics::particles::ParticleSystem;
 use nalgebra::{Matrix4, Vector3};
 
+/// Проблема 12: Z-depth константы для UI элементов
+/// Используются для сортировки UI при отрисовке (0.0 = ближний, 1.0 = дальний)
+pub const UI_DEPTH_BACKGROUND: f32 = 0.7;
+pub const UI_DEPTH_HUD: f32 = 0.8;
+pub const UI_DEPTH_PROMPT: f32 = 0.85;
+pub const UI_DEPTH_NOTIFICATIONS: f32 = 0.9;
+pub const UI_DEPTH_TOOLTIP: f32 = 0.95;
+pub const UI_DEPTH_CURSOR: f32 = 1.0;
+
 /// Unique handle for resources
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Handle<T>(u64, std::marker::PhantomData<T>);

@@ -5,6 +5,8 @@ use crate::game::player::{PlayerState, CameraMode};
 use crate::game::skills::PlayerSkills;
 use crate::game::interaction::{InteractableType, InteractionResult};
 use crate::game::weather::{WeatherState, PrecipitationType};
+use crate::graphics::renderer::{RenderCommand, RenderQueue};
+use crate::graphics::render_command::{UI_DEPTH_HUD, UI_DEPTH_NOTIFICATIONS, UI_DEPTH_PROMPT};
 use nalgebra::{Vector2, Vector3};
 
 // Type aliases for backwards compatibility
@@ -372,6 +374,91 @@ impl UIManager {
         self.interaction_prompt = None;
         self.skill_notifications.clear();
         self.visibility = UIVisibility::default();
+    }
+
+    /// Проблема 3: Submit UI commands to render queue
+    /// Отрисовка уведомлений и HUD через RenderCommand::UIElement
+    pub fn submit_ui_commands(&self, render_queue: &mut RenderQueue, screen_width: f32, screen_height: f32) {
+        // Отрисовка уведомлений
+        if self.visibility.notifications {
+            let mut y_offset = 10.0;
+            for notification in &self.notifications {
+                let alpha = 1.0 - (notification.age / notification.duration).min(1.0);
+                let color = match notification.notification_type {
+                    NotificationType::Info => [0.2, 0.6, 1.0, alpha],
+                    NotificationType::Success => [0.2, 0.8, 0.2, alpha],
+                    NotificationType::Warning => [1.0, 0.8, 0.0, alpha],
+                    NotificationType::Error => [1.0, 0.2, 0.2, alpha],
+                    NotificationType::SkillUp => [1.0, 0.5, 0.0, alpha],
+                    NotificationType::Achievement => [1.0, 0.8, 0.5, alpha],
+                };
+
+                render_queue.submit(RenderCommand::UIElement {
+                    rect: [10.0, screen_height - y_offset - 30.0, 300.0, 25.0],
+                    texture: None,
+                    color,
+                    depth: UI_DEPTH_NOTIFICATIONS,
+                });
+                y_offset += 35.0;
+            }
+        }
+
+        // Отрисовка interaction prompt
+        if self.visibility.interaction_prompt {
+            if let Some(prompt) = &self.interaction_prompt {
+                if prompt.visible {
+                    render_queue.submit(RenderCommand::UIElement {
+                        rect: [screen_width / 2.0 - 100.0, screen_height / 2.0 + 50.0, 200.0, 30.0],
+                        texture: None,
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        depth: UI_DEPTH_PROMPT,
+                    });
+                }
+            }
+        }
+
+        // Отрисовка HUD элементов (speedometer, fuel, etc.)
+        if self.visibility.hud {
+            // Speedometer background
+            if self.visibility.speedometer {
+                render_queue.submit(RenderCommand::UIElement {
+                    rect: [screen_width - 210.0, 10.0, 200.0, 80.0],
+                    texture: None,
+                    color: [0.0, 0.0, 0.0, 0.5],
+                    depth: UI_DEPTH_HUD,
+                });
+            }
+
+            // Fuel gauge background
+            if self.visibility.fuel_gauge {
+                render_queue.submit(RenderCommand::UIElement {
+                    rect: [screen_width - 210.0, 100.0, 200.0, 30.0],
+                    texture: None,
+                    color: [0.0, 0.0, 0.0, 0.5],
+                    depth: UI_DEPTH_HUD,
+                });
+            }
+
+            // Compass background
+            if self.visibility.compass {
+                render_queue.submit(RenderCommand::UIElement {
+                    rect: [screen_width / 2.0 - 100.0, 10.0, 200.0, 30.0],
+                    texture: None,
+                    color: [0.0, 0.0, 0.0, 0.5],
+                    depth: UI_DEPTH_HUD,
+                });
+            }
+
+            // Clock
+            if self.visibility.clock {
+                render_queue.submit(RenderCommand::UIElement {
+                    rect: [screen_width - 100.0, screen_height - 40.0, 90.0, 30.0],
+                    texture: None,
+                    color: [0.0, 0.0, 0.0, 0.5],
+                    depth: UI_DEPTH_HUD,
+                });
+            }
+        }
     }
 }
 

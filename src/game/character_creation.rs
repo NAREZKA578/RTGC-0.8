@@ -610,6 +610,53 @@ impl CharacterCreationManager {
     pub fn update(&mut self, _dt: f32) {
         // Placeholder for future updates
     }
+
+    /// Render character creation UI
+    pub fn render_ui(&self, renderer: &mut crate::graphics::renderer::Renderer) {
+        let w = renderer.width as f32;
+        let h = renderer.height as f32;
+
+        unsafe {
+            // Background
+            renderer.draw_rect(0.0, 0.0, w, h, [0.0, 0.0, 0.0, 0.8]);
+
+            // Title
+            let step_num = self.get_step_number();
+            let total_steps = 10;
+            let title = format!("СОЗДАНИЕ ПЕРСОНАЖА - ШАГ {}/{}", step_num, total_steps);
+            renderer.draw_text(&title, w/2.0 - 200.0, 50.0, 1.2, [1.0, 1.0, 1.0, 1.0]);
+
+            // Current step info
+            let step_info = match self.current_step {
+                CreationStep::Gender => "Выберите пол: 1 - Мужской, 2 - Женский",
+                CreationStep::Height => "Рост: стрелки вверх/вниз (1.50 - 2.10 м)",
+                CreationStep::SkinColor => "Оттенок кожи: стрелки влево/вправо",
+                CreationStep::Face => "Лицо: стрелки влево/вправо",
+                CreationStep::HairStyle => "Причёска: стрелки влево/вправо",
+                CreationStep::HairColor => "Цвет волос: стрелки влево/вправо",
+                CreationStep::Education => "Выберите образование",
+                CreationStep::VehicleColor => "Цвет автомобиля: стрелки влево/вправо",
+                CreationStep::StartingLocation => "Место старта: стрелки влево/вправо",
+                CreationStep::Summary => "Проверьте характеристики и нажмите Enter",
+                CreationStep::Complete => "Создание завершено",
+            };
+            renderer.draw_text(step_info, w/2.0 - 200.0, h/2.0 - 50.0, 1.0, [0.8, 0.8, 0.8, 1.0]);
+
+            // Character preview info
+            let info = format!(
+                "Имя: {}\nПол: {:?}\nРост: {:.2} м\nКожа: {}\nВолосы: {}",
+                self.data.name,
+                self.data.gender,
+                self.data.height,
+                self.data.skin_tone_index,
+                self.data.hair_color_index
+            );
+            renderer.draw_text(&info, w/2.0 - 200.0, h/2.0 + 20.0, 0.9, [0.7, 0.7, 0.7, 1.0]);
+
+            // Navigation hint
+            renderer.draw_text("Стрелки - выбор, Enter - далее, Esc - назад", w/2.0 - 180.0, h - 80.0, 0.8, [0.5, 0.5, 0.5, 1.0]);
+        }
+    }
 }
 
 impl Default for CharacterCreationManager {

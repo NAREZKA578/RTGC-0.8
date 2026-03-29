@@ -1,17 +1,28 @@
 //! Main Menu Scene
 
 use super::super::scene::{Scene, SceneType, SceneId};
+use super::super::main_menu::MainMenu;
 use std::any::Any;
 
 pub struct MainMenuScene {
     name: String,
+    main_menu: MainMenu,
 }
 
 impl MainMenuScene {
     pub fn new() -> Self {
         Self {
             name: "Main Menu".to_string(),
+            main_menu: MainMenu::new(),
         }
+    }
+
+    pub fn get_main_menu(&self) -> &MainMenu {
+        &self.main_menu
+    }
+
+    pub fn get_main_menu_mut(&mut self) -> &mut MainMenu {
+        &mut self.main_menu
     }
 }
 
@@ -34,12 +45,14 @@ impl Scene for MainMenuScene {
         tracing::info!("Exiting Main Menu");
     }
 
-    fn update(&mut self, _delta_time: f32) {
+    fn update(&mut self, delta_time: f32) {
         // Handle menu input and animations
+        self.main_menu.update(delta_time);
     }
 
-    fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn render(&mut self, renderer: &mut crate::graphics::renderer::Renderer) -> Result<(), Box<dyn std::error::Error>> {
         // Render main menu UI
+        self.main_menu.render_ui(renderer);
         Ok(())
     }
 

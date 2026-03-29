@@ -71,7 +71,7 @@ pub trait Scene: Send {
     fn update(&mut self, _delta_time: f32) {}
 
     /// Render the scene
-    fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn render(&mut self, _renderer: &mut crate::graphics::renderer::Renderer) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
@@ -267,10 +267,10 @@ impl SceneManager {
     }
 
     /// Render the current scene
-    pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn render(&mut self, renderer: &mut crate::graphics::renderer::Renderer) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(active_id) = self.active_scene {
             if let Some(active) = self.scenes.get_mut(&active_id) {
-                return active.render();
+                return active.render(renderer);
             }
         }
         Ok(())

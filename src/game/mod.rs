@@ -26,6 +26,7 @@ pub mod map_system;
 pub mod scene;
 pub mod scenes;
 pub mod asset_manager;
+pub mod loading_manager;
 
 pub use mission_save::{SaveGame, MissionSaveManager};
 pub use weather::{WeatherSystem, WeatherState, DayNightCycle, PrecipitationType};
@@ -52,3 +53,4 @@ pub use map_system::{MapSystem, MapMarker, MarkerType};
 pub use scene::{Scene, SceneType, SceneId, SceneState, SceneManager, SceneManagerConfig, TransitionEffect};
 pub use scenes::{MainMenuScene, OpenWorldScene, LoadingScene, PauseScene};
 pub use asset_manager::{AssetManager, AssetManagerConfig, AssetManagerStats, RefCountedHandle, AssetMetadata};
+pub use loading_manager::{LoadingManager, LoadingState, LoadingProgress, LoadingStats, LoadableResource, ResourceType, LoadStatus};

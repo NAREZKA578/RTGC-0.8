@@ -5,6 +5,7 @@ use nalgebra::{Vector3, UnitQuaternion, Point3};
 use crate::physics::{RigidBody, Shape, LAYER_WORLD, LAYER_VEHICLE, LAYER_CARGO, LAYER_TRIGGER};
 use crate::game::skills::PlayerSkills;
 use crate::game::InventoryItem;
+use crate::input::action_map::{ActionMap, ExtendedAction, ActionState};
 
 /// Collision layer for player character
 pub const LAYER_PLAYER: u32 = 0b10000;
@@ -111,9 +112,12 @@ pub struct Player {
     
     /// Is jumping
     pub is_jumping: bool,
-    
+
     /// Can jump (on ground)
     pub can_jump: bool,
+
+    /// Проблема 14: Input action map
+    pub action_map: ActionMap,
 }
 
 /// Player wallet with multiple currencies
@@ -139,7 +143,7 @@ impl Player {
     pub fn new(name: String) -> Self {
         let height = 1.93;
         let radius = 0.35;
-        
+
         Self {
             name,
             is_male: true,
@@ -161,6 +165,7 @@ impl Player {
             is_sprinting: false,
             is_jumping: false,
             can_jump: true,
+            action_map: ActionMap::new(),
         }
     }
     
@@ -187,7 +192,57 @@ impl Player {
             }
         }
     }
-    
+
+    /// Проблема 14: Process input using action map instead of hardcoded keys
+    pub fn process_input(&mut self, action_map: &ActionMap, physics: &mut crate::physics::PhysicsWorld, dt: f32) {
+        if self.state != PlayerState::OnFoot {
+            return;
+        }
+
+        // Movement input
+        let mut move_direction = Vector3::zeros();
+        
+        if action_map.is_action_held(ExtendedAction::MoveForward) {
+            move_direction.z += 1.0;
+        }
+        if action_map.is_action_held(ExtendedAction::MoveBackward) {
+            move_direction.z -= 1.0;
+        }
+        if action_map.is_action_held(ExtendedAction::MoveLeft) {
+            move_direction.x += 1.0;
+        }
+        if action_map.is_action_held(ExtendedAction::MoveRight) {
+            move_direction.x -= 1.0;
+        }
+
+        // Normalize and apply force
+        if move_direction.norm_squared() > 0.0 {
+            move_direction = move_direction.normalize();
+            let force = if action_map.is_action_held(ExtendedAction::Sprint) && self.stamina > 0.2 {
+                100.0 // Sprint force
+            } else {
+                50.0 // Walk force
+            };
+            self.apply_movement_force(move_direction, force, physics);
+        }
+
+        // Jump
+        if action_map.is_action_just_pressed(ExtendedAction::Jump) {
+            self.jump(physics);
+        }
+
+        // Sprint toggle
+        if action_map.is_action_just_pressed(ExtendedAction::Sprint) {
+            self.toggle_sprint();
+        }
+
+        // Interact
+        if action_map.is_action_just_pressed(ExtendedAction::Interact) {
+            // Interaction handled by interaction_system in engine
+            eprintln!("DEBUG: Interact action pressed");
+        }
+    }
+
     /// Jump action
     pub fn jump(&mut self, physics: &mut crate::physics::PhysicsWorld) {
         if !self.can_jump || self.state != PlayerState::OnFoot {

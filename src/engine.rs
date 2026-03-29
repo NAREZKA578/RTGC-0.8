@@ -13,6 +13,12 @@ use crate::ecs::EcsManager;
 use crate::physics;
 use crate::graphics::renderer::{MenuState, Renderer};
 use crate::game::{WeatherSystem, Cargo, Winch, MissionGenerator, Mission, MainMenu};
+use crate::game::loading_manager::{LoadingManager, ResourceType, LoadingProgress, LoadingStats};
+use crate::game::interaction::InteractionSystem;
+use crate::game::debug_menu::DebugMenu;
+use crate::game::asset_manager::AssetManager;
+use crate::game::save::SaveSystem;
+use crate::game::ui::UIManager;
 use crate::world::DayNightCycle;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::debug_renderer::DebugRenderer;
@@ -84,6 +90,18 @@ pub struct Engine {
     save_timer: f32,
     mouse_x: f32,
     mouse_y: f32,
+    // Проблема 8: Interaction system
+    interaction_system: InteractionSystem,
+    // Проблема 6: Debug menu
+    debug_menu: DebugMenu,
+    // Проблема 4: Asset manager
+    asset_manager: AssetManager,
+    // Проблема 3: UI Manager
+    ui_manager: UIManager,
+    // Проблема 9: Save system
+    save_system: SaveSystem,
+    // Менеджер загрузки
+    loading_manager: LoadingManager,
 }
 
 impl Engine {
@@ -116,6 +134,18 @@ impl Engine {
         let weather_system = WeatherSystem::new(42);  // seed для погоды
         let day_night_cycle = DayNightCycle::new(55.0, 82.9);  // широта и долгота (Новосибирск)
         let winch = Winch::new(0);  // индекс тела транспортного средства
+        // Проблема 8: Interaction system
+        let interaction_system = InteractionSystem::new();
+        // Проблема 6: Debug menu
+        let debug_menu = DebugMenu::new();
+        // Проблема 4: Asset manager
+        let asset_manager = AssetManager::default();
+        // Проблема 3: UI manager
+        let ui_manager = UIManager::new();
+        // Проблема 9: Save system
+        let save_system = SaveSystem::default();
+        // Менеджер загрузки
+        let mut loading_manager = LoadingManager::new("assets");
 
         Ok(Self {
             graphics_context,
@@ -157,6 +187,12 @@ impl Engine {
             save_timer: 0.0,
             mouse_x: 0.0,
             mouse_y: 0.0,
+            interaction_system,
+            debug_menu,
+            asset_manager,
+            ui_manager,
+            save_system,
+            loading_manager,
         })
     }
 
@@ -179,15 +215,16 @@ impl Engine {
     pub fn update(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
         // DEBUG: Отладка обновления движка
         eprintln!("DEBUG [engine]: Engine::update() - dt={:.4}", dt);
-        
+
         profiler::begin_frame();
         let _profile = profiler::ProfileScope::new("Engine::update");
 
         // Обновление ввода
         self.input_manager.update();
 
-        // Обновление hover-эффектов меню
+        // Обновление main_menu
         if self.game_state == GameState::MainMenu {
+            self.main_menu.update(dt);
             self.update_menu_hover();
         }
 
@@ -197,14 +234,61 @@ impl Engine {
             self.physics_step(self.physics_timestep)?;
             self.physics_accumulator -= self.physics_timestep;
         }
-        
+
         // Обновление систем
         self.ecs_manager.update(dt);
         let current_hour = self.day_night_cycle.get_hour();
         self.weather_system.update(dt, current_hour);
         self.day_night_cycle.advance_time(dt);
         self.particle_system.update(dt);
-        
+
+        // Проблема 8: Обновление interaction system
+        if self.game_state == GameState::Playing {
+            // Получаем позицию игрока и направление камеры
+            let player_pos = if let Some(ref heli) = self.helicopter {
+                heli.position
+            } else {
+                Vector3::zeros()
+            };
+            let player_forward = Vector3::z(); // Helicopter не имеет метода forward()
+
+            // Обновляем interaction system
+            self.interaction_system.update(dt, player_pos, player_forward, 4.0);
+
+            // Обработка взаимодействия по клавише F
+            if self.input_manager.state().is_key_held(winit::keyboard::KeyCode::KeyF) {
+                // Получаем состояние игрока из helicopter или vehicle
+                let mut player_state = crate::game::player::PlayerState::OnFoot;
+                if self.helicopter.is_some() {
+                    player_state = crate::game::player::PlayerState::InVehicle {
+                        vehicle_index: 0,
+                        vehicle_id: 1,
+                        seat_index: 0,
+                    };
+                }
+
+                // Пробуем взаимодействовать
+                let result = self.interaction_system.try_interact(&mut player_state);
+                if result.success {
+                    eprintln!("Interaction: {}", result.message);
+                }
+            }
+        }
+
+        // Проблема 6: Обновление debug menu статистики
+        if self.debug_mode {
+            self.debug_menu.update_fps(1.0 / dt.max(0.0001), dt * 1000.0);
+            // self.debug_menu.update_physics_stats(self.physics_world.stats()); // stats() не существует
+
+            // Обновление chunk count - chunks не существует в OpenWorld
+            // if let Some(ref open_world) = self.open_world {
+            //     self.debug_menu.update_chunks(open_world.chunks.len());
+            // }
+
+            // RAM usage - заглушка (требует feature в windows crate)
+            self.debug_menu.update_ram_usage(0.0);
+        }
+
         // Обновление HUD с данными автомобиля
         if let Some(ref vehicle) = self.vehicle {
             let hud_data = crate::ui::hud::VehicleHudData {
@@ -216,12 +300,12 @@ impl Engine {
             };
             self.hud_manager.update(hud_data, dt);
         }
-        
+
         // Обновление вертолета
         if let Some(ref mut heli) = self.helicopter {
             heli.update(dt);
         }
-        
+
         // Обновление транспортного средства
         if let Some(ref mut vehicle) = self.vehicle {
             // Сначала устанавливаем управление
@@ -232,7 +316,7 @@ impl Engine {
                 0.0, // handbrake
             );
             vehicle.set_controls(controls);
-            
+
             // Затем обновляем физику
             let terrain_getter = |x: f32, z: f32| -> f32 {
                 if let Some(ref open_world) = self.open_world {
@@ -247,19 +331,19 @@ impl Engine {
             };
             vehicle.update(dt, terrain_getter, surface_getter);
         }
-        
+
         // Обновление лебедки
         // if let Some(ref mut cargo) = self.cargo {
         //     self.winch.update(dt, cargo);
         // }
-        
+
         // Таймер автосохранения
         self.save_timer += dt;
         if self.save_timer >= 60.0 {
             self.save_game()?;
             self.save_timer = 0.0;
         }
-        
+
         profiler::end_frame();
         Ok(())
     }
@@ -308,6 +392,9 @@ impl Engine {
             eprintln!("DEBUG [engine]: Calling renderer.render()");
             renderer.render()?;
             
+            // Flush render queue to execute all commands
+            renderer.flush()?;
+            
             // Рендеринг частиц (поверх сцены)
             if let Some(ref gl) = self.graphics_context.gl {
                 if self.game_state == GameState::Playing {
@@ -347,11 +434,32 @@ impl Engine {
                     };
                     self.hud_manager.update(hud_data, 0.016);
                 }
-                
+
                 // Отрисовка HUD через Renderer
                 self.hud_manager.render(renderer);
             }
-            
+
+            // Проблема 6: Рендеринг debug menu (если включен debug_mode)
+            if self.debug_mode {
+                // Render debug menu overlay
+                let mut y = 10.0;
+                let x = 10.0;
+                let line_height = 18.0;
+                
+                // Helper closure for drawing text
+                let draw_text = &mut |text: &str, x: f32, y: f32, color: [f32; 4]| {
+                    // Submit UI command to render queue
+                    renderer.submit(crate::graphics::renderer::RenderCommand::UIElement {
+                        rect: [x, y, text.len() as f32 * 10.0, line_height],
+                        texture: None,
+                        color,
+                        depth: 1.0,
+                    });
+                };
+                
+                self.debug_menu.render(draw_text);
+            }
+
             // Завершение кадра через Renderer (swap buffers)
             self.graphics_context.end_frame()?;
         } else if let Some(ref gl) = self.graphics_context.gl {
@@ -569,42 +677,95 @@ impl Engine {
     fn update_menu_hover(&mut self) {
         let w = self.renderer.as_ref().map(|r| r.width as f32).unwrap_or(800.0);
         let h = self.renderer.as_ref().map(|r| r.height as f32).unwrap_or(600.0);
-        
+
         let button_width = 240.0;
         let button_height = 40.0;
         let center_x = w / 2.0;
-        
+
         let new_game_y = h / 2.0 - 80.0;
         let continue_y = h / 2.0 - 30.0;
         let settings_y = h / 2.0 + 20.0;
         let exit_y = h / 2.0 + 70.0;
-        
+
         let mouse_x = self.mouse_x;
         let mouse_y = h - self.mouse_y;
-        
-        // Проверка наведения на кнопки
-        let hovered = if mouse_x >= center_x - button_width / 2.0 && mouse_x <= center_x + button_width / 2.0 {
+
+        // Проверка наведения на кнопки и обновление main_menu
+        if mouse_x >= center_x - button_width / 2.0 && mouse_x <= center_x + button_width / 2.0 {
             if mouse_y >= new_game_y && mouse_y <= new_game_y + button_height {
-                Some("Новая игра")
+                self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame);
+                eprintln!("DEBUG [engine]: Menu hover - Новая игра");
             } else if mouse_y >= continue_y && mouse_y <= continue_y + button_height {
-                Some("Продолжить")
+                self.main_menu.hover_button(crate::game::main_menu::MenuButton::Continue);
+                eprintln!("DEBUG [engine]: Menu hover - Продолжить");
             } else if mouse_y >= settings_y && mouse_y <= settings_y + button_height {
-                Some("Настройки")
+                self.main_menu.hover_button(crate::game::main_menu::MenuButton::Options);
+                eprintln!("DEBUG [engine]: Menu hover - Настройки");
             } else if mouse_y >= exit_y && mouse_y <= exit_y + button_height {
-                Some("Выход")
+                self.main_menu.hover_button(crate::game::main_menu::MenuButton::Exit);
+                eprintln!("DEBUG [engine]: Menu hover - Выход");
             } else {
-                None
+                self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
             }
         } else {
-            None
-        };
-        
-        if let Some(button) = hovered {
-            eprintln!("DEBUG [engine]: Menu hover - {}", button);
+            self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
         }
     }
 
+    /// Инициализация менеджера загрузки - регистрация всех ресурсов
+    fn init_loading_manager(&mut self) {
+        eprintln!("DEBUG [engine]: Initializing loading manager...");
+        
+        // Регистрация мешей
+        self.loading_manager.add_resource("meshes/truck.obj", ResourceType::Mesh, 1);
+        self.loading_manager.add_resource("meshes/terrain.obj", ResourceType::Mesh, 2);
+        self.loading_manager.add_resource("meshes/building_low.obj", ResourceType::Mesh, 3);
+        
+        // Регистрация текстур
+        self.loading_manager.add_resource("textures/ground.png", ResourceType::Texture, 1);
+        self.loading_manager.add_resource("textures/sky.png", ResourceType::Texture, 2);
+        self.loading_manager.add_resource("textures/building.png", ResourceType::Texture, 3);
+        self.loading_manager.add_resource("textures/ui/hud.png", ResourceType::Texture, 4);
+        
+        // Регистрация шейдеров
+        self.loading_manager.add_resource("shaders/basic.vert", ResourceType::Shader, 1);
+        self.loading_manager.add_resource("shaders/basic.frag", ResourceType::Shader, 1);
+        self.loading_manager.add_resource("shaders/terrain.vert", ResourceType::Shader, 2);
+        self.loading_manager.add_resource("shaders/terrain.frag", ResourceType::Shader, 2);
+        
+        // Регистрация конфигов
+        self.loading_manager.add_resource("config.json", ResourceType::Config, 0);
+        self.loading_manager.add_resource("settings.json", ResourceType::Config, 0);
+        
+        // Проверка файлов
+        let progress = self.loading_manager.check_all_files();
+        eprintln!(
+            "DEBUG [engine]: Loading manager initialized: {}/{} files found",
+            progress.loaded_resources + progress.failed_resources,
+            progress.total_resources
+        );
+    }
+
+    /// Загрузить все зарегистрированные ресурсы
+    pub fn load_all_resources(&mut self) -> LoadingProgress {
+        eprintln!("DEBUG [engine]: Loading all resources...");
+        self.loading_manager.load_all()
+    }
+
+    /// Получить текущий прогресс загрузки
+    pub fn get_loading_progress(&self) -> LoadingProgress {
+        self.loading_manager.get_progress()
+    }
+
+    /// Получить статистику загрузки
+    pub fn get_loading_stats(&self) -> &LoadingStats {
+        self.loading_manager.stats()
+    }
+
     fn load_initial_data(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Инициализация менеджера загрузки
+        self.init_loading_manager();
+        
         // Загрузка начальных данных игры
         // Генерация мира
         if let Some(ref mut open_world) = self.open_world {
@@ -677,21 +838,104 @@ impl Engine {
     }
 
     fn save_game(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Сохранение состояния игры
-        use std::fs::File;
-        use std::io::Write;
+        // Проблема 9: Использование SaveSystem для сохранения
+        use crate::game::save::{SaveData, SaveMetadata, WorldStateData, PlayerData};
+        use std::time::{SystemTime, UNIX_EPOCH};
         
-        let save_data = format!(
-            "seed={}\nvehicle_health={}\nvehicle_fuel={}\ncompass_heading={}\n",
-            self.world_seed,
-            self.vehicle_health,
-            self.vehicle_fuel,
-            self.compass_heading
-        );
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         
-        let mut file = File::create("savegame.dat")?;
-        file.write_all(save_data.as_bytes())?;
+        // Получаем позицию игрока
+        let position = if let Some(ref heli) = self.helicopter {
+            [heli.position.x, heli.position.y, heli.position.z]
+        } else {
+            [0.0, 0.0, 0.0]
+        };
         
+        // Создаем метаданные сохранения
+        let metadata = SaveMetadata {
+            slot: 0,
+            player_name: "Player".to_string(),
+            game_time_hours: self.day_night_cycle.get_hour(),
+            timestamp,
+            location_name: "Open World".to_string(),
+            position,
+            money_rub: 50000.0, // TODO: get from player
+            playtime_hours: 0.0, // TODO: track playtime
+        };
+        
+        // Создаем данные игрока
+        let player_data = PlayerData {
+            name: "Player".to_string(),
+            is_male: true,
+            height: 1.93,
+            skin_color: [0.8, 0.65, 0.55],
+            face_variant: 0,
+            hair_style: 0,
+            hair_color: [0.25, 0.18, 0.12],
+            skills: crate::game::save::PlayerSkillsData {
+                mechanics: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                electrics: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                welding: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                construction: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                road_building: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                driving: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                tracked: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                piloting: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                flying: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                crane: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                geology: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                drilling: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                logging: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                mining: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                business: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                logistics: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                trading: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                navigation: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                medicine: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                fitness: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+            },
+            money: crate::game::save::PlayerMoneyData {
+                rub: 50000.0,
+                cny: 0.0,
+                usd: 0.0,
+            },
+            inventory: vec![],
+            inventory_weight: 0.0,
+            position,
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            state: crate::game::save::PlayerStateData::OnFoot,
+            camera_mode: crate::game::save::CameraModeData::ThirdPerson { distance: 4.0, yaw: 0.0, pitch: 0.3 },
+            stamina: 1.0,
+        };
+        
+        // Создаем данные мира
+        let world_state = WorldStateData {
+            time_hours: self.day_night_cycle.get_hour(),
+            day: 1,
+            weather: self.weather_system.get_state().description().to_string(),
+            weather_intensity: self.weather_system.get_state().intensity,
+            discovered_locations: vec![],
+            completed_missions: vec![],
+            active_missions: vec![],
+            reputation: std::collections::HashMap::new(),
+        };
+        
+        // Создаем данные сохранения
+        let save_data = SaveData {
+            metadata,
+            player: player_data,
+            world_state,
+            vehicles: vec![],
+        };
+        
+        // Сохраняем через SaveSystem
+        self.save_system.save_game(0, &save_data)
+            .map_err(|e| format!("Failed to save game: {}", e))?;
+        
+        eprintln!("DEBUG: Game saved successfully");
         Ok(())
     }
 }

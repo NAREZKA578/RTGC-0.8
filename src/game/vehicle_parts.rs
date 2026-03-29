@@ -457,13 +457,82 @@ impl VehiclePartsSystem {
                 }
             }
         }
-        
+
         // Check frame integrity
         if self.frame_integrity < 10.0 {
             return false;
         }
-        
+
         true
+    }
+
+    /// Проблема 15: Deform mesh based on part damage
+    /// Возвращает смещения вершин для визуальной деформации
+    pub fn deform_mesh(&self, impact_point: &str, damage_amount: f32) -> Vec<(usize, nalgebra::Vector3<f32>)> {
+        let mut deformations = Vec::new();
+        
+        // Определяем зону повреждения
+        let affected_vertices = self.get_affected_vertices(impact_point);
+        
+        // Применяем деформацию к вершинам
+        for (vertex_idx, base_offset) in &affected_vertices {
+            // Сила деформации зависит от повреждения
+            let deform_strength = damage_amount / 100.0;
+            
+            // Направление деформации (внутрь меша)
+            let deform_direction = match impact_point {
+                "front" => nalgebra::Vector3::new(0.0, 0.0, -1.0),
+                "rear" => nalgebra::Vector3::new(0.0, 0.0, 1.0),
+                "left" => nalgebra::Vector3::new(-1.0, 0.0, 0.0),
+                "right" => nalgebra::Vector3::new(1.0, 0.0, 0.0),
+                "top" => nalgebra::Vector3::new(0.0, -1.0, 0.0),
+                "bottom" => nalgebra::Vector3::new(0.0, 1.0, 0.0),
+                _ => nalgebra::Vector3::new(0.0, 0.0, 0.0),
+            };
+            
+            // Добавляем случайность для реалистичности
+            let random_factor = ((*vertex_idx % 10) as f32 / 10.0).sin().abs();
+            let offset = deform_direction * deform_strength * (0.5 + random_factor * 0.5);
+            
+            deformations.push((*vertex_idx, offset));
+        }
+        
+        deformations
+    }
+
+    /// Get vertices affected by damage at specific point
+    fn get_affected_vertices(&self, impact_point: &str) -> Vec<(usize, nalgebra::Vector3<f32>)> {
+        // Упрощённая реализация - в реальном проекте использовать UV координаты
+        match impact_point {
+            "front" => vec![
+                (0, nalgebra::Vector3::new(0.0, 0.0, 0.0)),
+                (1, nalgebra::Vector3::new(0.1, 0.0, 0.0)),
+                (2, nalgebra::Vector3::new(0.0, 0.1, 0.0)),
+                (3, nalgebra::Vector3::new(0.0, 0.0, 0.1)),
+            ],
+            "rear" => vec![
+                (4, nalgebra::Vector3::new(0.0, 0.0, 0.0)),
+                (5, nalgebra::Vector3::new(-0.1, 0.0, 0.0)),
+            ],
+            "left" => vec![
+                (6, nalgebra::Vector3::new(0.0, 0.0, 0.0)),
+                (7, nalgebra::Vector3::new(0.0, 0.1, 0.0)),
+            ],
+            "right" => vec![
+                (8, nalgebra::Vector3::new(0.0, 0.0, 0.0)),
+                (9, nalgebra::Vector3::new(0.0, 0.0, 0.1)),
+            ],
+            _ => vec![],
+        }
+    }
+
+    /// Apply mesh deformation to render command
+    pub fn apply_to_render_command(&self, command: &mut crate::graphics::renderer::RenderCommand, impact_point: &str, damage: f32) {
+        let deformations = self.deform_mesh(impact_point, damage);
+        
+        // В реальной реализации применить деформацию к мешу
+        // Здесь заглушка для демонстрации интеграции
+        eprintln!("DEBUG: Applying {} deformations to mesh", deformations.len());
     }
 
     /// Get total repair cost for all damaged parts

@@ -209,6 +209,76 @@ impl MainMenu {
             },
         }
     }
+
+    /// Render UI elements directly through renderer
+    pub fn render_ui(&self, renderer: &mut crate::graphics::renderer::Renderer) {
+        let w = renderer.width as f32;
+        let h = renderer.height as f32;
+        
+        match self.state {
+            MenuState::MainMenu => {
+                // Центральная панель
+                unsafe {
+                    renderer.draw_rect(w/2.0 - 150.0, h/2.0 - 120.0, 300.0, 240.0, [0.1, 0.1, 0.15, 0.9]);
+                }
+
+                let button_width = 240.0;
+                let button_height = 40.0;
+                let center_x = w / 2.0;
+                let mouse_x = renderer.mouse_x;
+                let mouse_y = renderer.mouse_y;
+
+                // Функция для проверки hover
+                let is_hovered = |mouse_x: f32, mouse_y: f32, y: f32| -> bool {
+                    mouse_x >= center_x - button_width / 2.0
+                        && mouse_x <= center_x + button_width / 2.0
+                        && mouse_y >= y && mouse_y <= y + button_height
+                };
+
+                // Пункты меню с hover-эффектами
+                let buttons = [
+                    (MenuButton::NewGame, "НОВАЯ ИГРА", h/2.0 - 80.0, 
+                     [0.0, 0.8, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]),
+                    (MenuButton::Continue, "ПРОДОЛЖИТЬ", h/2.0 - 30.0,
+                     [0.0, 0.3, 0.8, 1.0], [0.0, 0.5, 1.0, 1.0]),
+                    (MenuButton::Options, "НАСТРОЙКИ", h/2.0 + 20.0,
+                     [0.5, 0.5, 0.5, 1.0], [0.7, 0.7, 0.7, 1.0]),
+                    (MenuButton::Exit, "ВЫХОД", h/2.0 + 70.0,
+                     [0.8, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0]),
+                ];
+
+                for (btn, text, y, color_normal, color_hover) in buttons.iter() {
+                    let hovered = is_hovered(mouse_x, mouse_y, *y);
+                    let color = if hovered { *color_hover } else { *color_normal };
+                    
+                    unsafe {
+                        renderer.draw_rect(w/2.0 - button_width/2.0, *y, button_width, button_height, color);
+                        renderer.draw_text(text, w/2.0 - 60.0, *y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+                    }
+                }
+            }
+            MenuState::CharacterCreation => {
+                // Character creation UI handled separately
+                if let Some(cc) = &self.character_creation {
+                    cc.render_ui(renderer);
+                }
+            }
+            MenuState::Loading => {
+                // Loading screen
+                unsafe {
+                    renderer.draw_rect(0.0, 0.0, w, h, [0.0, 0.0, 0.0, 1.0]);
+                    renderer.draw_text("ЗАГРУЗКА...", w/2.0 - 80.0, h/2.0, 1.5, [1.0, 1.0, 1.0, 1.0]);
+                }
+            }
+            MenuState::Paused => {
+                // Pause menu
+                unsafe {
+                    renderer.draw_rect(w/2.0 - 150.0, h/2.0 - 100.0, 300.0, 200.0, [0.1, 0.1, 0.15, 0.95]);
+                    renderer.draw_text("ПАУЗА", w/2.0 - 40.0, h/2.0 - 60.0, 1.2, [1.0, 1.0, 1.0, 1.0]);
+                }
+            }
+        }
+    }
 }
 
 /// Actions to perform based on menu interaction
