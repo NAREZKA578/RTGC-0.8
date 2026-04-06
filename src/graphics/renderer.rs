@@ -1916,6 +1916,74 @@ impl Renderer {
             self.current_city_index -= 1;
         }
     }
+
+    /// Главный метод рендеринга — вызывается каждый кадр из Engine
+    pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe {
+            // 1. Очищаем экран красивым цветом (не тёмно-синий)
+            self.gl.clear_color(0.4, 0.6, 0.9, 1.0); // дневное небо
+            self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+
+            // 2. Рендерим небо (gradient quad) — теперь будет видно небо!
+            if self.menu_state == MenuState::InGame || self.menu_state == MenuState::Paused {
+                self.render_sky()?;
+            } else {
+                // Для меню — просто тёмный градиент
+                self.render_sky()?; // можно потом заменить на отдельный меню-бэкграунд
+            }
+
+            // 3. Рендерим 3D-сцену (пока заглушка — UAZ и техника)
+            if self.menu_state == MenuState::InGame {
+                // TODO: сюда позже добавим terrain + vehicles из render_queue
+                // Пока просто отрисовываем тестовую модель, если она загружена
+                if !self.models.is_empty() {
+                    self.render_model("uaz_patriot")?; // заменить на реальное имя модели
+                }
+            }
+
+            // 4. Рендерим HUD (компас, скорость, мини-карта и т.д.)
+            if self.menu_state == MenuState::InGame || self.menu_state == MenuState::Paused {
+                self.render_hud()?;
+            }
+
+            // 5. Рендерим главное меню
+            if self.menu_state == MenuState::MainMenu {
+                self.render_main_menu()?;
+            }
+
+            // 6. Debug overlay (если включён F3)
+            // (будет добавлено позже)
+
+            // 7. Выполняем все команды из render_queue
+            self.flush()?;
+        }
+
+        Ok(())
+    }
+
+    fn render_main_menu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe {
+            self.gl.disable(glow::DEPTH_TEST);
+            let w = self.width as f32;
+            let h = self.height as f32;
+
+            // Фон меню (тёмный)
+            self.draw_rect(0.0, 0.0, w, h, [0.05, 0.05, 0.12, 1.0]);
+
+            // Заголовок
+            self.draw_text("RTGC 0.8", w/2.0 - 140.0, 120.0, 4.0, [1.0, 0.8, 0.0, 1.0]);
+
+            // Кнопки (будут работать после кликов)
+            self.draw_rect(w/2.0 - 120.0, h/2.0 - 80.0, 240.0, 50.0, [0.2, 0.2, 0.25, 0.95]);
+            self.draw_text("НОВАЯ ИГРА", w/2.0 - 90.0, h/2.0 - 65.0, 1.8, [1.0, 1.0, 1.0, 1.0]);
+
+            self.draw_rect(w/2.0 - 120.0, h/2.0 - 20.0, 240.0, 50.0, [0.2, 0.2, 0.25, 0.95]);
+            self.draw_text("ПРОДОЛЖИТЬ", w/2.0 - 95.0, h/2.0 - 5.0, 1.8, [1.0, 1.0, 1.0, 1.0]);
+
+            self.gl.enable(glow::DEPTH_TEST);
+        }
+        Ok(())
+    }
 }
 
 // Implement RendererTrait for Renderer
