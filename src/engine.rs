@@ -349,15 +349,10 @@ impl Engine {
     }
 
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // DEBUG: Отладка рендеринга
-        eprintln!("DEBUG [engine]: Engine::render() - game_state={:?}", self.game_state);
-        
         let _profile = profiler::ProfileScope::new("Engine::render");
 
         // Рендеринг через Renderer
         if let Some(ref mut renderer) = self.renderer {
-            eprintln!("DEBUG [engine]: Renderer exists, updating menu_state");
-            
             // Обновление позиции мыши для UI
             renderer.mouse_x = self.mouse_x;
             renderer.mouse_y = self.mouse_y;
@@ -370,26 +365,13 @@ impl Engine {
 
             // Обновление menu_state в renderer на основе game_state
             renderer.menu_state = match self.game_state {
-                GameState::MainMenu => {
-                    eprintln!("DEBUG [engine]: Setting MenuState::MainMenu");
-                    MenuState::MainMenu
-                },
-                GameState::Loading => {
-                    eprintln!("DEBUG [engine]: Setting MenuState::Loading");
-                    MenuState::Loading
-                },
-                GameState::Playing => {
-                    eprintln!("DEBUG [engine]: Setting MenuState::InGame");
-                    MenuState::InGame
-                },
-                GameState::Paused => {
-                    eprintln!("DEBUG [engine]: Setting MenuState::Paused");
-                    MenuState::Paused
-                },
+                GameState::MainMenu => MenuState::MainMenu,
+                GameState::Loading => MenuState::Loading,
+                GameState::Playing => MenuState::InGame,
+                GameState::Paused => MenuState::Paused,
             };
 
             // Вызов рендера (Renderer сам очищает экран и рисует всё)
-            eprintln!("DEBUG [engine]: Calling renderer.render()");
             renderer.render()?;
             
             // Flush render queue to execute all commands
@@ -830,6 +812,25 @@ impl Engine {
         // По умолчанию создаем вертолет
         self.helicopter = Some(crate::physics::Helicopter::new(spawn_pos));
 
+        // Добавляем простую коробку-машину для теста 3D-сцены
+        if let Some(ref mut renderer) = self.renderer {
+            // Создаём простую коробку-машину (пока вместо glTF)
+            let _ = renderer.create_vehicle_box_mesh(nalgebra::Vector3::new(2.5, 1.8, 5.5));
+            
+            // Ставим машину на сцену
+            renderer.set_vehicle_transform(
+                nalgebra::Vector3::new(0.0, 2.0, -10.0),
+                nalgebra::UnitQuaternion::from_axis_angle(&nalgebra::Vector3::y_axis(), 0.0)
+            );
+
+            // Включаем HUD
+            renderer.set_hud_data(crate::ui::hud::VehicleHudData {
+                speed_kmh: 45.0,
+                engine_rpm: 2200.0,
+                ..Default::default()
+            });
+        }
+
         // Альтернативно можно создать наземное транспортное средство
         // self.vehicle = Some(Vehicle::new(spawn_pos));
         // self.vehicle_chassis_id = Some(self.vehicle.as_ref().unwrap().chassis_body_id);
@@ -953,7 +954,12 @@ impl ApplicationHandler for Engine {
                 if let Some(ref gl) = ctx.gl {
                     match Renderer::new(gl.clone()) {
                         Ok(renderer) => {
-                            self.renderer = Some(renderer);
+                            // Настраиваем размеры и состояние меню
+                            let mut r = renderer;
+                            r.width = 1280;
+                            r.height = 720;
+                            r.menu_state = MenuState::MainMenu;
+                            self.renderer = Some(r);
                             eprintln!("DEBUG: Renderer initialized successfully");
                         }
                         Err(e) => {
