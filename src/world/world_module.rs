@@ -26,7 +26,7 @@ pub struct OpenWorld {
     /// Currently loaded chunks
     loaded_chunks: HashMap<ChunkId, Arc<Chunk>>,
     /// Terrain generator for procedural generation
-    generator: TerrainGenerator,
+    pub generator: TerrainGenerator,
     /// World streaming system for async loading
     streamer: WorldStreamer,
     /// LOD management system

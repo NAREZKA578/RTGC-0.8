@@ -267,6 +267,8 @@ pub struct Renderer {
     pub texture_streaming: TextureStreamingSystem,
     // Render queue for command-based rendering
     render_queue: RenderQueue,
+    // Asset loader for loading meshes and textures
+    pub asset_loader: crate::assets::loader::AssetLoader,
     // Terrain & Vehicle rendering
     terrain_mesh: Option<Mesh>,
     vehicle_box_mesh: Option<Mesh>,
@@ -468,6 +470,8 @@ impl Renderer {
             menu_state: MenuState::Loading,
             lod_manager: LodManager::new(),
             texture_streaming: TextureStreamingSystem::new(128, 10.0, 5),
+            // Asset loader for loading meshes and textures
+            asset_loader: crate::assets::loader::AssetLoader::new(),
             // Terrain & vehicle mesh placeholders (initialized on demand)
             terrain_mesh: None,
             vehicle_box_mesh: None,
@@ -507,7 +511,7 @@ impl Renderer {
             render_queue: RenderQueue::new(),
             // Debug renderer and particle system
             debug_renderer: DebugRenderer::new(),
-            particle_system: ParticleSystem::new(),
+            particle_system: ParticleSystem::new(1000),
             debug_mode: false,
         })
     }
@@ -1885,6 +1889,15 @@ impl Renderer {
     }
     
     pub fn load_model(&mut self, name: String, model: Model) {
+        self.models.insert(name, model);
+    }
+    
+    /// Load a model from a Mesh (for OBJ files loaded via AssetLoader)
+    pub fn load_mesh_as_model(&mut self, name: String, mesh: Mesh) {
+        let model = Model {
+            meshes: vec![mesh],
+            textures: vec![],
+        };
         self.models.insert(name, model);
     }
 

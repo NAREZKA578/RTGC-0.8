@@ -3,11 +3,13 @@
 
 use std::path::Path;
 use std::fs;
+use std::io::Cursor;
 use serde::{Deserialize, Serialize};
 use nalgebra::{Vector3, UnitQuaternion};
 use crate::physics::{PhysicsWorld, RigidBody};
 use crate::physics::vehicle::{VehicleConfig, WheelState};
 use crate::assets::AssetLoader;
+use crate::renderer::Model;
 
 /// Метаданные транспортного средства
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +196,207 @@ impl VehicleLoader {
             .map_err(|e| VehicleLoadError::ParseError(e.to_string()))?;
         
         Ok(def)
+    }
+
+    /// Загрузить GLTF/GLB модель транспорта
+    pub fn load_gltf(path: &str) -> Result<Model, String> {
+        use crate::renderer::{Vertex, IndexBuffer, VertexBuffer};
+        use std::path::PathBuf;
+
+        let full_path = PathBuf::from(path);
+        
+        // Проверка существования файла
+        if !full_path.exists() {
+            // Если файл не найден, пробуем альтернативные пути
+            let alt_paths = [
+                format!("assets/models/{}", path),
+                format!("assets/vehicles/{}", path),
+                path.to_string(),
+            ];
+            
+            let found_path = alt_paths.iter()
+                .find(|p| PathBuf::from(p).exists())
+                .ok_or_else(|| format!("GLTF file not found: {} (tried: {})", path, alt_paths.join(", ")))?;
+            
+            return Self::load_gltf_from_path(found_path);
+        }
+        
+        Self::load_gltf_from_path(path)
+    }
+
+    /// Загрузить GLTF/GLB из указанного пути
+    fn load_gltf_from_path(path: &str) -> Result<Model, String> {
+        use gltf::buffer::Data;
+        use std::collections::HashMap;
+
+        let file = fs::File::open(path)
+            .map_err(|e| format!("Failed to open GLTF file {}: {}", path, e))?;
+        
+        let is_glb = path.ends_with(".glb") || path.ends_with(".GLB");
+        
+        let (gltf, buffers, _images) = if is_glb {
+            // Загрузка бинарного GLB
+            let mut buffer_data = Vec::new();
+            std::io::Read::read_to_end(&mut (file as std::fs::File), &mut buffer_data)
+                .map_err(|e| format!("Failed to read GLB: {}", e))?;
+            
+            let gltf = gltf::Gltf::from_slice(&buffer_data)
+                .map_err(|e| format!("Failed to parse GLB: {}", e))?;
+            
+            // Извлекаем буферы из GLB
+            let buffers: Vec<Vec<u8>> = gltf
+                .buffers()
+                .map(|b| {
+                    gltf::buffer::Data::view(&b, &buffer_data)
+                        .map(|v| v.to_vec())
+                        .unwrap_or_default()
+                })
+                .collect();
+            
+            (gltf, buffers, Vec::new())
+        } else {
+            // Загрузка текстового GLTF + BIN файлы
+            let document = gltf::Document::from_reader(file)
+                .map_err(|e| format!("Failed to parse GLTF: {}", e))?;
+            
+            let base_path = PathBuf::from(path).parent()
+                .ok_or("Invalid path")?.to_path_buf();
+            
+            let mut buffers = Vec::new();
+            for buffer in document.buffers() {
+                match buffer.source() {
+                    Some(uri) => {
+                        let buffer_path = base_path.join(uri);
+                        let data = fs::read(&buffer_path)
+                            .map_err(|e| format!("Failed to read buffer {}: {}", uri, e))?;
+                        buffers.push(data);
+                    }
+                    None => buffers.push(Vec::new()),
+                }
+            }
+            
+            (document, buffers, Vec::new())
+        };
+
+        // Создаём меши из узлов GLTF
+        let mut vertices: Vec<Vertex> = Vec::new();
+        let mut indices: Vec<u32> = Vec::new();
+        let mut index_offset: u32 = 0;
+
+        for mesh in gltf.meshes() {
+            for primitive in mesh.primitives() {
+                // Читаем позиции вершин
+                if let Some(reader) = primitive.read_positions() {
+                    for pos in reader {
+                        vertices.push(Vertex {
+                            position: pos,
+                            normal: [0.0, 1.0, 0.0], // Дефолтная нормаль
+                            texcoord: [0.0, 0.0],
+                            color: [1.0, 1.0, 1.0],
+                        });
+                    }
+                }
+
+                // Читаем нормали если есть
+                if let Some(reader) = primitive.read_normals() {
+                    let normals: Vec<[f32; 3]> = reader.collect();
+                    for (i, normal) in normals.iter().enumerate() {
+                        if i < vertices.len() {
+                            vertices[i].normal = *normal;
+                        }
+                    }
+                }
+
+                // Читаем индексы
+                if let Some(reader) = primitive.read_indices() {
+                    match reader {
+                        gltf::accessor::ReadIndices::U16(iter) => {
+                            for idx in iter {
+                                indices.push(index_offset + idx as u32);
+                            }
+                        }
+                        gltf::accessor::ReadIndices::U32(iter) => {
+                            for idx in iter {
+                                indices.push(index_offset + idx);
+                            }
+                        }
+                        gltf::accessor::ReadIndices::U8(iter) => {
+                            for idx in iter {
+                                indices.push(index_offset + idx as u32);
+                            }
+                        }
+                    }
+                }
+
+                index_offset = vertices.len() as u32;
+            }
+        }
+
+        // Если вершины не найдены, создаём простую коробку как заглушку
+        if vertices.is_empty() {
+            tracing::warn!("No vertices found in GLTF {}, using box placeholder", path);
+            let size = Vector3::new(1.0, 1.0, 2.0);
+            vertices = Self::create_box_mesh(size);
+            indices = vec![
+                0, 1, 2, 0, 2, 3, // Front
+                4, 5, 6, 4, 6, 7, // Back
+                8, 9, 10, 8, 10, 11, // Top
+                12, 13, 14, 12, 14, 15, // Bottom
+                16, 17, 18, 16, 18, 19, // Left
+                20, 21, 22, 20, 22, 23, // Right
+            ];
+        }
+
+        // Создаём буферы
+        let vertex_buffer = VertexBuffer::new(vertices);
+        let index_buffer = IndexBuffer::new(&indices);
+
+        Ok(Model {
+            vertex_buffer,
+            index_buffer,
+            index_count: indices.len() as u32,
+            transform: nalgebra::Matrix4::identity(),
+        })
+    }
+
+    /// Создать простую коробку-меш
+    fn create_box_mesh(size: Vector3<f32>) -> Vec<crate::renderer::Vertex> {
+        let hx = size.x / 2.0;
+        let hy = size.y / 2.0;
+        let hz = size.z / 2.0;
+
+        vec![
+            // Front face
+            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            // Back face
+            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            // Top face
+            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 1.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 1.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 1.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 1.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            // Bottom face
+            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, -1.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, -1.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, -1.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, -1.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            // Left face
+            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [-1.0, 0.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [-1.0, 0.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [-1.0, 0.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [-1.0, 0.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            // Right face
+            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [1.0, 0.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [1.0, 0.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, hy, hz], normal: [1.0, 0.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [1.0, 0.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+        ]
     }
     
     /// Список всех доступных транспортных средств
