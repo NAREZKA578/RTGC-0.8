@@ -9,6 +9,8 @@ use nalgebra::{Vector3, Matrix4, UnitQuaternion};
 use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Texture};
 use crate::graphics::lod_system::{LodManager, LodObject};
 use crate::graphics::texture_streaming::TextureStreamingSystem;
+use crate::graphics::debug_renderer::DebugRenderer;
+use crate::graphics::particles::ParticleSystem;
 use tracing::warn;
 
 /// Renderer trait for backend abstraction
@@ -302,6 +304,12 @@ pub struct Renderer {
     // Граф-3: Minimap texture
     minimap_texture: Option<Texture>,
     minimap_size: u32,
+    // Debug renderer for debug lines
+    debug_renderer: DebugRenderer,
+    // Particle system
+    particle_system: ParticleSystem,
+    // Debug mode flag
+    debug_mode: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -377,8 +385,8 @@ impl Renderer {
         let ui_fragment_src = std::fs::read_to_string(shader_path.join("ui.frag"))
             .map_err(|e| format!("Failed to load ui.frag: {}", e))?;
         let ui_shader = match Shader::new(&gl, &ui_vertex_src, &ui_fragment_src) {
-            Ok(s) => { eprintln!("DEBUG: UI shader loaded successfully"); Some(s) },
-            Err(e) => { eprintln!("DEBUG: UI shader failed: {}", e); None }
+            Ok(s) => Some(s),
+            Err(e) => { warn!("UI shader failed: {}", e); None }
         };
 
         // Исп-2: Создать простой шейдер для неба
@@ -497,6 +505,10 @@ impl Renderer {
             mouse_y: 0.0,
             // Render queue
             render_queue: RenderQueue::new(),
+            // Debug renderer and particle system
+            debug_renderer: DebugRenderer::new(),
+            particle_system: ParticleSystem::new(),
+            debug_mode: false,
         })
     }
     
@@ -1004,16 +1016,10 @@ impl Renderer {
     }
     
     fn render_main_menu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // DEBUG: Отладка рендеринга главного меню
-        eprintln!("DEBUG [renderer]: Rendering MAIN MENU at {}x{}", self.width, self.height);
-        eprintln!("DEBUG [renderer]: mouse_x={}, mouse_y={}", self.mouse_x, self.mouse_y);
-
         unsafe {
             self.gl.disable(glow::DEPTH_TEST);
             self.gl.clear_color(0.05, 0.05, 0.1, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
-
-            eprintln!("DEBUG [renderer]: Screen cleared, drawing buttons");
 
             // Включаем blending для прозрачности UI элементов
             self.gl.enable(glow::BLEND);
@@ -1023,7 +1029,6 @@ impl Renderer {
             let h = self.height as f32;
 
             // Центральная панель
-            eprintln!("DEBUG [renderer]: Drawing central panel at ({}, {})", w/2.0 - 150.0, h/2.0 - 120.0);
             self.draw_rect(w/2.0 - 150.0, h/2.0 - 120.0, 300.0, 240.0, [0.1, 0.1, 0.15, 0.9]);
 
             // Получаем позицию мыши для hover-эффектов
@@ -1051,7 +1056,6 @@ impl Renderer {
             } else {
                 [0.0, 0.8, 0.0, 1.0] // ЯРКО-ЗЕЛЁНЫЙ без прозрачности
             };
-            eprintln!("DEBUG [renderer]: NEW GAME button: mouse=({:.1}, {:.1}), y={:.1}, hover={}, color={:?}", mouse_x, mouse_y, new_game_y, new_game_hover, new_game_color);
             self.draw_rect(w/2.0 - 120.0, new_game_y, 240.0, 40.0, new_game_color);
             self.draw_text("НОВАЯ ИГРА", w/2.0 - 60.0, new_game_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
 
@@ -1087,9 +1091,6 @@ impl Renderer {
             };
             self.draw_rect(w/2.0 - 120.0, exit_y, 240.0, 40.0, exit_color);
             self.draw_text("ВЫХОД", w/2.0 - 35.0, exit_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
-
-            eprintln!("DEBUG [renderer]: Main menu rendered with 4 buttons (hover: new={}, cont={}, set={}, exit={})",
-                new_game_hover, continue_hover, settings_hover, exit_hover);
             
             // Отключаем blending после рендеринга UI
             self.gl.disable(glow::BLEND);
@@ -1189,6 +1190,12 @@ impl Renderer {
         
         // Обновляем цвета неба после рендера
         self.update_sky_colors(self.sky_color_top, self.sky_color_horizon);
+
+        // === SPRINT 5: Texture streaming update ===
+        self.texture_streaming.update_camera_position(nalgebra::Vector2::new(
+            self.camera.position.x,
+            self.camera.position.z,
+        ));
 
         // Get visible objects from LOD system
         let camera_pos = self.camera.position;
@@ -1348,6 +1355,16 @@ impl Renderer {
             }
         }
         
+        // === SPRINT 5: Render debug lines and particles ===
+        if self.debug_mode {
+            let view_proj = self.camera.projection_matrix() * self.camera.view_matrix();
+            self.debug_renderer.flush_to_gl(&self.gl, view_proj);
+        }
+        
+        // Render particles
+        let view_proj = self.camera.projection_matrix() * self.camera.view_matrix();
+        self.particle_system.render(&self.gl, view_proj);
+        
         // === SPRINT 2: Render HUD ===
         // HUD рисуется после основной сцены, без depth test
         self.render_hud()?;
@@ -1362,9 +1379,6 @@ impl Renderer {
     
     /// Ввод-2: Оверлей паузы
     fn render_pause_overlay(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // DEBUG: Отладка рендеринга меню паузы
-        eprintln!("DEBUG [renderer]: Rendering PAUSE OVERLAY");
-        
         unsafe {
             self.gl.disable(glow::DEPTH_TEST);
 
@@ -1392,7 +1406,6 @@ impl Renderer {
             self.draw_rect(w/2.0 - 120.0, menu_y, 240.0, 40.0, [0.6, 0.2, 0.2, 0.8]);
             self.draw_text("В МЕНЮ", w/2.0 - 40.0, menu_y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
 
-            eprintln!("DEBUG [renderer]: Pause overlay rendered with 3 buttons");
             self.gl.enable(glow::DEPTH_TEST);
         }
         Ok(())
@@ -1611,14 +1624,7 @@ impl Renderer {
     /// Draw a 2D rectangle (simple quad) with proper VAO/VBO implementation
     pub unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
         // Use UI shader if available, otherwise fall back to main shader
-        let shader_name = if self.ui_shader.is_some() { "UI" } else { "MAIN" };
         let shader = self.ui_shader.as_ref().unwrap_or(&self.shader);
-
-        // DEBUG: Логирование первого вызова draw_rect
-        static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-            eprintln!("DEBUG [draw_rect]: Using {} shader, color={:?}", shader_name, color);
-        }
 
         // Create orthographic projection for UI with Y=0 at top (screen coordinates)
         let ortho = Matrix4::new_orthographic(
