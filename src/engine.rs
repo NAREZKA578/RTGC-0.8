@@ -361,6 +361,9 @@ impl Engine {
                 GameState::Paused => MenuState::Paused,
             };
 
+            // Передача debug_mode в renderer
+            renderer.debug_mode = self.debug_mode;
+
             // Один вызов render() — всё внутри, включая flush
             renderer.render()?;
             
@@ -756,16 +759,30 @@ impl Engine {
         // По умолчанию создаем вертолет
         self.helicopter = Some(crate::physics::Helicopter::new(spawn_pos));
 
-        // Добавляем простую коробку-машину для теста 3D-сцены
+        // Добавляем машину UAZ Patriot из GLB файла
         if let Some(ref mut renderer) = self.renderer {
-            // Создаём простую коробку-машину (пока вместо glTF)
-            let _ = renderer.create_vehicle_box_mesh(nalgebra::Vector3::new(2.5, 1.8, 5.5));
-            
-            // Ставим машину на сцену
-            renderer.set_vehicle_transform(
-                nalgebra::Vector3::new(0.0, 2.0, -10.0),
-                nalgebra::UnitQuaternion::from_axis_angle(&nalgebra::Vector3::y_axis(), 0.0)
-            );
+            // Загружаем модель UAZ Patriot из assets/models/uaz_patriot.glb
+            match crate::assets::VehicleLoader::load_gltf("assets/models/uaz_patriot.glb") {
+                Ok(model) => {
+                    renderer.load_model("uaz_patriot".to_string(), model);
+                    
+                    // Ставим машину на сцену
+                    renderer.set_vehicle_transform(
+                        nalgebra::Vector3::new(0.0, 2.0, -15.0),
+                        nalgebra::UnitQuaternion::from_axis_angle(&nalgebra::Vector3::y_axis(), 0.0)
+                    );
+                    tracing::info!("Loaded UAZ Patriot from GLB");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load UAZ Patriot GLB: {}, using fallback box", e);
+                    // Fallback: создаём простую коробку если загрузка не удалась
+                    let _ = renderer.create_vehicle_box_mesh(nalgebra::Vector3::new(2.5, 1.8, 5.5));
+                    renderer.set_vehicle_transform(
+                        nalgebra::Vector3::new(0.0, 2.0, -10.0),
+                        nalgebra::UnitQuaternion::from_axis_angle(&nalgebra::Vector3::y_axis(), 0.0)
+                    );
+                }
+            }
 
             // Включаем HUD
             renderer.set_hud_data(crate::ui::hud::VehicleHudData {
@@ -904,13 +921,33 @@ impl ApplicationHandler for Engine {
                             r.height = 720;
                             r.menu_state = MenuState::MainMenu;
                             
-                            // Добавляем LOD объекты для тестирования
+                            // Добавляем LOD объекты для тестирования (лес, дороги, здания)
                             use crate::graphics::lod_system::{LodObject, LodModel};
+                            
+                            // Тестовый объект - машина игрока
                             let lod_obj = LodObject::new(
                                 nalgebra::Vector3::new(0.0, 2.0, -10.0),
                                 5.0, // radius
                             );
                             r.lod_manager.add_object(lod_obj);
+                            
+                            // Лес вдалеке
+                            for i in 0..5 {
+                                let lod_obj = LodObject::new(
+                                    nalgebra::Vector3::new(-50.0 + i as f32 * 20.0, 0.0, -50.0),
+                                    10.0,
+                                );
+                                r.lod_manager.add_object(lod_obj);
+                            }
+                            
+                            // Дорога/здания
+                            for i in 0..3 {
+                                let lod_obj = LodObject::new(
+                                    nalgebra::Vector3::new(50.0, 0.0, -30.0 + i as f32 * 30.0),
+                                    15.0,
+                                );
+                                r.lod_manager.add_object(lod_obj);
+                            }
                             
                             self.renderer = Some(r);
                             tracing::info!("Renderer initialized successfully");
