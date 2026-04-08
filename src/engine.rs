@@ -106,25 +106,18 @@ pub struct Engine {
 
 impl Engine {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        // DEBUG: Инициализация движка
-        eprintln!("DEBUG [engine]: Engine::new() - Starting initialization");
-        
         // Загрузка конфигурации
         let config = Config::load("config.json").unwrap_or_else(|_| {
             tracing::warn!("Не удалось загрузить config.json, используются настройки по умолчанию");
             Config::default()
         });
 
-        eprintln!("DEBUG [engine]: Config loaded, creating graphics context");
-        
         // GlContext будет создан в resumed() через init_window
         let graphics_context = GlContext::new_placeholder();
         let input_manager = InputManager::new();
-        eprintln!("DEBUG [engine]: Input manager created");
-        
+
         let audio_system = AudioSystem::new()?;
-        eprintln!("DEBUG [engine]: Audio system created");
-        
+
         let ecs_manager = EcsManager::new();
         let physics_world = physics::PhysicsWorld::new();
         let hud_manager = HudManager::new();
@@ -213,9 +206,6 @@ impl Engine {
     }
 
     pub fn update(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
-        // DEBUG: Отладка обновления движка
-        eprintln!("DEBUG [engine]: Engine::update() - dt={:.4}", dt);
-
         profiler::begin_frame();
         let _profile = profiler::ProfileScope::new("Engine::update");
 
@@ -270,7 +260,7 @@ impl Engine {
                 // Пробуем взаимодействовать
                 let result = self.interaction_system.try_interact(&mut player_state);
                 if result.success {
-                    eprintln!("Interaction: {}", result.message);
+                    tracing::info!("Interaction: {}", result.message);
                 }
             }
         }
@@ -351,7 +341,7 @@ impl Engine {
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let _profile = profiler::ProfileScope::new("Engine::render");
 
-        // Рендеринг через Renderer
+        // Рендеринг через Renderer — один вызов, всё внутри
         if let Some(ref mut renderer) = self.renderer {
             // Обновление позиции мыши для UI
             renderer.mouse_x = self.mouse_x;
@@ -371,78 +361,10 @@ impl Engine {
                 GameState::Paused => MenuState::Paused,
             };
 
-            // Вызов рендера (Renderer сам очищает экран и рисует всё)
+            // Один вызов render() — всё внутри, включая flush
             renderer.render()?;
             
-            // Flush render queue to execute all commands
-            renderer.flush()?;
-            
-            // Рендеринг частиц (поверх сцены)
-            if let Some(ref gl) = self.graphics_context.gl {
-                if self.game_state == GameState::Playing {
-                    // Получение матриц вида и проекции
-                    let view_matrix = Matrix4::identity();
-                    let proj_matrix = self.graphics_context.get_projection_matrix(std::f32::consts::PI / 4.0, 0.1, 1000.0);
-                    let view_proj = proj_matrix * view_matrix;
-                    
-                    self.particle_system.render(gl, view_proj);
-                    
-                    // Отладочный рендеринг
-                    if self.debug_mode {
-                        self.debug_renderer.flush_to_gl(gl, view_proj);
-                    }
-                }
-            }
-            
-            // Рендеринг HUD
-            if self.game_state == GameState::Playing || self.game_state == GameState::Paused {
-                // Обновление данных HUD
-                if let Some(ref vehicle) = self.vehicle {
-                    let hud_data = crate::ui::hud::VehicleHudData {
-                        speed_kmh: vehicle.speed() * 3.6,
-                        engine_rpm: 2000.0,
-                        fuel_level: self.vehicle_fuel / 100.0,
-                        vehicle_health: self.vehicle_health / 100.0,
-                        heading_degrees: self.compass_heading,
-                        ..Default::default()
-                    };
-                    self.hud_manager.update(hud_data, 0.016);
-                } else if let Some(ref heli) = self.helicopter {
-                    let hud_data = crate::ui::hud::VehicleHudData {
-                        speed_kmh: heli.velocity.norm() * 3.6,
-                        altitude_m: heli.position.y,
-                        heading_degrees: self.compass_heading,
-                        ..Default::default()
-                    };
-                    self.hud_manager.update(hud_data, 0.016);
-                }
-
-                // Отрисовка HUD через Renderer
-                self.hud_manager.render(renderer);
-            }
-
-            // Проблема 6: Рендеринг debug menu (если включен debug_mode)
-            if self.debug_mode {
-                // Render debug menu overlay
-                let mut y = 10.0;
-                let x = 10.0;
-                let line_height = 18.0;
-                
-                // Helper closure for drawing text
-                let draw_text = &mut |text: &str, x: f32, y: f32, color: [f32; 4]| {
-                    // Submit UI command to render queue
-                    renderer.submit(crate::graphics::renderer::RenderCommand::UIElement {
-                        rect: [x, y, text.len() as f32 * 10.0, line_height],
-                        texture: None,
-                        color,
-                        depth: 1.0,
-                    });
-                };
-                
-                self.debug_menu.render(draw_text);
-            }
-
-            // Завершение кадра через Renderer (swap buffers)
+            // Завершение кадра (swap buffers)
             self.graphics_context.end_frame()?;
         } else if let Some(ref gl) = self.graphics_context.gl {
             // Фолбэк рендеринг если Renderer не инициализирован
@@ -478,7 +400,7 @@ impl Engine {
                                 KeyCode::Enter => {
                                     // Начать новую игру
                                     self.main_menu.start_new_game();
-                                    eprintln!("DEBUG: Starting new game - character creation");
+                                    tracing::info!("Starting new game - character creation");
                                 }
                                 KeyCode::Escape => {
                                     // Выход из игры
@@ -593,9 +515,6 @@ impl Engine {
 
     /// Обработка кликов по кнопкам главного меню
     fn handle_menu_click(&mut self) {
-        // DEBUG: Обработка клика по кнопкам меню
-        eprintln!("DEBUG [engine]: handle_menu_click() - mouse=({}, {})", self.mouse_x, self.mouse_y);
-        
         let w = self.renderer.as_ref().map(|r| r.width as f32).unwrap_or(800.0);
         let h = self.renderer.as_ref().map(|r| r.height as f32).unwrap_or(600.0);
         
@@ -617,7 +536,7 @@ impl Engine {
         // "Новая игра"
         if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
             && click_y >= new_game_y && click_y <= new_game_y + button_height {
-            eprintln!("DEBUG [engine]: Menu click - NEW GAME");
+            tracing::info!("Menu click - NEW GAME");
             self.game_state = GameState::Playing;
             if let Some(ref mut renderer) = self.renderer {
                 renderer.menu_state = crate::graphics::renderer::MenuState::InGame;
@@ -628,13 +547,13 @@ impl Engine {
         // "Продолжить"
         if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
             && click_y >= continue_y && click_y <= continue_y + button_height {
-            eprintln!("DEBUG [engine]: Menu click - CONTINUE");
+            tracing::info!("Menu click - CONTINUE");
             // Загрузка последнего сохранения
             if let Some(save_path) = self.main_menu.continue_game() {
-                eprintln!("DEBUG [engine]: Loading save from: {:?}", save_path);
+                tracing::info!("Loading save from: {:?}", save_path);
                 self.game_state = GameState::Playing;
             } else {
-                eprintln!("DEBUG [engine]: No saves found");
+                tracing::warn!("No saves found");
             }
             return;
         }
@@ -642,14 +561,14 @@ impl Engine {
         // "Настройки"
         if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
             && click_y >= settings_y && click_y <= settings_y + button_height {
-            eprintln!("DEBUG [engine]: Menu click - SETTINGS (not implemented)");
+            tracing::info!("Menu click - SETTINGS (not implemented)");
             return;
         }
         
         // "Выход"
         if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
             && click_y >= exit_y && click_y <= exit_y + button_height {
-            eprintln!("DEBUG [engine]: Menu click - EXIT");
+            tracing::info!("Menu click - EXIT");
             // Сигнал на выход из приложения
             std::process::exit(0);
         }
@@ -676,16 +595,12 @@ impl Engine {
         if mouse_x >= center_x - button_width / 2.0 && mouse_x <= center_x + button_width / 2.0 {
             if mouse_y >= new_game_y && mouse_y <= new_game_y + button_height {
                 self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame);
-                eprintln!("DEBUG [engine]: Menu hover - Новая игра");
             } else if mouse_y >= continue_y && mouse_y <= continue_y + button_height {
                 self.main_menu.hover_button(crate::game::main_menu::MenuButton::Continue);
-                eprintln!("DEBUG [engine]: Menu hover - Продолжить");
             } else if mouse_y >= settings_y && mouse_y <= settings_y + button_height {
                 self.main_menu.hover_button(crate::game::main_menu::MenuButton::Options);
-                eprintln!("DEBUG [engine]: Menu hover - Настройки");
             } else if mouse_y >= exit_y && mouse_y <= exit_y + button_height {
                 self.main_menu.hover_button(crate::game::main_menu::MenuButton::Exit);
-                eprintln!("DEBUG [engine]: Menu hover - Выход");
             } else {
                 self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
             }
@@ -696,8 +611,6 @@ impl Engine {
 
     /// Инициализация менеджера загрузки - регистрация всех ресурсов
     fn init_loading_manager(&mut self) {
-        eprintln!("DEBUG [engine]: Initializing loading manager...");
-        
         // Регистрация мешей
         self.loading_manager.add_resource("meshes/truck.obj", ResourceType::Mesh, 1);
         self.loading_manager.add_resource("meshes/terrain.obj", ResourceType::Mesh, 2);
@@ -721,8 +634,8 @@ impl Engine {
         
         // Проверка файлов
         let progress = self.loading_manager.check_all_files();
-        eprintln!(
-            "DEBUG [engine]: Loading manager initialized: {}/{} files found",
+        tracing::info!(
+            "Loading manager initialized: {}/{} files found",
             progress.loaded_resources + progress.failed_resources,
             progress.total_resources
         );
@@ -730,7 +643,7 @@ impl Engine {
 
     /// Загрузить все зарегистрированные ресурсы
     pub fn load_all_resources(&mut self) -> LoadingProgress {
-        eprintln!("DEBUG [engine]: Loading all resources...");
+        tracing::info!("Loading all resources...");
         self.loading_manager.load_all()
     }
 
@@ -749,9 +662,40 @@ impl Engine {
         self.init_loading_manager();
         
         // Загрузка начальных данных игры
-        // Генерация мира
+        // Генерация мира и создание terrain mesh для рендерера
         if let Some(ref mut open_world) = self.open_world {
-            // open_world.generate_terrain(); // TODO: method not found
+            // Генерируем первый чанк вокруг спавна
+            let spawn_chunk_id = crate::world::ChunkId::new(0, 0);
+            let chunk_data = open_world.generator.generate_chunk(spawn_chunk_id);
+            
+            // Создаём меш территории из данных чанка
+            let (vertices, indices) = crate::world::chunk::generate_chunk_mesh(&chunk_data, 0);
+            
+            // Конвертируем TerrainVertex в формат для Mesh (flat array)
+            let mut vertex_data: Vec<f32> = Vec::with_capacity(vertices.len() * 18);
+            for v in &vertices {
+                vertex_data.extend_from_slice(&v.position);
+                vertex_data.extend_from_slice(&v.normal);
+                vertex_data.extend_from_slice(&v.tangent);
+                vertex_data.extend_from_slice(&v.bitangent);
+                vertex_data.extend_from_slice(&v.texcoord);
+                vertex_data.extend_from_slice(&v.splat_weights);
+            }
+            
+            // Создаём меш и передаём в рендерер
+            if let Some(ref mut renderer) = self.renderer {
+                if let Ok(gl) = &self.graphics_context.gl {
+                    match crate::graphics::mesh::Mesh::new_terrain(gl, &vertex_data, &indices) {
+                        Ok(terrain_mesh) => {
+                            renderer.set_terrain_mesh(terrain_mesh);
+                            tracing::info!("Terrain mesh created with {} vertices", vertices.len());
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create terrain mesh: {}", e);
+                        }
+                    }
+                }
+            }
         }
 
         // Создание поселений
@@ -936,7 +880,7 @@ impl Engine {
         self.save_system.save_game(0, &save_data)
             .map_err(|e| format!("Failed to save game: {}", e))?;
         
-        eprintln!("DEBUG: Game saved successfully");
+        tracing::info!("Game saved successfully");
         Ok(())
     }
 }
@@ -959,11 +903,20 @@ impl ApplicationHandler for Engine {
                             r.width = 1280;
                             r.height = 720;
                             r.menu_state = MenuState::MainMenu;
+                            
+                            // Добавляем LOD объекты для тестирования
+                            use crate::graphics::lod_system::{LodObject, LodModel};
+                            let lod_obj = LodObject::new(
+                                nalgebra::Vector3::new(0.0, 2.0, -10.0),
+                                5.0, // radius
+                            );
+                            r.lod_manager.add_object(lod_obj);
+                            
                             self.renderer = Some(r);
-                            eprintln!("DEBUG: Renderer initialized successfully");
+                            tracing::info!("Renderer initialized successfully");
                         }
                         Err(e) => {
-                            eprintln!("ERROR: Failed to initialize Renderer: {}", e);
+                            tracing::error!("Failed to initialize Renderer: {}", e);
                         }
                     }
                 }
@@ -972,13 +925,11 @@ impl ApplicationHandler for Engine {
 
                 // Загрузка начальных данных
                 if let Err(e) = self.load_initial_data() {
-                    eprintln!("ERROR: Failed to load initial data: {}", e);
-                    eprintln!("ERROR: Backtrace: {:?}", std::backtrace::Backtrace::force_capture());
+                    tracing::error!("Failed to load initial data: {}", e);
                 }
             }
             Err(e) => {
-                eprintln!("ERROR: Failed to initialize window: {}", e);
-                eprintln!("ERROR: Backtrace: {:?}", std::backtrace::Backtrace::force_capture());
+                tracing::error!("Failed to initialize window: {}", e);
                 event_loop.exit();
             }
         }
@@ -1038,7 +989,7 @@ impl ApplicationHandler for Engine {
             }
             WinitWindowEvent::Resized(new_size) => {
                 if let Err(e) = self.graphics_context.resize(new_size.width, new_size.height) {
-                    eprintln!("ERROR: Resize error: {}", e);
+                    tracing::error!("Resize error: {}", e);
                 }
             }
             _ => {}
@@ -1051,15 +1002,13 @@ impl ApplicationHandler for Engine {
         self.last_frame_time = now;
 
         if let Err(e) = self.update(dt) {
-            eprintln!("ERROR: Update error: {}", e);
-            eprintln!("ERROR: Backtrace: {:?}", std::backtrace::Backtrace::force_capture());
+            tracing::error!("Update error: {}", e);
         }
 
         // Пропускаем рендеринг если контекст ещё не инициализирован
         if self.graphics_context.is_initialized() {
             if let Err(e) = self.render() {
-                eprintln!("ERROR: Render error: {}", e);
-                eprintln!("ERROR: Backtrace: {:?}", std::backtrace::Backtrace::force_capture());
+                tracing::error!("Render error: {}", e);
             }
         }
     }
