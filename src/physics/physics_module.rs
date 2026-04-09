@@ -9,6 +9,7 @@ pub use super::async_physics::AsyncPhysicsEngine;
 pub use super::advanced_vehicle::{AdvancedVehicle, AdvancedWheel, AdvancedSuspension};
 pub use super::helicopter::{Helicopter, HelicopterState, MainRotor, TailRotor, TurboshaftEngine, HelicopterControls};
 pub use super::vehicle::{Vehicle, VehicleConfig, VehicleControls, WheelState};
+pub use super::constraints::{SpringConstraint, RaycastSuspension};
 use tracing;
 
 // Collision layers (B4)
@@ -1868,6 +1869,72 @@ impl PhysicsWorld {
         
         // Solve spring constraints (B1)
         self.solve_spring_constraints(self.time_step / self.sub_steps as f32);
+    }
+
+    /// Solve spring constraints for vehicle suspension
+    /// Uses Hooke's law with damping: F = -k*x - c*v
+    fn solve_spring_constraints(&mut self, dt: f32) {
+        // Clone constraints to avoid borrow checker issues
+        let constraints: Vec<_> = self.spring_constraints.iter().cloned().collect();
+        
+        for constraint in constraints {
+            if let (Some(body_a), Some(body_b)) = (
+                self.rigid_bodies.get_by_index(constraint.body_a).cloned(),
+                self.rigid_bodies.get_by_index(constraint.body_b).cloned(),
+            ) {
+                // Transform local anchors to world space
+                let world_anchor_a = body_a.position + body_a.rotation * constraint.anchor_a;
+                let world_anchor_b = body_b.position + body_b.rotation * constraint.anchor_b;
+                
+                // Calculate spring axis and current length
+                let delta = world_anchor_b - world_anchor_a;
+                let current_length = delta.norm();
+                
+                if current_length < 0.001 {
+                    continue; // Avoid division by zero
+                }
+                
+                let axis = delta / current_length;
+                
+                // Calculate spring force (Hooke's law)
+                let displacement = current_length - constraint.rest_length;
+                let spring_force = -constraint.stiffness * displacement;
+                
+                // Calculate relative velocity along spring axis
+                let vel_a = body_a.velocity + body_a.angular_velocity.cross(&(world_anchor_a - body_a.position));
+                let vel_b = body_b.velocity + body_b.angular_velocity.cross(&(world_anchor_b - body_b.position));
+                let relative_vel = (vel_b - vel_a).dot(&axis);
+                
+                // Add damping force
+                let damping_force = -constraint.damping * relative_vel;
+                
+                // Total force magnitude
+                let mut force_magnitude = spring_force + damping_force;
+                
+                // Clamp force to maximum
+                force_magnitude = force_magnitude.clamp(-constraint.max_force, constraint.max_force);
+                
+                // Apply forces to bodies
+                let force = axis * force_magnitude;
+                
+                if let Some(body_a_mut) = self.rigid_bodies.get_by_index_mut(constraint.body_a) {
+                    if !body_a_mut.is_static {
+                        body_a_mut.apply_force(force);
+                        // Apply torque due to off-center force
+                        let torque = (world_anchor_a - body_a_mut.position).cross(&force);
+                        body_a_mut.apply_torque(torque);
+                    }
+                }
+                
+                if let Some(body_b_mut) = self.rigid_bodies.get_by_index_mut(constraint.body_b) {
+                    if !body_b_mut.is_static {
+                        body_b_mut.apply_force(-force); // Newton's third law
+                        let torque = (world_anchor_b - body_b_mut.position).cross(&-force);
+                        body_b_mut.apply_torque(torque);
+                    }
+                }
+            }
+        }
     }
 
     // Raycasting methods

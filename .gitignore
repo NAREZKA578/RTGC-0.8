@@ -1,40 +1,4 @@
 ```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
-*.glb
-
-# Dependencies
-venv/
-.venv/
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
-.vscode/
-.idea/
-
-# Build directories
-build/
-dist/
 target/
-
-# Python cache
-*.pyc
-__pycache__/
-*.pyo
-*.pyd
-
-# Generated files
-*.glb
+**/*.rs.bk
 ```

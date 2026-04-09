@@ -11,7 +11,8 @@ use nalgebra::{Vector3, UnitQuaternion, Matrix3, Quaternion};
 use std::f32::consts::PI;
 
 use super::physics_module::{RigidBody, Ray, RaycastHit, LAYER_WORLD};
-use super::deformable_terrain::DeformableTerrainComponent;
+use super::deformable_terrain::{DeformableTerrainComponent, DeformationType};
+use crate::world::SurfaceType;
 
 /// Типы гусеничной техники
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -436,8 +437,10 @@ impl TrackedVehicle {
         let track_width = self.vehicle_type.track_width() * 2.0;
         let turning_torque = (right_effective - left_effective) * track_width / 2.0;
         
-        // Сопротивление качению
-        let rolling_resistance = self.mass * 9.81 * 0.05; // Коэффициент для гусениц
+        // Сопротивление качению с учётом типа поверхности
+        let surface_type = SurfaceType::Dirt; // TODO: получить из terrain_getter
+        let rolling_resistance_coeff = surface_type.rolling_resistance();
+        let rolling_resistance = self.mass * 9.81 * rolling_resistance_coeff;
         let rolling_force = if self.linear_velocity.norm() > 0.001 {
             -self.linear_velocity.normalize() * rolling_resistance
         } else {
@@ -533,13 +536,13 @@ impl TrackedVehicle {
         );
 
         // Глубина колеи зависит от давления и типа грунта
-        let depth = pressure * 0.0001; // Упрощённая модель
+        let depth_factor = pressure * 0.0001; // Упрощённая модель
 
-        // TODO: реализовать deform в DeformableTerrainComponent
-        // for suspension in &self.suspensions {
-        //     let world_pos = self.position + self.orientation * suspension.local_position;
-        //     terrain.deform(world_pos.x, world_pos.z, depth, 0.3);
-        // }
+        // Применяем деформацию для каждой точки подвески
+        for suspension in &self.suspensions {
+            let world_pos = self.position + self.orientation * suspension.local_position;
+            terrain.apply_deformation(world_pos, DeformationType::Press(depth_factor));
+        }
     }
 
     /// Получить состояние для рендеринга
@@ -564,6 +567,18 @@ impl TrackedVehicle {
             "dirt" | "mud" | "sand" | "snow" | "grass" | 
             "gravel" | "asphalt_bad" | "asphalt_good"
         )
+    }
+    
+    /// Обновление физики с интеграцией в PhysicsWorld
+    pub fn physics_update(
+        &mut self, 
+        dt: f32, 
+        _physics_world: &mut crate::physics::PhysicsWorld,
+        terrain_getter: &dyn Fn(f32, f32) -> f32,
+        deformable_terrain: Option<&mut crate::physics::DeformableTerrainComponent>,
+    ) {
+        // Вызываем основной метод update с terrain
+        self.update(dt, terrain_getter, deformable_terrain);
     }
 }
 
