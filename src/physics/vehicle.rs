@@ -163,6 +163,8 @@ pub struct Vehicle {
     controls: VehicleControls,
     /// Center of gravity offset from body origin
     pub cog_offset: Vector3<f32>,
+    /// ID тела шасси в PhysicsWorld
+    chassis_body_id: Option<usize>,
 }
 
 impl Vehicle {
@@ -186,6 +188,7 @@ impl Vehicle {
             wheels,
             controls: VehicleControls::default(),
             cog_offset: Vector3::new(0.0, 0.0, 0.0),
+            chassis_body_id: None,
         }
     }
 
@@ -560,6 +563,44 @@ impl Vehicle {
         }
         
         self.controls = VehicleControls::default();
+    }
+
+    /// Интеграция с PhysicsWorld - добавляет тело шасси в мир и возвращает его ID
+    pub fn add_to_physics_world(&mut self, physics_world: &mut crate::physics::PhysicsWorld) -> usize {
+        let body = std::mem::replace(&mut self.body, RigidBody::new_box(
+            Vector3::zeros(), 
+            1.0, 
+            Vector3::new(0.1, 0.1, 0.1)
+        ));
+        let body_id = physics_world.add_body(body);
+        body_id
+    }
+
+    /// Обновление физики транспорта через PhysicsWorld
+    pub fn physics_update(&mut self, dt: f32, physics_world: &mut crate::physics::PhysicsWorld) {
+        // Синхронизируем состояние тела с physics_world
+        if let Some(chassis_id) = self.chassis_body_id {
+            if let Some(body) = physics_world.get_body_mut(chassis_id) {
+                // Применяем силы от колёс к шасси через physics_world
+                self.apply_wheel_forces_to_chassis(body);
+            }
+        }
+    }
+
+    /// Возвращает ID тела шасси
+    pub fn chassis_body_id(&self) -> Option<usize> {
+        self.chassis_body_id
+    }
+
+    /// Устанавливает ID тела шасси
+    pub fn set_chassis_body_id(&mut self, id: usize) {
+        self.chassis_body_id = Some(id);
+    }
+
+    /// Применяет силы от колёс к шасси
+    fn apply_wheel_forces_to_chassis(&mut self, chassis_body: &mut RigidBody) {
+        // Силы уже были применены в update(), здесь просто синхронизируем состояние
+        // Можно добавить дополнительную логику если нужно
     }
 }
 

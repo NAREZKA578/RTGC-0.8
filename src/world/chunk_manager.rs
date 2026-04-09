@@ -1,9 +1,10 @@
 //! Chunk Manager for RTGC-0.8
 //! Менеджер жизненного цикла чанков
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use nalgebra::Vector3;
 use crate::world::chunk::Chunk;
+use crate::world::{CHUNK_SIZE, HEIGHTMAP_RESOLUTION, generate_chunk_mesh};
 
 /// Координаты чанка
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -76,9 +77,25 @@ impl ChunkManager {
     }
     
     /// Асинхронная загрузка чанка
-    pub fn load_chunk(&mut self, _coords: ChunkCoords) -> Option<Chunk> {
-        // Заглушка - упрощено для компиляции
-        None
+    pub fn load_chunk(&mut self, coords: ChunkCoords) -> Option<Chunk> {
+        // Генерируем меш чанка
+        let (vertices, indices) = generate_chunk_mesh(
+            coords.x,
+            coords.z,
+            CHUNK_SIZE,
+            HEIGHTMAP_RESOLUTION,
+        );
+        
+        // Создаём чанк
+        let chunk = Chunk::new(
+            coords,
+            CHUNK_SIZE,
+            vertices,
+            indices,
+        );
+        
+        self.chunks.insert(coords, chunk);
+        self.chunks.get(&coords).cloned()
     }
     
     /// Выгрузка чанка
@@ -138,8 +155,6 @@ impl ChunkManager {
         self.render_distance
     }
 }
-
-use std::collections::HashSet;
 
 #[cfg(test)]
 mod tests {

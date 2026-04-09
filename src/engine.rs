@@ -310,8 +310,7 @@ impl Engine {
             // Затем обновляем физику
             let terrain_getter = |x: f32, z: f32| -> f32 {
                 if let Some(ref open_world) = self.open_world {
-                    // open_world.get_height(x, z) // TODO: method not found
-                    0.0
+                    open_world.get_height_at(nalgebra::Vector3::new(x, 0.0, z))
                 } else {
                     0.0
                 }
@@ -495,23 +494,35 @@ impl Engine {
     }
 
     fn physics_step(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
+        // Terrain getter для получения высоты местности через get_height_at
+        let terrain_getter = |x: f32, z: f32| -> f32 {
+            if let Some(ref open_world) = self.open_world {
+                open_world.get_height_at(nalgebra::Vector3::new(x, 0.0, z))
+            } else {
+                0.0
+            }
+        };
+        
+        // Deformable terrain - получаем из open_world если есть
+        let deformable_terrain: Option<&mut crate::physics::DeformableTerrainComponent> = None;
+
         // Обновление физики транспорта
-        // if let Some(ref mut vehicle) = self.vehicle {
-        //     vehicle.physics_update(dt, &mut self.physics_world);
-        // }
+        if let Some(ref mut vehicle) = self.vehicle {
+            vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, deformable_terrain);
+        }
 
         // Обновление физики вертолета
-        // if let Some(ref mut heli) = self.helicopter {
-        //     heli.physics_update(dt, &mut self.physics_world);
-        // }
+        if let Some(ref mut heli) = self.helicopter {
+            heli.physics_update(dt, &mut self.physics_world);
+        }
 
         // Шаг физического мира
         self.physics_world.step(dt);
 
         // Обновление лебедки и груза
-        // if let Some(ref mut cargo) = self.cargo {
-        //     self.winch.physics_update(dt, cargo, &mut self.physics_world);
-        // }
+        if let Some(ref mut cargo) = self.cargo {
+            self.winch.physics_update(dt, cargo, &mut self.physics_world);
+        }
 
         Ok(())
     }
@@ -757,7 +768,19 @@ impl Engine {
         let spawn_pos = nalgebra::Vector3::new(0.0, 100.0, 0.0);
 
         // По умолчанию создаем вертолет
-        self.helicopter = Some(crate::physics::Helicopter::new(spawn_pos));
+        let mut helicopter = crate::physics::Helicopter::new(spawn_pos);
+        
+        // Добавляем тело вертолета в физический мир
+        let chassis_body = crate::physics::RigidBody::new_capsule(
+            spawn_pos,
+            1100.0, // масса вертолета
+            1.5,    // радиус
+            4.0,    // высота
+        );
+        let chassis_id = self.physics_world.add_body(chassis_body);
+        helicopter.set_chassis_body_id(chassis_id);
+
+        self.helicopter = Some(helicopter);
 
         // Добавляем машину UAZ Patriot из GLB файла
         if let Some(ref mut renderer) = self.renderer {

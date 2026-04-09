@@ -678,6 +678,9 @@ pub struct Helicopter {
     pub cargo_position: Option<Vector3<f32>>, // Позиция груза (если есть)
     pub cargo_velocity: Vector3<f32>,       // Скорость груза
     pub is_cargo_attached: bool,            // Прицеплен ли груз
+    
+    // Интеграция с PhysicsWorld
+    pub chassis_body_id: Option<usize>,     // ID тела в физическом мире
 }
 
 impl Helicopter {
@@ -724,7 +727,18 @@ impl Helicopter {
             cargo_position: None,
             cargo_velocity: Vector3::zeros(),
             is_cargo_attached: false,
+            chassis_body_id: None,
         }
+    }
+    
+    /// Установить ID тела в физическом мире
+    pub fn set_chassis_body_id(&mut self, id: usize) {
+        self.chassis_body_id = Some(id);
+    }
+    
+    /// Получить ID тела из физического мира
+    pub fn get_chassis_body_id(&self) -> Option<usize> {
+        self.chassis_body_id
     }
     
     /// Создание вертолёта с конфигурацией и внешней подвеской
@@ -782,6 +796,7 @@ impl Helicopter {
             cargo_position: None,
             cargo_velocity: Vector3::zeros(),
             is_cargo_attached: false,
+            chassis_body_id: None,
         }
     }
 
@@ -811,6 +826,13 @@ impl Helicopter {
         
         // 7. Обновляем хвостовой ротор
         self.tail_rotor.current_rpm = self.main_rotor.current_rpm * 3.0; // Передаточное отношение
+    }
+    
+    /// Обновление физики с интеграцией в PhysicsWorld
+    pub fn physics_update(&mut self, dt: f32, _physics_world: &mut crate::physics::PhysicsWorld) {
+        // Вертолёт использует свою собственную физику, независимую от PhysicsWorld
+        // Но мы можем использовать мир для проверки столкновений или других query
+        self.update(dt);
     }
     
     /// Обновление физики груза на внешней подвеске

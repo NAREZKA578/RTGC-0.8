@@ -84,8 +84,8 @@ impl OpenWorld {
     }
 
     /// Get terrain height at given coordinates
-    pub fn get_height(&self, _x: f32, _z: f32) -> f32 {
-        0.0 // заглушка
+    pub fn get_height(&self, x: f32, z: f32) -> f32 {
+        self.get_height_at(Vector3::new(x, 0.0, z))
     }
 
     /// Generate terrain data
