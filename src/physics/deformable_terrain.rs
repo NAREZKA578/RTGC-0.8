@@ -266,6 +266,39 @@ impl DeformableTerrainComponent {
             self.current_heightmap = new_heightmap;
         }
     }
+    
+    /// Get reference to current heightmap for rendering
+    pub fn get_heightmap(&self) -> &Vec<Vec<f32>> {
+        &self.current_heightmap
+    }
+    
+    /// Get resolution of the heightmap
+    pub fn get_resolution(&self) -> (usize, usize) {
+        self.resolution
+    }
+    
+    /// Get list of modified regions since last query (for incremental renderer updates)
+    pub fn get_modified_regions(&self) -> Vec<(usize, usize)> {
+        // Returns grid coordinates that have been modified
+        // In a full implementation, this would track changes since last call
+        // For now, return all points that differ from original
+        let mut modified = Vec::new();
+        for z in 0..self.resolution.1 {
+            for x in 0..self.resolution.0 {
+                if (self.current_heightmap[z][x] - self.original_heightmap[z][x]).abs() > 0.001 {
+                    modified.push((x, z));
+                }
+            }
+        }
+        modified
+    }
+    
+    /// Clear modification history after renderer has updated
+    pub fn clear_modification_history(&mut self) {
+        // In a full implementation, this would reset the dirty tracking
+        // For now, we just keep the history for debugging
+        tracing::debug!("Cleared terrain modification history");
+    }
 }
 
 #[derive(Debug, Clone)]

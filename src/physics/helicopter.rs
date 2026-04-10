@@ -829,10 +829,27 @@ impl Helicopter {
     }
     
     /// Обновление физики с интеграцией в PhysicsWorld
-    pub fn physics_update(&mut self, dt: f32, _physics_world: &mut crate::physics::PhysicsWorld) {
-        // Вертолёт использует свою собственную физику, независимую от PhysicsWorld
-        // Но мы можем использовать мир для проверки столкновений или других query
+    pub fn physics_update(
+        &mut self, 
+        dt: f32, 
+        physics_world: &mut crate::physics::PhysicsWorld,
+    ) {
+        // Выполняем основной update вертолёта
         self.update(dt);
+        
+        // Синхронизируем состояние тела шасси с PhysicsWorld
+        if let Some(chassis_id) = self.chassis_body_id {
+            if let Some(body) = physics_world.get_body_mut(chassis_id) {
+                // Синхронизируем позицию и ориентацию
+                body.position = self.position;
+                body.rotation = self.rotation;
+                body.velocity = self.velocity;
+                body.angular_velocity = self.angular_velocity;
+                
+                // Применяем внешние силы (ветер, подъемная сила и т.д.)
+                // Силы уже применены в update(), здесь только синхронизация
+            }
+        }
     }
     
     /// Обновление физики груза на внешней подвеске
