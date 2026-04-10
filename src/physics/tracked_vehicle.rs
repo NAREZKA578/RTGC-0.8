@@ -599,10 +599,10 @@ impl TrackedVehicle {
         // Синхронизируем состояние тела шасси с PhysicsWorld если есть
         if let Some(chassis_id) = self.chassis_body_id {
             if let Some(body) = physics_world.get_body_mut(chassis_id) {
-                // Синхронизируем позицию и ориентацию
+                // Синхронизируем позицию и ориентацию (используем orientation для единообразия)
                 body.position = self.position;
-                body.rotation = self.rotation;
-                body.velocity = self.velocity;
+                body.rotation = self.orientation;
+                body.velocity = self.linear_velocity;
                 body.angular_velocity = self.angular_velocity;
             }
         }
