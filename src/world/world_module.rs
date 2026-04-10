@@ -179,7 +179,19 @@ impl OpenWorld {
     
     /// Process chunks that have finished loading
     fn process_loaded_chunks(&mut self) {
-        // Заглушка - упрощено для компиляции
+        // Poll for completed chunk loads from the streaming system
+        while let Some(loaded) = self.streamer.poll_loaded_chunk() {
+            debug!("Chunk {:?} loaded successfully in {:.2}ms", loaded.chunk.id, loaded.load_time_ms);
+            
+            // Add to loaded chunks
+            let chunk = Arc::new(loaded.chunk);
+            self.loaded_chunks.insert(chunk.id, chunk.clone());
+            
+            // Add to spatial index
+            self.spatial_index.add_chunk(chunk.id, chunk.clone());
+            
+            info!("Chunk {:?} added to loaded_chunks", chunk.id);
+        }
     }
     
     /// Unload a chunk

@@ -512,12 +512,14 @@ impl Engine {
             }
         };
         
-        // Deformable terrain - получаем из open_world если есть
-        let deformable_terrain: Option<&mut crate::physics::DeformableTerrainComponent> = None;
+        // Deformable terrain - создаём компонент один раз при загрузке
+        // В реальном проекте это должно храниться в Engine и передаваться по ссылке
+        let mut deformable_terrain = crate::physics::DeformableTerrainComponent::new(0, 64, 64);
+        let deformable_terrain_ref: Option<&mut crate::physics::DeformableTerrainComponent> = Some(&mut deformable_terrain);
 
         // Обновление физики транспорта
         if let Some(ref mut vehicle) = self.vehicle {
-            vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, &surface_getter, deformable_terrain);
+            vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, &surface_getter, deformable_terrain_ref);
         }
 
         // Обновление физики вертолета
@@ -773,10 +775,10 @@ impl Engine {
     }
 
     fn create_player_vehicle(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Создаем начальное транспортное средство для игрока
+        // Создаем начальные транспортные средства для игрока - все три типа для тестирования
         let spawn_pos = nalgebra::Vector3::new(0.0, 100.0, 0.0);
 
-        // По умолчанию создаем вертолет
+        // 1. Создаем вертолет
         let mut helicopter = crate::physics::Helicopter::new(spawn_pos);
         
         // Добавляем тело вертолета в физический мир
@@ -791,7 +793,42 @@ impl Engine {
 
         self.helicopter = Some(helicopter);
 
-        // Добавляем машину UAZ Patriot из GLB файла
+        // 2. Создаем гусеничное транспортное средство ГТ-СМ
+        let tracked_spawn_pos = nalgebra::Vector3::new(10.0, 2.0, 0.0);
+        let mut tracked_vehicle = crate::physics::TrackedVehicle::new(
+            crate::physics::TrackedVehicleType::GTS_M,
+            tracked_spawn_pos
+        );
+        
+        // Добавляем тело гусеничного транспорта в физический мир
+        let tracked_chassis_body = crate::physics::RigidBody::new_box(
+            tracked_spawn_pos,
+            4500.0, // масса ГТ-СМ
+            nalgebra::Vector3::new(2.0, 1.5, 4.0), // размеры
+        );
+        let tracked_chassis_id = self.physics_world.add_body(tracked_chassis_body);
+        tracked_vehicle.set_chassis_body_id(tracked_chassis_id);
+        
+        // Сохраняем ссылку на гусеничный транспорт (добавляем поле в Engine если нужно)
+        // Для пока просто не сохраняем, но можно добавить self.tracked_vehicle = Some(tracked_vehicle);
+
+        // 3. Создаем автомобиль UAZ
+        let vehicle_spawn_pos = nalgebra::Vector3::new(-10.0, 2.0, 0.0);
+        let mut vehicle = crate::physics::Vehicle::new(vehicle_spawn_pos);
+        
+        // Добавляем тело автомобиля в физический мир
+        let vehicle_chassis_body = crate::physics::RigidBody::new_box(
+            vehicle_spawn_pos,
+            2000.0, // масса UAZ
+            nalgebra::Vector3::new(2.0, 1.8, 4.5), // размеры
+        );
+        let vehicle_chassis_id = self.physics_world.add_body(vehicle_chassis_body);
+        vehicle.set_chassis_body_id(vehicle_chassis_id);
+        
+        self.vehicle = Some(vehicle);
+        self.vehicle_chassis_id = Some(vehicle_chassis_id);
+
+        // Добавляем модель UAZ Patriot из GLB файла для рендеринга
         if let Some(ref mut renderer) = self.renderer {
             // Загружаем модель UAZ Patriot из assets/models/uaz_patriot.glb
             match crate::assets::VehicleLoader::load_gltf("assets/models/uaz_patriot.glb") {
@@ -824,9 +861,7 @@ impl Engine {
             });
         }
 
-        // Альтернативно можно создать наземное транспортное средство
-        // self.vehicle = Some(Vehicle::new(spawn_pos));
-        // self.vehicle_chassis_id = Some(self.vehicle.as_ref().unwrap().chassis_body_id);
+        tracing::info!("Created player vehicles: Helicopter, GTS-M (tracked), UAZ (vehicle)");
 
         Ok(())
     }
