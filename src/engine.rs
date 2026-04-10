@@ -503,12 +503,21 @@ impl Engine {
             }
         };
         
+        // Surface getter для получения типа поверхности
+        let surface_getter = |x: f32, z: f32| -> crate::world::SurfaceType {
+            if let Some(ref open_world) = self.open_world {
+                open_world.get_surface_type_at(x, z)
+            } else {
+                crate::world::SurfaceType::Grass
+            }
+        };
+        
         // Deformable terrain - получаем из open_world если есть
         let deformable_terrain: Option<&mut crate::physics::DeformableTerrainComponent> = None;
 
         // Обновление физики транспорта
         if let Some(ref mut vehicle) = self.vehicle {
-            vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, deformable_terrain);
+            vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, &surface_getter, deformable_terrain);
         }
 
         // Обновление физики вертолета

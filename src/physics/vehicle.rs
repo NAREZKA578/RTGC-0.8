@@ -577,12 +577,47 @@ impl Vehicle {
     }
 
     /// Обновление физики транспорта через PhysicsWorld
-    pub fn physics_update(&mut self, dt: f32, physics_world: &mut crate::physics::PhysicsWorld) {
+    pub fn physics_update(
+        &mut self, 
+        dt: f32, 
+        physics_world: &mut crate::physics::PhysicsWorld,
+        terrain_getter: &dyn Fn(f32, f32) -> f32,
+        surface_getter: &dyn Fn(f32, f32) -> crate::world::SurfaceType,
+        deformable_terrain: Option<&mut crate::physics::DeformableTerrainComponent>,
+    ) {
+        // Сначала выполняем основной update с terrain и surface
+        self.update(dt, terrain_getter, surface_getter);
+        
+        // Деформация ландшафта колёсами
+        if let Some(terrain) = deformable_terrain {
+            self.deform_terrain(terrain);
+        }
+        
         // Синхронизируем состояние тела с physics_world
         if let Some(chassis_id) = self.chassis_body_id {
             if let Some(body) = physics_world.get_body_mut(chassis_id) {
                 // Применяем силы от колёс к шасси через physics_world
                 self.apply_wheel_forces_to_chassis(body);
+                
+                // Синхронизируем позицию и ориентацию
+                body.position = self.body.position;
+                body.rotation = self.body.rotation;
+                body.velocity = self.body.velocity;
+                body.angular_velocity = self.body.angular_velocity;
+            }
+        }
+    }
+    
+    /// Деформация ландшафта под колёсами
+    fn deform_terrain(&self, terrain: &mut crate::physics::DeformableTerrainComponent) {
+        use crate::physics::DeformationType;
+        
+        for wheel in &self.wheels {
+            if wheel.is_in_contact {
+                let wheel_pos = self.body.position + self.body.rotation * wheel.local_position;
+                // Давление колеса создаёт небольшую вмятину
+                let pressure = self.config.mass / self.wheels.len() as f32 * 9.81 * 0.001;
+                terrain.apply_deformation(wheel_pos, DeformationType::Press(pressure));
             }
         }
     }

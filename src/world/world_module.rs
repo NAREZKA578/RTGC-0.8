@@ -212,6 +212,12 @@ impl OpenWorld {
         }
     }
     
+    /// Get surface type at world coordinates (x, z)
+    pub fn get_surface_type_at(&self, x: f32, z: f32) -> crate::world::SurfaceType {
+        let height = self.get_height(x, z);
+        self.generator.get_surface_type(x, z, height)
+    }
+    
     /// Raycast against the terrain
     pub fn raycast_terrain(&self, origin: Point3<f32>, direction: Vector3<f32>, max_distance: f32) -> Option<(Point3<f32>, Vector3<f32>)> {
         // Simple raycast implementation - can be optimized with spatial index

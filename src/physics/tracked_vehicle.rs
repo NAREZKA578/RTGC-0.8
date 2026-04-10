@@ -305,6 +305,8 @@ pub struct TrackedVehicle {
     pub engine_temperature: f32,
     /// Работает ли двигатель
     pub engine_running: bool,
+    /// ID тела шасси в PhysicsWorld
+    pub chassis_body_id: Option<usize>,
 }
 
 impl TrackedVehicle {
@@ -338,7 +340,18 @@ impl TrackedVehicle {
             fuel_consumption: 0.0,
             engine_temperature: 20.0,
             engine_running: false,
+            chassis_body_id: None,
         }
+    }
+    
+    /// Установить ID тела шасси
+    pub fn set_chassis_body_id(&mut self, id: usize) {
+        self.chassis_body_id = Some(id);
+    }
+    
+    /// Получить ID тела шасси
+    pub fn chassis_body_id(&self) -> Option<usize> {
+        self.chassis_body_id
     }
 
     /// Запустить двигатель
@@ -357,11 +370,12 @@ impl TrackedVehicle {
         self.engine_running = false;
     }
 
-    /// Обновить физику
-    pub fn update(
+    /// Обновить физику с учётом типа поверхности
+    pub fn update_with_surface(
         &mut self,
         dt: f32,
         terrain_getter: &dyn Fn(f32, f32) -> f32,
+        surface_getter: &dyn Fn(f32, f32) -> SurfaceType,
         deformable_terrain: Option<&mut DeformableTerrainComponent>,
     ) {
         if !self.engine_running {
@@ -438,7 +452,8 @@ impl TrackedVehicle {
         let turning_torque = (right_effective - left_effective) * track_width / 2.0;
         
         // Сопротивление качению с учётом типа поверхности
-        let surface_type = SurfaceType::Dirt; // TODO: получить из terrain_getter
+        let surface_pos = (self.position.x, self.position.z);
+        let surface_type = surface_getter(surface_pos.0, surface_pos.1);
         let rolling_resistance_coeff = surface_type.rolling_resistance();
         let rolling_resistance = self.mass * 9.81 * rolling_resistance_coeff;
         let rolling_force = if self.linear_velocity.norm() > 0.001 {
@@ -573,12 +588,24 @@ impl TrackedVehicle {
     pub fn physics_update(
         &mut self, 
         dt: f32, 
-        _physics_world: &mut crate::physics::PhysicsWorld,
+        physics_world: &mut crate::physics::PhysicsWorld,
         terrain_getter: &dyn Fn(f32, f32) -> f32,
+        surface_getter: &dyn Fn(f32, f32) -> crate::world::SurfaceType,
         deformable_terrain: Option<&mut crate::physics::DeformableTerrainComponent>,
     ) {
-        // Вызываем основной метод update с terrain
-        self.update(dt, terrain_getter, deformable_terrain);
+        // Вызываем основной метод update с terrain и surface
+        self.update_with_surface(dt, terrain_getter, surface_getter, deformable_terrain);
+        
+        // Синхронизируем состояние тела шасси с PhysicsWorld если есть
+        if let Some(chassis_id) = self.chassis_body_id {
+            if let Some(body) = physics_world.get_body_mut(chassis_id) {
+                // Синхронизируем позицию и ориентацию
+                body.position = self.position;
+                body.rotation = self.rotation;
+                body.velocity = self.velocity;
+                body.angular_velocity = self.angular_velocity;
+            }
+        }
     }
 }
 
