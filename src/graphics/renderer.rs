@@ -1087,16 +1087,20 @@ impl Renderer {
 
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         unsafe {
-            // SPRINT 5: Clear with sky gradient color (using top color for now)
-            self.gl.clear_color(
-                self.sky_color_top.x,
-                self.sky_color_top.y,
-                self.sky_color_top.z,
-                1.0,
-            );
-            self.gl
-                .clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+            self.gl.clear_color(0.4, 0.6, 0.9, 1.0);           // ваш старый синий горизонт
+            self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
         }
+
+        // Потом ваш существующий код с render_queue и т.д.
+        self.render_queue.submit(RenderCommand::Clear {
+            color: Some([0.4, 0.6, 0.9, 1.0]),
+            depth: true,
+            stencil: false,
+        });
+
+        self.render_queue.flush()?;
 
         // Задача 3: Рендерить небо перед сценой
         if self.menu_state == MenuState::InGame {
