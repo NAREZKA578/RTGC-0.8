@@ -12,6 +12,6 @@ uniform vec4 u_color;
 
 void main() {
     gl_Position = u_projection * vec4(a_position, 0.0, 1.0);
-    v_color = a_color * u_color;
+    v_color = a_color;  // Передаём вершинный цвет напрямую, без умножения
     v_uv = a_uv;
 }

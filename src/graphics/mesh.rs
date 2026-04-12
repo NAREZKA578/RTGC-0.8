@@ -237,6 +237,10 @@ impl Mesh {
     }
 
     pub fn draw(&self, gl: &Context) {
+        // Пропускаем рендеринг для placeholder мешей с нулевым количеством индексов
+        if self.indices_count == 0 {
+            return;
+        }
         unsafe {
             gl.bind_vertex_array(Some(self.vao));
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.ebo));
