@@ -106,6 +106,11 @@ impl<T> ArenaAllocator<T> {
         self.get_mut_unchecked(index)
     }
 
+    /// Gets a mutable reference by index (alias for get_mut_by_index)
+    pub fn get_by_index_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.get_mut_by_index(index)
+    }
+
     /// Checks if an index is valid and allocated
     pub fn is_allocated(&self, index: usize) -> bool {
         if index < self.items.len() {

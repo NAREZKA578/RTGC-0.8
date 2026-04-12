@@ -610,7 +610,7 @@ impl Vehicle {
     
     /// Деформация ландшафта под колёсами
     fn deform_terrain(&self, terrain: &mut crate::physics::DeformableTerrainComponent) {
-        use crate::physics::DeformationType;
+        use crate::physics::deformable_terrain::DeformationType;
         
         for wheel in &self.wheels {
             if wheel.is_in_contact {

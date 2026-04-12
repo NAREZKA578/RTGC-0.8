@@ -273,6 +273,11 @@ impl SpatialIndex {
         self.stats.total_chunks = self.chunks.len();
     }
     
+    /// Add a chunk to the spatial index (alias for insert_chunk)
+    pub fn add_chunk(&mut self, chunk_id: ChunkId, chunk: std::sync::Arc<Chunk>) {
+        self.insert_chunk(chunk);
+    }
+    
     /// Remove a chunk from the spatial index
     pub fn remove_chunk(&mut self, chunk_id: ChunkId) {
         self.chunks.remove(&chunk_id);

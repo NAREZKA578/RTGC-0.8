@@ -311,7 +311,7 @@ pub struct Renderer {
     // Particle system
     particle_system: ParticleSystem,
     // Debug mode flag
-    debug_mode: bool,
+    pub debug_mode: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
