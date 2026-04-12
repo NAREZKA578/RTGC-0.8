@@ -26,7 +26,7 @@ pub use fracture_component::FractureComponent;
 pub use helicopter::{Helicopter, HelicopterConfig, HelicopterControls, HelicopterState};
 pub use vehicle::{Vehicle, VehicleControls};
 pub use advanced_vehicle::AdvancedVehicle;
-pub use deformable_terrain::DeformableTerrainComponent;
+pub use deformable_terrain::{DeformableTerrainComponent, DeformationType};
 pub use constraints::{SpringConstraint, RaycastSuspension};
 pub use tracked_vehicle::{TrackedVehicle, TrackedVehicleType, TrackedControls, TrackedVehicleState};
 pub use crane_arm::{CraneArm, CraneConfig, CraneState};

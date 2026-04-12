@@ -83,6 +83,11 @@ impl Winch {
         // }
     }
 
+    /// Обновить лебёдку (physics_update alias для совместимости)
+    pub fn physics_update(&mut self, dt: f32, _cargo: Option<usize>, physics_world: &mut PhysicsWorld) {
+        self.update(dt, physics_world, &mut physics_world.spring_constraints);
+    }
+
     /// Отцепить трос
     pub fn release(&mut self, _constraints: &mut Vec<SpringConstraint>) {
         self.is_active = false;

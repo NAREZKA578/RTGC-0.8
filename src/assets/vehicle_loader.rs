@@ -9,7 +9,7 @@ use nalgebra::{Vector3, UnitQuaternion};
 use crate::physics::{PhysicsWorld, RigidBody};
 use crate::physics::vehicle::{VehicleConfig, WheelState};
 use crate::assets::AssetLoader;
-use crate::renderer::Model;
+use crate::graphics::renderer::Model;
 
 /// Метаданные транспортного средства
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,7 +200,7 @@ impl VehicleLoader {
 
     /// Загрузить GLTF/GLB модель транспорта
     pub fn load_gltf(path: &str) -> Result<Model, String> {
-        use crate::renderer::{Vertex, IndexBuffer, VertexBuffer};
+        use crate::graphics::renderer::{Vertex, IndexBuffer, VertexBuffer};
         use std::path::PathBuf;
 
         let full_path = PathBuf::from(path);
@@ -291,8 +291,7 @@ impl VehicleLoader {
                         vertices.push(Vertex {
                             position: pos,
                             normal: [0.0, 1.0, 0.0], // Дефолтная нормаль
-                            texcoord: [0.0, 0.0],
-                            color: [1.0, 1.0, 1.0],
+                            tex_coords: [0.0, 0.0],
                         });
                     }
                 }
@@ -310,17 +309,17 @@ impl VehicleLoader {
                 // Читаем индексы
                 if let Some(reader) = primitive.read_indices() {
                     match reader {
-                        gltf::accessor::ReadIndices::U16(iter) => {
+                        gltf::mesh::util::ReadIndices::U16(iter) => {
                             for idx in iter {
                                 indices.push(index_offset + idx as u32);
                             }
                         }
-                        gltf::accessor::ReadIndices::U32(iter) => {
+                        gltf::mesh::util::ReadIndices::U32(iter) => {
                             for idx in iter {
                                 indices.push(index_offset + idx);
                             }
                         }
-                        gltf::accessor::ReadIndices::U8(iter) => {
+                        gltf::mesh::util::ReadIndices::U8(iter) => {
                             for idx in iter {
                                 indices.push(index_offset + idx as u32);
                             }
@@ -360,42 +359,42 @@ impl VehicleLoader {
     }
 
     /// Создать простую коробку-меш
-    fn create_box_mesh(size: Vector3<f32>) -> Vec<crate::renderer::Vertex> {
+    fn create_box_mesh(size: Vector3<f32>) -> Vec<crate::graphics::renderer::Vertex> {
         let hx = size.x / 2.0;
         let hy = size.y / 2.0;
         let hz = size.z / 2.0;
 
         vec![
             // Front face
-            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, 0.0, 1.0], tex_coords: [0.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, 0.0, 1.0], tex_coords: [1.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 0.0, 1.0], tex_coords: [1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 0.0, 1.0], tex_coords: [0.0, 1.0] },
             // Back face
-            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, 0.0, -1.0], tex_coords: [0.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, 0.0, -1.0], tex_coords: [1.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 0.0, -1.0], tex_coords: [1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 0.0, -1.0], tex_coords: [0.0, 1.0] },
             // Top face
-            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 1.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 1.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 1.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 1.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 1.0, 0.0], tex_coords: [0.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 1.0, 0.0], tex_coords: [1.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 1.0, 0.0], tex_coords: [1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 1.0, 0.0], tex_coords: [0.0, 1.0] },
             // Bottom face
-            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, -1.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, -1.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, -1.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, -1.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, -1.0, 0.0], tex_coords: [0.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, -1.0, 0.0], tex_coords: [1.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, -1.0, 0.0], tex_coords: [1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, -1.0, 0.0], tex_coords: [0.0, 1.0] },
             // Left face
-            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [-1.0, 0.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [-1.0, 0.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [-1.0, 0.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [-1.0, 0.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, -hy, hz], normal: [-1.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, hy, hz], normal: [-1.0, 0.0, 0.0], tex_coords: [1.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, hy, -hz], normal: [-1.0, 0.0, 0.0], tex_coords: [1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [-hx, -hy, -hz], normal: [-1.0, 0.0, 0.0], tex_coords: [0.0, 1.0] },
             // Right face
-            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [1.0, 0.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [1.0, 0.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, hz], normal: [1.0, 0.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [1.0, 0.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [hx, -hy, -hz], normal: [1.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [hx, hy, -hz], normal: [1.0, 0.0, 0.0], tex_coords: [1.0, 0.0] },
+            crate::graphics::renderer::Vertex { position: [hx, hy, hz], normal: [1.0, 0.0, 0.0], tex_coords: [1.0, 1.0] },
+            crate::graphics::renderer::Vertex { position: [hx, -hy, hz], normal: [1.0, 0.0, 0.0], tex_coords: [0.0, 1.0] },
         ]
     }
     
