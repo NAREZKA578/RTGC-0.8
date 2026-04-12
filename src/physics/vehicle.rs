@@ -1,8 +1,8 @@
 //! Physics - Vehicle physics simulation
 
-use nalgebra::{Vector3, Quaternion, Matrix3, UnitQuaternion};
 use crate::physics::physics_module::RigidBody;
 use crate::world::SurfaceType;
+use nalgebra::{Matrix3, Quaternion, UnitQuaternion, Vector3};
 
 /// Vehicle configuration
 #[derive(Debug, Clone)]
@@ -141,8 +141,15 @@ impl VehicleControls {
         }
     }
 
-    pub fn new_full(throttle: f32, brake: f32, steering: f32, handbrake: f32,
-                    diff_front: bool, diff_rear: bool, low_range: bool) -> Self {
+    pub fn new_full(
+        throttle: f32,
+        brake: f32,
+        steering: f32,
+        handbrake: f32,
+        diff_front: bool,
+        diff_rear: bool,
+        low_range: bool,
+    ) -> Self {
         Self {
             throttle: throttle.clamp(-1.0, 1.0),
             brake: brake.clamp(0.0, 1.0),
@@ -171,9 +178,9 @@ impl Vehicle {
     /// Creates a new vehicle with the given configuration
     pub fn new(config: VehicleConfig) -> Self {
         let body = RigidBody::new_box(Vector3::zeros(), config.mass, Vector3::new(0.9, 0.3, 2.25));
-        
+
         let mut wheels = Vec::with_capacity(config.wheel_count as usize);
-        
+
         // Set up default 4-wheel configuration
         if config.wheel_count >= 4 {
             wheels.push(WheelState::front_left(&config));
@@ -203,7 +210,12 @@ impl Vehicle {
     }
 
     /// Updates the vehicle physics with surface type information
-    pub fn update(&mut self, dt: f32, ground_height: impl Fn(f32, f32) -> f32, surface_getter: impl Fn(f32, f32) -> SurfaceType) {
+    pub fn update(
+        &mut self,
+        dt: f32,
+        ground_height: impl Fn(f32, f32) -> f32,
+        surface_getter: impl Fn(f32, f32) -> SurfaceType,
+    ) {
         // Apply steering to front wheels
         let target_steering = self.controls.steering * self.config.max_steering_angle;
 
@@ -218,14 +230,14 @@ impl Vehicle {
         for i in 0..wheel_count {
             let wheel_local_pos = self.wheels[i].local_position;
             let wheel_steering = self.wheels[i].steering_angle;
-            
+
             // Calculate wheel world position
             let wheel_world_pos = self.body.position + self.body.rotation * wheel_local_pos;
-            
+
             // Sample ground height and surface type
             let ground_y = ground_height(wheel_world_pos.x, wheel_world_pos.z);
             let surface_type = surface_getter(wheel_world_pos.x, wheel_world_pos.z);
-            
+
             // Update wheel suspension and forces
             self.update_wheel_simple(i, dt, ground_y, surface_type, wheel_world_pos);
         }
@@ -238,7 +250,14 @@ impl Vehicle {
     }
 
     /// Updates a single wheel's physics (simplified version to avoid borrow issues)
-    fn update_wheel_simple(&mut self, wheel_index: usize, dt: f32, ground_y: f32, surface_type: SurfaceType, wheel_world_pos: Vector3<f32>) {
+    fn update_wheel_simple(
+        &mut self,
+        wheel_index: usize,
+        dt: f32,
+        ground_y: f32,
+        surface_type: SurfaceType,
+        wheel_world_pos: Vector3<f32>,
+    ) {
         // Calculate suspension compression
         let wheel_bottom_y = wheel_world_pos.y - self.config.wheel_radius;
         let suspension_deflection = ground_y - wheel_bottom_y;
@@ -252,8 +271,10 @@ impl Vehicle {
 
             if wheel.is_in_contact {
                 wheel.contact_normal = Some(Vector3::new(0.0, 1.0, 0.0));
-                wheel.contact_point = Some(Vector3::new(wheel_world_pos.x, ground_y, wheel_world_pos.z));
-                wheel.suspension_compression = suspension_deflection.clamp(0.0, self.config.max_suspension_travel);
+                wheel.contact_point =
+                    Some(Vector3::new(wheel_world_pos.x, ground_y, wheel_world_pos.z));
+                wheel.suspension_compression =
+                    suspension_deflection.clamp(0.0, self.config.max_suspension_travel);
 
                 // Calculate suspension force
                 let spring_force = wheel.suspension_compression * self.config.suspension_stiffness;
@@ -285,7 +306,14 @@ impl Vehicle {
         // Применяем силы шины после освобождения borrow wheel
         // Исправление: вызов apply_tire_forces_simple вынесен за пределы borrow wheel
         if needs_tire_forces {
-            self.apply_tire_forces_simple(wheel_index, dt, ground_y, surface_type, wheel_world_pos, wheel_angular_vel);
+            self.apply_tire_forces_simple(
+                wheel_index,
+                dt,
+                ground_y,
+                surface_type,
+                wheel_world_pos,
+                wheel_angular_vel,
+            );
         }
 
         // Update wheel rotation - снова заиммуем wheel
@@ -304,45 +332,49 @@ impl Vehicle {
     ) {
         // Get wheel world position
         let wheel_world_pos = self.body.position + self.body.rotation * wheel.local_position;
-        
+
         // Raycast вниз для определения контакта с землёй
         let ray_origin = wheel_world_pos;
         let ray_direction = Vector3::new(0.0, -1.0, 0.0);
-        let ray_length = self.config.wheel_radius + self.config.suspension_rest_length + self.config.max_suspension_travel;
-        
+        let ray_length = self.config.wheel_radius
+            + self.config.suspension_rest_length
+            + self.config.max_suspension_travel;
+
         // Sample ground height at wheel position
         let ground_y = ground_height(wheel_world_pos.x, wheel_world_pos.z);
-        
+
         // Get surface type at wheel position
         let surface_type = surface_getter(wheel_world_pos.x, wheel_world_pos.z);
-        
+
         // Calculate suspension compression
         let wheel_bottom_y = wheel_world_pos.y - self.config.wheel_radius;
         let suspension_deflection = ground_y - wheel_bottom_y;
-        
+
         wheel.is_in_contact = suspension_deflection > 0.0;
-        
+
         if wheel.is_in_contact {
             // Устанавливаем нормаль контакта (вверх, так как земля горизонтальная)
             wheel.contact_normal = Some(Vector3::new(0.0, 1.0, 0.0));
-            wheel.contact_point = Some(Vector3::new(wheel_world_pos.x, ground_y, wheel_world_pos.z));
-            
-            wheel.suspension_compression = suspension_deflection.clamp(0.0, self.config.max_suspension_travel);
-            
+            wheel.contact_point =
+                Some(Vector3::new(wheel_world_pos.x, ground_y, wheel_world_pos.z));
+
+            wheel.suspension_compression =
+                suspension_deflection.clamp(0.0, self.config.max_suspension_travel);
+
             // Calculate suspension force
             let spring_force = wheel.suspension_compression * self.config.suspension_stiffness;
             let damping_force = wheel.suspension_velocity * self.config.suspension_damping;
             let suspension_force = (spring_force + damping_force).max(0.0);
-            
+
             // Apply suspension force to vehicle body
             let force_dir = self.body.rotation * Vector3::new(0.0, 1.0, 0.0);
             let force = force_dir * suspension_force;
-            
+
             self.body.apply_force_at_point(force, wheel_world_pos);
-            
+
             // Calculate tire forces based on slip and surface type
             self.apply_tire_forces(wheel, wheel_index, dt, ground_y, surface_type);
-            
+
             // Update wheel rotation based on vehicle speed
             let linear_speed = self.body.velocity.norm();
             wheel.angular_velocity = linear_speed / self.config.wheel_radius;
@@ -350,13 +382,21 @@ impl Vehicle {
             wheel.suspension_compression = 0.0;
             wheel.suspension_velocity = 0.0;
         }
-        
+
         // Update wheel rotation
         wheel.rotation_angle += wheel.angular_velocity * dt;
     }
 
     /// Applies tire forces based on slip angles and surface type (simplified version)
-    fn apply_tire_forces_simple(&mut self, wheel_index: usize, dt: f32, ground_y: f32, surface_type: SurfaceType, wheel_world_pos: Vector3<f32>, _wheel_angular_vel: f32) {
+    fn apply_tire_forces_simple(
+        &mut self,
+        wheel_index: usize,
+        dt: f32,
+        ground_y: f32,
+        surface_type: SurfaceType,
+        wheel_world_pos: Vector3<f32>,
+        _wheel_angular_vel: f32,
+    ) {
         let wheel_vel = self.body.get_velocity_at_point(wheel_world_pos);
 
         // Get friction coefficients from surface type
@@ -369,10 +409,10 @@ impl Vehicle {
 
         let forward_vel = wheel_vel.dot(&forward);
         let lateral_vel = wheel_vel.dot(&lateral);
-        
+
         // Apply surface friction to forces
         let friction_multiplier = surface_friction;
-        
+
         // Calculate rolling resistance force (opposes motion)
         let speed = wheel_vel.norm();
         let rolling_resistance_force = if speed > 0.01 {
@@ -407,7 +447,7 @@ impl Vehicle {
         };
 
         let braking_force = -self.controls.brake * self.config.brake_force
-                           - self.controls.handbrake * self.config.brake_force * 0.5;
+            - self.controls.handbrake * self.config.brake_force * 0.5;
 
         let longitudinal_force = drive_force + braking_force;
 
@@ -417,28 +457,35 @@ impl Vehicle {
     }
 
     /// Applies tire forces based on slip angles and surface type
-    fn apply_tire_forces(&mut self, wheel: &WheelState, wheel_index: usize, dt: f32, ground_y: f32, surface_type: SurfaceType) {
+    fn apply_tire_forces(
+        &mut self,
+        wheel: &WheelState,
+        wheel_index: usize,
+        dt: f32,
+        ground_y: f32,
+        surface_type: SurfaceType,
+    ) {
         if !wheel.is_in_contact {
             return;
         }
 
         let wheel_world_pos = self.body.position + self.body.rotation * wheel.local_position;
         let wheel_vel = self.body.get_velocity_at_point(wheel_world_pos);
-        
+
         // Get friction coefficients from surface type
         let surface_friction = surface_type.friction_coefficient();
         let rolling_resistance = surface_type.rolling_resistance();
-        
+
         // Calculate slip angle (simplified)
         let forward = self.body.rotation * Vector3::new(0.0, 0.0, 1.0);
         let lateral = self.body.rotation * Vector3::new(1.0, 0.0, 0.0);
-        
+
         let forward_vel = wheel_vel.dot(&forward);
         let lateral_vel = wheel_vel.dot(&lateral);
-        
+
         // Apply surface friction to tire forces
         let friction_multiplier = surface_friction;
-        
+
         // Calculate rolling resistance force (opposes motion)
         let speed = wheel_vel.norm();
         let rolling_resistance_force = if speed > 0.01 {
@@ -453,13 +500,13 @@ impl Vehicle {
         } else {
             1.0
         };
-        
+
         // Determine drive force based on wheel index and differential locks
         let is_front_wheel = wheel_index < 2;
         let is_rear_wheel = wheel_index >= 2;
-        
+
         let throttle_force = self.controls.throttle * self.config.engine_force * torque_multiplier;
-        
+
         // 4WD by default, but respect differential locks for torque distribution
         let drive_force = if is_front_wheel && is_rear_wheel {
             // All wheels driven (4WD)
@@ -483,12 +530,12 @@ impl Vehicle {
                 throttle_force / 2.0
             }
         };
-        
-        let braking_force = -self.controls.brake * self.config.brake_force 
-                           - self.controls.handbrake * self.config.brake_force * 0.5;
-        
+
+        let braking_force = -self.controls.brake * self.config.brake_force
+            - self.controls.handbrake * self.config.brake_force * 0.5;
+
         let longitudinal_force = drive_force + braking_force;
-        
+
         // Apply forces
         let drive_dir = forward * longitudinal_force;
         self.body.apply_force(drive_dir);
@@ -498,22 +545,24 @@ impl Vehicle {
     fn apply_aerodynamics(&mut self, dt: f32) {
         let speed_sq = self.body.velocity.norm_squared();
         let speed = self.body.velocity.norm();
-        
+
         if speed < 0.01 {
             return;
         }
-        
+
         // Air drag
         let drag_direction = -self.body.velocity.normalize();
         let drag_magnitude = 0.5 * 1.225 * self.config.drag_coefficient * 2.0 * speed_sq;
         let drag_force = drag_direction * drag_magnitude;
-        
+
         self.body.apply_force(drag_force);
-        
+
         // Downforce (if configured)
         if self.config.downforce_coefficient > 0.0 {
-            let downforce = self.body.rotation * Vector3::new(0.0, -1.0, 0.0) 
-                          * self.config.downforce_coefficient * speed_sq;
+            let downforce = self.body.rotation
+                * Vector3::new(0.0, -1.0, 0.0)
+                * self.config.downforce_coefficient
+                * speed_sq;
             self.body.apply_force(downforce);
         }
     }
@@ -550,8 +599,12 @@ impl Vehicle {
 
     /// Resets the vehicle state
     pub fn reset(&mut self) {
-        self.body = RigidBody::new_box(Vector3::zeros(), self.config.mass, Vector3::new(0.9, 0.3, 2.25));
-        
+        self.body = RigidBody::new_box(
+            Vector3::zeros(),
+            self.config.mass,
+            Vector3::new(0.9, 0.3, 2.25),
+        );
+
         for wheel in &mut self.wheels {
             wheel.suspension_compression = 0.0;
             wheel.suspension_velocity = 0.0;
@@ -561,25 +614,27 @@ impl Vehicle {
             wheel.contact_point = None;
             wheel.contact_normal = None;
         }
-        
+
         self.controls = VehicleControls::default();
     }
 
     /// Интеграция с PhysicsWorld - добавляет тело шасси в мир и возвращает его ID
-    pub fn add_to_physics_world(&mut self, physics_world: &mut crate::physics::PhysicsWorld) -> usize {
-        let body = std::mem::replace(&mut self.body, RigidBody::new_box(
-            Vector3::zeros(), 
-            1.0, 
-            Vector3::new(0.1, 0.1, 0.1)
-        ));
+    pub fn add_to_physics_world(
+        &mut self,
+        physics_world: &mut crate::physics::PhysicsWorld,
+    ) -> usize {
+        let body = std::mem::replace(
+            &mut self.body,
+            RigidBody::new_box(Vector3::zeros(), 1.0, Vector3::new(0.1, 0.1, 0.1)),
+        );
         let body_id = physics_world.add_body(body);
         body_id
     }
 
     /// Обновление физики транспорта через PhysicsWorld
     pub fn physics_update(
-        &mut self, 
-        dt: f32, 
+        &mut self,
+        dt: f32,
         physics_world: &mut crate::physics::PhysicsWorld,
         terrain_getter: &dyn Fn(f32, f32) -> f32,
         surface_getter: &dyn Fn(f32, f32) -> crate::world::SurfaceType,
@@ -587,18 +642,18 @@ impl Vehicle {
     ) {
         // Сначала выполняем основной update с terrain и surface
         self.update(dt, terrain_getter, surface_getter);
-        
+
         // Деформация ландшафта колёсами
         if let Some(terrain) = deformable_terrain {
             self.deform_terrain(terrain);
         }
-        
+
         // Синхронизируем состояние тела с physics_world
         if let Some(chassis_id) = self.chassis_body_id {
             if let Some(body) = physics_world.get_body_mut(chassis_id) {
                 // Применяем силы от колёс к шасси через physics_world
                 self.apply_wheel_forces_to_chassis(body);
-                
+
                 // Синхронизируем позицию и ориентацию
                 body.position = self.body.position;
                 body.rotation = self.body.rotation;
@@ -607,11 +662,11 @@ impl Vehicle {
             }
         }
     }
-    
+
     /// Деформация ландшафта под колёсами
     fn deform_terrain(&self, terrain: &mut crate::physics::DeformableTerrainComponent) {
-        use crate::physics::DeformationType;
-        
+        use crate::physics::deformable_terrain::DeformationType;
+
         for wheel in &self.wheels {
             if wheel.is_in_contact {
                 let wheel_pos = self.body.position + self.body.rotation * wheel.local_position;
@@ -647,7 +702,7 @@ mod tests {
     fn test_vehicle_creation() {
         let config = VehicleConfig::default();
         let vehicle = Vehicle::new(config.clone());
-        
+
         assert_eq!(vehicle.body.mass, config.mass);
         assert_eq!(vehicle.wheels.len(), 4);
     }
@@ -655,10 +710,10 @@ mod tests {
     #[test]
     fn test_vehicle_controls() {
         let mut vehicle = Vehicle::new(VehicleConfig::default());
-        
+
         let controls = VehicleControls::new(1.0, 0.5, 0.3, 0.0);
         vehicle.set_controls(controls.clone());
-        
+
         assert_eq!(vehicle.get_controls().throttle, 1.0);
         assert_eq!(vehicle.get_controls().brake, 0.5);
         assert_eq!(vehicle.get_controls().steering, 0.3);

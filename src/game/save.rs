@@ -1,11 +1,11 @@
 //! Save System - Game save/load functionality
 //! Saves only in "safe" locations: beds, vehicle bunks, tents, owned properties
 
-use serde::{Serialize, Deserialize};
-use crate::game::player::{Player, PlayerState, CameraMode};
-use crate::game::skills::PlayerSkills;
 use crate::game::mission_save::WorldState;
+use crate::game::player::{CameraMode, Player, PlayerState};
+use crate::game::skills::PlayerSkills;
 use crate::game::InventoryItem;
+use serde::{Deserialize, Serialize};
 
 /// Maximum number of save slots
 pub const MAX_SAVE_SLOTS: usize = 10;
@@ -84,6 +84,8 @@ pub struct PlayerData {
 /// Serialized skills
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerSkillsData {
+    pub strength: f32,
+    pub stamina: f32,
     pub mechanics: SkillData,
     pub electrics: SkillData,
     pub welding: SkillData,
@@ -114,12 +116,90 @@ pub struct SkillData {
     pub total_hours: f32,
 }
 
+impl Default for SkillData {
+    fn default() -> Self {
+        Self {
+            rank: 0,
+            mastery: 0.0,
+            total_hours: 0.0,
+        }
+    }
+}
+
+impl Default for PlayerSkillsData {
+    fn default() -> Self {
+        Self {
+            strength: 1.0,
+            stamina: 1.0,
+            mechanics: SkillData::default(),
+            electrics: SkillData::default(),
+            welding: SkillData::default(),
+            construction: SkillData::default(),
+            road_building: SkillData::default(),
+            driving: SkillData::default(),
+            tracked: SkillData::default(),
+            piloting: SkillData::default(),
+            flying: SkillData::default(),
+            crane: SkillData::default(),
+            geology: SkillData::default(),
+            drilling: SkillData::default(),
+            logging: SkillData::default(),
+            mining: SkillData::default(),
+            business: SkillData::default(),
+            logistics: SkillData::default(),
+            trading: SkillData::default(),
+            navigation: SkillData::default(),
+            medicine: SkillData::default(),
+            fitness: SkillData::default(),
+        }
+    }
+}
+
+impl PlayerSkillsData {
+    /// Create from education specialty
+    pub fn from_education(specialty_id: &str) -> Self {
+        let mut skills = Self::default();
+
+        match specialty_id {
+            "mechanic" => {
+                skills.mechanics.rank = 3;
+                skills.mechanics.mastery = 0.5;
+            }
+            "electrician" => {
+                skills.electrics.rank = 3;
+                skills.electrics.mastery = 0.5;
+            }
+            "driver" => {
+                skills.driving.rank = 3;
+                skills.driving.mastery = 0.5;
+            }
+            "pilot" => {
+                skills.piloting.rank = 3;
+                skills.piloting.mastery = 0.5;
+            }
+            _ => {}
+        }
+
+        skills
+    }
+}
+
 /// Serialized money
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerMoneyData {
     pub rub: f64,
     pub cny: f64,
     pub usd: f64,
+}
+
+impl Default for PlayerMoneyData {
+    fn default() -> Self {
+        Self {
+            rub: 0.0,
+            cny: 0.0,
+            usd: 0.0,
+        }
+    }
 }
 
 /// Serialized inventory item
@@ -135,7 +215,11 @@ pub struct InventoryItemData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PlayerStateData {
     OnFoot,
-    InVehicle { vehicle_index: usize, vehicle_id: u64, seat_index: usize },
+    InVehicle {
+        vehicle_index: usize,
+        vehicle_id: u64,
+        seat_index: usize,
+    },
 }
 
 /// Serialized camera mode
@@ -255,99 +339,100 @@ impl SaveSystem {
             current_slot: None,
         }
     }
-    
+
     /// Check if can save at location
     pub fn can_save_at(&self, location_type: SaveLocationType) -> bool {
         // All safe locations allow saving
-        matches!(location_type, 
-            SaveLocationType::Bed |
-            SaveLocationType::VehicleBunk |
-            SaveLocationType::Tent |
-            SaveLocationType::OwnedProperty
+        matches!(
+            location_type,
+            SaveLocationType::Bed
+                | SaveLocationType::VehicleBunk
+                | SaveLocationType::Tent
+                | SaveLocationType::OwnedProperty
         )
     }
-    
+
     /// Get save file path for slot
     pub fn get_save_path(&self, slot: u8) -> String {
         format!("{}/save_{}.bin", self.save_directory, slot)
     }
-    
+
     /// Get metadata file path for slot
     pub fn get_metadata_path(&self, slot: u8) -> String {
         format!("{}/save_{}.meta", self.save_directory, slot)
     }
-    
+
     /// Save game to slot
     pub fn save_game(&mut self, slot: u8, save_data: &SaveData) -> Result<(), String> {
         if slot >= MAX_SAVE_SLOTS as u8 {
             return Err(format!("Invalid save slot: {}", slot));
         }
-        
+
         // Create save directory if not exists
         std::fs::create_dir_all(&self.save_directory)
             .map_err(|e| format!("Failed to create save directory: {}", e))?;
-        
+
         // Serialize save data
         let save_bytes = bincode::serialize(save_data)
             .map_err(|e| format!("Failed to serialize save data: {}", e))?;
-        
+
         // Write save file
         std::fs::write(self.get_save_path(slot), save_bytes)
             .map_err(|e| format!("Failed to write save file: {}", e))?;
-        
+
         // Update metadata
         self.saves[slot as usize] = Some(save_data.metadata.clone());
         self.current_slot = Some(slot);
-        
+
         Ok(())
     }
-    
+
     /// Load game from slot
     pub fn load_game(&mut self, slot: u8) -> Result<SaveData, String> {
         if slot >= MAX_SAVE_SLOTS as u8 {
             return Err(format!("Invalid save slot: {}", slot));
         }
-        
+
         // Read save file
         let save_bytes = std::fs::read(self.get_save_path(slot))
             .map_err(|e| format!("Failed to read save file: {}", e))?;
-        
+
         // Deserialize save data
         let save_data: SaveData = bincode::deserialize(&save_bytes)
             .map_err(|e| format!("Failed to deserialize save data: {}", e))?;
-        
+
         // Update metadata
         self.saves[slot as usize] = Some(save_data.metadata.clone());
         self.current_slot = Some(slot);
-        
+
         Ok(save_data)
     }
-    
+
     /// Delete save from slot
     pub fn delete_save(&mut self, slot: u8) -> Result<(), String> {
         if slot >= MAX_SAVE_SLOTS as u8 {
             return Err(format!("Invalid save slot: {}", slot));
         }
-        
+
         // Remove files
         let _ = std::fs::remove_file(self.get_save_path(slot));
         let _ = std::fs::remove_file(self.get_metadata_path(slot));
-        
+
         // Update metadata
         self.saves[slot as usize] = None;
-        
+
         if self.current_slot == Some(slot) {
             self.current_slot = None;
         }
-        
+
         Ok(())
     }
-    
+
     /// Check if slot has save
     pub fn has_save(&self, slot: u8) -> bool {
         slot < MAX_SAVE_SLOTS as u8 && self.saves[slot as usize].is_some()
     }
-    
+
     /// Get metadata for slot
     pub fn get_metadata(&self, slot: u8) -> Option<&SaveMetadata> {
         if slot < MAX_SAVE_SLOTS as u8 {
@@ -356,17 +441,22 @@ impl SaveSystem {
             None
         }
     }
-    
+
     /// List all saves
     pub fn list_saves(&self) -> Vec<(u8, &SaveMetadata)> {
-        self.saves.iter()
+        self.saves
+            .iter()
             .enumerate()
             .filter_map(|(i, meta)| meta.as_ref().map(|m| (i as u8, m)))
             .collect()
     }
-    
+
     /// Convert Player to PlayerData for saving
-    pub fn player_to_save_data(player: &Player, position: [f32; 3], rotation: [f32; 4]) -> PlayerData {
+    pub fn player_to_save_data(
+        player: &Player,
+        position: [f32; 3],
+        rotation: [f32; 4],
+    ) -> PlayerData {
         PlayerData {
             name: player.name.clone(),
             is_male: player.is_male,
@@ -386,85 +476,65 @@ impl SaveSystem {
             stamina: player.stamina,
         }
     }
-    
-    /// Convert PlayerSkills to PlayerSkillsData
-    pub fn skills_to_save_data(skills: &PlayerSkills) -> PlayerSkillsData {
-        use crate::game::skills::Skill;
-        
-        let skill_to_data = |s: &Skill| SkillData {
-            rank: s.rank,
-            mastery: s.mastery,
-            total_hours: s.total_hours,
-        };
-        
-        PlayerSkillsData {
-            mechanics: skill_to_data(&skills.mechanics),
-            electrics: skill_to_data(&skills.electrics),
-            welding: skill_to_data(&skills.welding),
-            construction: skill_to_data(&skills.construction),
-            road_building: skill_to_data(&skills.road_building),
-            driving: skill_to_data(&skills.driving),
-            tracked: skill_to_data(&skills.tracked),
-            piloting: skill_to_data(&skills.piloting),
-            flying: skill_to_data(&skills.flying),
-            crane: skill_to_data(&skills.crane),
-            geology: skill_to_data(&skills.geology),
-            drilling: skill_to_data(&skills.drilling),
-            logging: skill_to_data(&skills.logging),
-            mining: skill_to_data(&skills.mining),
-            business: skill_to_data(&skills.business),
-            logistics: skill_to_data(&skills.logistics),
-            trading: skill_to_data(&skills.trading),
-            navigation: skill_to_data(&skills.navigation),
-            medicine: skill_to_data(&skills.medicine),
-            fitness: skill_to_data(&skills.fitness),
-        }
+
+    /// Convert PlayerSkillsData to PlayerSkillsData (for saving)
+    pub fn skills_to_save_data(skills: &PlayerSkillsData) -> PlayerSkillsData {
+        skills.clone()
     }
-    
+
     /// Convert PlayerWallet to PlayerMoneyData
-    pub fn money_to_save_data(money: &crate::game::player::PlayerWallet) -> PlayerMoneyData {
+    pub fn money_to_save_data(money: &PlayerMoneyData) -> PlayerMoneyData {
         PlayerMoneyData {
             rub: money.rub,
             cny: money.cny,
             usd: money.usd,
         }
     }
-    
+
     /// Convert inventory to save data
-    pub fn inventory_to_save_data(inventory: &[InventoryItem]) -> Vec<InventoryItemData> {
-        inventory.iter().map(|item| InventoryItemData {
-            name: format!("{:?}", item.item_type),
-            weight: item.total_weight(),
-            item_type: format!("{:?}", item.item_type),
-            quantity: item.quantity,
-        }).collect()
+    pub fn inventory_to_save_data(
+        inventory: &[crate::game::player::InventoryItem],
+    ) -> Vec<InventoryItemData> {
+        inventory
+            .iter()
+            .map(|item| InventoryItemData {
+                name: item.name.clone(),
+                weight: item.count as f32 * 0.5, // approximate weight
+                item_type: format!("{:?}", item.item_type),
+                quantity: item.count,
+            })
+            .collect()
     }
-    
+
     /// Convert PlayerState to PlayerStateData
     pub fn state_to_save_data(state: &PlayerState) -> PlayerStateData {
         match state {
             PlayerState::OnFoot => PlayerStateData::OnFoot,
-            PlayerState::InVehicle { vehicle_index, vehicle_id, seat_index } => {
-                PlayerStateData::InVehicle {
-                    vehicle_index: *vehicle_index,
-                    vehicle_id: *vehicle_id,
-                    seat_index: *seat_index,
-                }
-            }
+            PlayerState::InVehicle {
+                vehicle_index,
+                seat_index,
+            } => PlayerStateData::InVehicle {
+                vehicle_index: *vehicle_index,
+                vehicle_id: *vehicle_index as u64,
+                seat_index: *seat_index as usize,
+            },
+            _ => PlayerStateData::OnFoot,
         }
     }
-    
+
     /// Convert CameraMode to CameraModeData
     pub fn camera_to_save_data(camera: &CameraMode) -> CameraModeData {
         match camera {
             CameraMode::FirstPerson => CameraModeData::FirstPerson,
-            CameraMode::ThirdPerson { distance, yaw, pitch } => {
-                CameraModeData::ThirdPerson {
-                    distance: *distance,
-                    yaw: *yaw,
-                    pitch: *pitch,
-                }
-            }
+            CameraMode::ThirdPerson {
+                distance,
+                yaw,
+                pitch,
+            } => CameraModeData::ThirdPerson {
+                distance: *distance,
+                yaw: *yaw,
+                pitch: *pitch,
+            },
         }
     }
 }
@@ -478,7 +548,7 @@ impl Default for SaveSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_save_location_types() {
         assert!(SaveSystem::new("").can_save_at(SaveLocationType::Bed));
@@ -486,7 +556,7 @@ mod tests {
         assert!(SaveSystem::new("").can_save_at(SaveLocationType::Tent));
         assert!(SaveSystem::new("").can_save_at(SaveLocationType::OwnedProperty));
     }
-    
+
     #[test]
     fn test_save_paths() {
         let system = SaveSystem::new("test_saves");

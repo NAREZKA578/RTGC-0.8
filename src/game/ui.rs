@@ -1,12 +1,12 @@
 //! UI System for RTGC-0.8
 //! Handles HUD, menus, tooltips, and all user interface elements
 
-use crate::game::player::{PlayerState, CameraMode};
-use crate::game::skills::PlayerSkills;
 use crate::game::interaction::{InteractableType, InteractionResult};
-use crate::game::weather::{WeatherState, PrecipitationType};
-use crate::graphics::renderer::{RenderCommand, RenderQueue};
+use crate::game::player::{CameraMode, PlayerState};
+use crate::game::skills::PlayerSkills;
+use crate::game::weather::{PrecipitationType, WeatherState};
 use crate::graphics::render_command::{UI_DEPTH_HUD, UI_DEPTH_NOTIFICATIONS, UI_DEPTH_PROMPT};
+use crate::graphics::renderer::{RenderCommand, RenderQueue};
 use nalgebra::{Vector2, Vector3};
 
 // Type aliases for backwards compatibility
@@ -94,7 +94,11 @@ impl Default for HUDData {
             weather: "Clear".to_string(),
             location: "Novosibirsk".to_string(),
             player_state: PlayerState::OnFoot,
-            camera_mode: CameraMode::ThirdPerson { distance: 4.0, yaw: 0.0, pitch: 0.3 },
+            camera_mode: CameraMode::ThirdPerson {
+                distance: 4.0,
+                yaw: 0.0,
+                pitch: 0.3,
+            },
             gear: 0,
             rpm: 0.0,
             engine_temp: 0.5,
@@ -258,7 +262,8 @@ impl UIManager {
 
     /// Add skill up notification
     pub fn notify_skill_up(&mut self, skill_name: String, new_rank: u32) {
-        self.skill_notifications.push((skill_name.clone(), new_rank));
+        self.skill_notifications
+            .push((skill_name.clone(), new_rank));
         self.add_notification(
             format!("{} increased to Rank {}!", skill_name, new_rank),
             NotificationType::SkillUp,
@@ -286,7 +291,7 @@ impl UIManager {
     pub fn update_hud(&mut self, data: HUDData) {
         // Check player state before moving data
         let is_in_vehicle = matches!(data.player_state, PlayerState::InVehicle { .. });
-        
+
         self.hud_data = data;
 
         // Auto-show speedometer when in vehicle
@@ -378,7 +383,12 @@ impl UIManager {
 
     /// Проблема 3: Submit UI commands to render queue
     /// Отрисовка уведомлений и HUD через RenderCommand::UIElement
-    pub fn submit_ui_commands(&self, render_queue: &mut RenderQueue, screen_width: f32, screen_height: f32) {
+    pub fn submit_ui_commands(
+        &self,
+        render_queue: &mut RenderQueue,
+        screen_width: f32,
+        screen_height: f32,
+    ) {
         // Отрисовка уведомлений
         if self.visibility.notifications {
             let mut y_offset = 10.0;
@@ -408,7 +418,12 @@ impl UIManager {
             if let Some(prompt) = &self.interaction_prompt {
                 if prompt.visible {
                     render_queue.submit(RenderCommand::UIElement {
-                        rect: [screen_width / 2.0 - 100.0, screen_height / 2.0 + 50.0, 200.0, 30.0],
+                        rect: [
+                            screen_width / 2.0 - 100.0,
+                            screen_height / 2.0 + 50.0,
+                            200.0,
+                            30.0,
+                        ],
                         texture: None,
                         color: [1.0, 1.0, 1.0, 1.0],
                         depth: UI_DEPTH_PROMPT,
@@ -472,10 +487,23 @@ impl Default for UIManager {
 impl WeatherState {
     pub fn description(&self) -> &str {
         match self {
-            WeatherState { precipitation_type: PrecipitationType::None, cloud_coverage, .. } if *cloud_coverage < 0.3 => "Clear",
-            WeatherState { precipitation_type: PrecipitationType::None, .. } => "Cloudy",
-            WeatherState { precipitation_type: PrecipitationType::Rain, .. } => "Rain",
-            WeatherState { precipitation_type: PrecipitationType::Snow, .. } => "Snow",
+            WeatherState {
+                precipitation_type: PrecipitationType::None,
+                cloud_coverage,
+                ..
+            } if *cloud_coverage < 0.3 => "Clear",
+            WeatherState {
+                precipitation_type: PrecipitationType::None,
+                ..
+            } => "Cloudy",
+            WeatherState {
+                precipitation_type: PrecipitationType::Rain,
+                ..
+            } => "Rain",
+            WeatherState {
+                precipitation_type: PrecipitationType::Snow,
+                ..
+            } => "Snow",
             _ => "Unknown",
         }
     }
@@ -512,7 +540,7 @@ mod tests {
         let mut ui = UIManager::new();
         ui.set_interaction_prompt("Enter Vehicle".to_string(), 2.0);
         assert!(ui.get_interaction_prompt().is_some());
-        
+
         ui.clear_interaction_prompt();
         assert!(ui.get_interaction_prompt().is_none());
     }

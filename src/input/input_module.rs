@@ -2,12 +2,12 @@
 //! DEBUG: Исправлен импорт Gamepad
 
 use std::collections::HashMap;
-use winit::event::{KeyEvent, ElementState, MouseButton as WinitMouseButton};
-use winit::keyboard::{KeyCode, PhysicalKey, NamedKey};
+use winit::event::{ElementState, KeyEvent, MouseButton as WinitMouseButton};
+use winit::keyboard::{KeyCode, NamedKey, PhysicalKey};
 
 pub use crate::input::mapping::{InputAction, InputMapping, MouseButton};
 // DEBUG: Импорт Gamepad из mod.rs
-pub use crate::input::gamepad::{GamepadButton, GamepadAxis, GamepadState};
+pub use crate::input::gamepad::{GamepadAxis, GamepadButton, GamepadState};
 // Gamepad type alias for backwards compatibility
 pub use crate::input::Gamepad;
 
@@ -67,12 +67,12 @@ impl InputState {
             mapping: InputMapping::new(),
         }
     }
-    
+
     /// Begin a new frame - update previous states
     pub fn begin_frame(&mut self) {
         // Store previous action states
         self.previous_action_states = self.action_states.clone();
-        
+
         // Update key states: JustPressed -> Held, JustReleased -> Released
         for state in self.key_states.values_mut() {
             *state = match state {
@@ -81,7 +81,7 @@ impl InputState {
                 _ => *state,
             };
         }
-        
+
         // Update mouse states
         for state in self.mouse_states.values_mut() {
             *state = match state {
@@ -90,20 +90,21 @@ impl InputState {
                 _ => *state,
             };
         }
-        
+
         // Reset deltas
         self.mouse_delta = (0.0, 0.0);
         self.scroll_delta = (0.0, 0.0);
     }
-    
+
     /// Handle keyboard input
     pub fn handle_keyboard(&mut self, event: &KeyEvent) {
         let physical_key = event.physical_key;
-        
+
         match event.state {
             ElementState::Pressed => {
-                self.key_states.insert(physical_key, ActionState::JustPressed);
-                
+                self.key_states
+                    .insert(physical_key, ActionState::JustPressed);
+
                 // Check if this key maps to an action
                 if let Some(key_code) = Self::physical_to_key_code(physical_key) {
                     if let Some(action) = self.mapping.get_action_for_key(&key_code) {
@@ -112,8 +113,9 @@ impl InputState {
                 }
             }
             ElementState::Released => {
-                self.key_states.insert(physical_key, ActionState::JustReleased);
-                
+                self.key_states
+                    .insert(physical_key, ActionState::JustReleased);
+
                 if let Some(key_code) = Self::physical_to_key_code(physical_key) {
                     if let Some(action) = self.mapping.get_action_for_key(&key_code) {
                         self.action_states.insert(action, ActionState::JustReleased);
@@ -122,34 +124,34 @@ impl InputState {
             }
         }
     }
-    
+
     /// Handle mouse button input
     pub fn handle_mouse_button(&mut self, button: WinitMouseButton, pressed: bool) {
         let mb = MouseButton::from(button);
-        let state = if pressed { 
-            ActionState::JustPressed 
-        } else { 
-            ActionState::JustReleased 
+        let state = if pressed {
+            ActionState::JustPressed
+        } else {
+            ActionState::JustReleased
         };
-        
+
         self.mouse_states.insert(mb, state);
-        
+
         if let Some(action) = self.mapping.get_action_for_mouse(&mb) {
             self.action_states.insert(action, state);
         }
     }
-    
+
     /// Handle mouse movement
     pub fn handle_mouse_motion(&mut self, position: (f64, f64), delta: (f64, f64)) {
         self.mouse_position = position;
         self.mouse_delta = delta;
     }
-    
+
     /// Handle mouse scroll
     pub fn handle_scroll(&mut self, delta: (f64, f64)) {
         self.scroll_delta = delta;
     }
-    
+
     /// Handle gamepad input
     pub fn handle_gamepad(&mut self, gamepad_state: GamepadState) {
         // Find or add gamepad
@@ -158,7 +160,7 @@ impl InputState {
         } else {
             self.gamepads.push(gamepad_state.clone());
         }
-        
+
         // Map gamepad buttons to actions
         for (button, pressed) in &gamepad_state.buttons {
             let action = self.mapping.get_action_for_gamepad_button(*button);
@@ -172,12 +174,15 @@ impl InputState {
             }
         }
     }
-    
+
     /// Check if an action is just pressed (this frame only)
     pub fn is_action_just_pressed(&self, action: InputAction) -> bool {
-        matches!(self.action_states.get(&action), Some(ActionState::JustPressed))
+        matches!(
+            self.action_states.get(&action),
+            Some(ActionState::JustPressed)
+        )
     }
-    
+
     /// Check if an action is currently held
     pub fn is_action_held(&self, action: InputAction) -> bool {
         matches!(
@@ -185,23 +190,29 @@ impl InputState {
             Some(ActionState::JustPressed | ActionState::Held)
         )
     }
-    
+
     /// Check if an action was just released (this frame only)
     pub fn is_action_released(&self, action: InputAction) -> bool {
-        matches!(self.action_states.get(&action), Some(ActionState::JustReleased))
+        matches!(
+            self.action_states.get(&action),
+            Some(ActionState::JustReleased)
+        )
     }
-    
+
     /// Get the current state of an action
     pub fn get_action_state(&self, action: InputAction) -> Option<ActionState> {
         self.action_states.get(&action).copied()
     }
-    
+
     /// Check if a key is just pressed
     pub fn is_key_just_pressed(&self, key_code: KeyCode) -> bool {
         let physical_key = PhysicalKey::Code(key_code);
-        matches!(self.key_states.get(&physical_key), Some(ActionState::JustPressed))
+        matches!(
+            self.key_states.get(&physical_key),
+            Some(ActionState::JustPressed)
+        )
     }
-    
+
     /// Check if a key is held
     pub fn is_key_held(&self, key_code: KeyCode) -> bool {
         let physical_key = PhysicalKey::Code(key_code);
@@ -210,42 +221,42 @@ impl InputState {
             Some(ActionState::JustPressed | ActionState::Held)
         )
     }
-    
+
     /// Get mouse position
     pub fn mouse_position(&self) -> (f64, f64) {
         self.mouse_position
     }
-    
+
     /// Get mouse delta
     pub fn mouse_delta(&self) -> (f64, f64) {
         self.mouse_delta
     }
-    
+
     /// Get scroll delta
     pub fn scroll_delta(&self) -> (f64, f64) {
         self.scroll_delta
     }
-    
+
     /// Get the input mapping
     pub fn mapping(&self) -> &InputMapping {
         &self.mapping
     }
-    
+
     /// Get mutable input mapping
     pub fn mapping_mut(&mut self) -> &mut InputMapping {
         &mut self.mapping
     }
-    
+
     /// Get connected gamepads
     pub fn gamepads(&self) -> &[GamepadState] {
         &self.gamepads
     }
-    
+
     /// Get primary gamepad (first connected)
     pub fn primary_gamepad(&self) -> Option<&GamepadState> {
         self.gamepads.first()
     }
-    
+
     fn physical_to_key_code(physical: PhysicalKey) -> Option<KeyCode> {
         match physical {
             PhysicalKey::Code(code) => Some(code),
@@ -356,6 +367,40 @@ impl InputManager {
     pub fn state_mut(&mut self) -> &mut InputState {
         &mut self.state
     }
+
+    /// Get action map for player input (convenience method)
+    pub fn action_map(&self) -> Option<crate::network::protocol::PlayerInput> {
+        let mut input = crate::network::protocol::PlayerInput::default();
+
+        // Map input actions to player input
+        if self.state.is_action_just_pressed(InputAction::MoveForward)
+            || self.state.is_action_held(InputAction::MoveForward)
+        {
+            input.throttle = 1.0;
+        }
+        if self.state.is_action_just_pressed(InputAction::MoveBackward)
+            || self.state.is_action_held(InputAction::MoveBackward)
+        {
+            input.throttle = -1.0;
+        }
+        if self.state.is_action_just_pressed(InputAction::MoveLeft)
+            || self.state.is_action_held(InputAction::MoveLeft)
+        {
+            input.steering = -1.0;
+        }
+        if self.state.is_action_just_pressed(InputAction::MoveRight)
+            || self.state.is_action_held(InputAction::MoveRight)
+        {
+            input.steering = 1.0;
+        }
+        if self.state.is_action_just_pressed(InputAction::Brake)
+            || self.state.is_action_held(InputAction::Brake)
+        {
+            input.handbrake = true;
+        }
+
+        Some(input)
+    }
 }
 
 impl Default for InputManager {
@@ -367,14 +412,14 @@ impl Default for InputManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_action_states() {
         let mut input = InputState::new();
-        
+
         // Initially no action state
         assert_eq!(input.get_action_state(InputAction::MoveForward), None);
-        
+
         // Simulate key press
         input.handle_keyboard(&KeyEvent {
             physical_key: PhysicalKey::Code(KeyCode::KeyW),
@@ -385,10 +430,10 @@ mod tests {
             text: None,
             platform_specific: Default::default(),
         });
-        
+
         assert!(input.is_action_just_pressed(InputAction::MoveForward));
         assert!(input.is_action_held(InputAction::MoveForward));
-        
+
         // Begin new frame - should transition to Held
         input.begin_frame();
         assert!(!input.is_action_just_pressed(InputAction::MoveForward));

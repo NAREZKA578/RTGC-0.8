@@ -1,9 +1,9 @@
 //! Interaction System for RTGC-0.8
 //! Handles player interactions with doors, vehicles, objects, NPCs
 
-use crate::game::events::{GameEvent, publish_event};
-use crate::physics::{Ray, RaycastHit};
+use crate::game::events::{publish_event, GameEvent};
 use crate::physics::physics_module::raycast_world;
+use crate::physics::{Ray, RaycastHit};
 use nalgebra::Vector3;
 
 // Type alias for backwards compatibility
@@ -182,7 +182,10 @@ impl InteractionSystem {
     }
 
     /// Try to interact with highlighted object (F key)
-    pub fn try_interact(&mut self, player_state: &mut crate::game::player::PlayerState) -> InteractionResult {
+    pub fn try_interact(
+        &mut self,
+        player_state: &mut crate::game::player::PlayerState,
+    ) -> InteractionResult {
         if self.interaction_cooldown > 0.0 {
             return InteractionResult {
                 success: false,
@@ -201,7 +204,7 @@ impl InteractionSystem {
             }
 
             let result = self.perform_interaction(interactable, player_state);
-            
+
             if result.success {
                 self.interaction_cooldown = 0.3; // 300ms cooldown
             }
@@ -223,17 +226,29 @@ impl InteractionSystem {
         player_state: &mut crate::game::player::PlayerState,
     ) -> InteractionResult {
         match interactable {
-            InteractableType::VehicleDoor { vehicle_id, door_index, .. } => {
+            InteractableType::VehicleDoor {
+                vehicle_id,
+                door_index,
+                ..
+            } => {
                 // Handle vehicle enter/exit
                 self.handle_vehicle_interaction(*vehicle_id, *door_index, player_state)
             }
-            InteractableType::Door { door_id, is_open, locked } => {
-                self.handle_door_interaction(*door_id, *is_open, *locked, player_state)
-            }
-            InteractableType::PickableObject { object_id, weight_kg, name } => {
-                self.handle_pickup_interaction(*object_id, *weight_kg, name.clone(), player_state)
-            }
-            InteractableType::Bed { bed_id, location_name, is_owned } => {
+            InteractableType::Door {
+                door_id,
+                is_open,
+                locked,
+            } => self.handle_door_interaction(*door_id, *is_open, *locked, player_state),
+            InteractableType::PickableObject {
+                object_id,
+                weight_kg,
+                name,
+            } => self.handle_pickup_interaction(*object_id, *weight_kg, name.clone(), player_state),
+            InteractableType::Bed {
+                bed_id,
+                location_name,
+                is_owned,
+            } => {
                 self.handle_bed_interaction(*bed_id, location_name.clone(), *is_owned, player_state)
             }
             _ => InteractionResult {
@@ -257,14 +272,13 @@ impl InteractionSystem {
             PState::OnFoot => {
                 // Enter vehicle
                 *player_state = PState::InVehicle {
-                    vehicle_index: 0,
-                    vehicle_id,
-                    seat_index: door_index,
+                    vehicle_index: vehicle_id as usize,
+                    seat_index: door_index as u8,
                 };
 
                 publish_event(GameEvent::PlayerEnteredVehicle {
                     player_name: "Player".to_string(),
-                    vehicle_index: 0,
+                    vehicle_index: vehicle_id as usize,
                     vehicle_id,
                     seat_index: door_index,
                 });
@@ -275,8 +289,16 @@ impl InteractionSystem {
                     interactable: None,
                 }
             }
-            PState::InVehicle { vehicle_id: current_vid, .. } => {
-                if *current_vid == vehicle_id as u64 {
+            PState::InHelicopter { .. } | PState::InCrane => InteractionResult {
+                success: false,
+                message: "Cannot enter vehicle while in vehicle/machine".to_string(),
+                interactable: None,
+            },
+            PState::InVehicle {
+                vehicle_index: current_vid,
+                ..
+            } => {
+                if *current_vid == vehicle_id as usize {
                     // Exit current vehicle
                     *player_state = PState::OnFoot;
 
@@ -321,10 +343,10 @@ impl InteractionSystem {
 
         let new_state = !is_open;
         publish_event(GameEvent::InteractionTriggered {
-            interaction_type: if new_state { 
-                crate::game::events::InteractionType::OpenDoor 
-            } else { 
-                crate::game::events::InteractionType::CloseDoor 
+            interaction_type: if new_state {
+                crate::game::events::InteractionType::OpenDoor
+            } else {
+                crate::game::events::InteractionType::CloseDoor
             },
             position: nalgebra::Vector3::zeros(),
             entity_index: None,
@@ -332,7 +354,12 @@ impl InteractionSystem {
 
         InteractionResult {
             success: true,
-            message: if new_state { "Door opened" } else { "Door closed" }.to_string(),
+            message: if new_state {
+                "Door opened"
+            } else {
+                "Door closed"
+            }
+            .to_string(),
             interactable: None,
         }
     }
@@ -349,6 +376,8 @@ impl InteractionSystem {
         let current_inventory_weight = match player_state {
             crate::game::player::PlayerState::OnFoot => 0.0, // Would need actual inventory tracking
             crate::game::player::PlayerState::InVehicle { .. } => 0.0,
+            crate::game::player::PlayerState::InHelicopter { .. } => 0.0,
+            crate::game::player::PlayerState::InCrane => 0.0,
         };
 
         if current_inventory_weight + weight_kg > 60.0 {
@@ -423,10 +452,10 @@ mod tests {
     #[test]
     fn test_interaction_cooldown() {
         let mut system = InteractionSystem::new();
-        
+
         // Simulate update
         system.update(0.1, Vector3::zeros(), Vector3::z(), 2.0);
-        
+
         // Cooldown should be 0 initially
         assert_eq!(system.interaction_cooldown, 0.0);
     }

@@ -89,12 +89,10 @@ impl ChunkData {
     /// Get normal at local coordinates
     pub fn get_normal(&self, x: f32, z: f32) -> Vector3<f32> {
         let sample_dist = 1.0;
-        let h_left = self.get_height(x - sample_dist, z);
-        let h_right = self.get_height(x + sample_dist, z);
-        let h_back = self.get_height(x, z - sample_dist);
-        let h_front = self.get_height(x, z + sample_dist);
-        
-        Vector3::new(h_left - h_right, 2.0 * sample_dist, h_back - h_front).normalize()
+        crate::utils::compute_terrain_normal(
+            |sx, sz| self.get_height(sx, sz),
+            x, z, sample_dist
+        )
     }
 }
 

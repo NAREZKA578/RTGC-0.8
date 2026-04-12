@@ -1,7 +1,7 @@
 //! Main Menu Scene
 
-use super::super::scene::{Scene, SceneType, SceneId};
 use super::super::main_menu::MainMenu;
+use super::super::scene::{Scene, SceneId, SceneType};
 use std::any::Any;
 
 pub struct MainMenuScene {
@@ -50,7 +50,10 @@ impl Scene for MainMenuScene {
         self.main_menu.update(delta_time);
     }
 
-    fn render(&mut self, renderer: &mut crate::graphics::renderer::Renderer) -> Result<(), Box<dyn std::error::Error>> {
+    fn render(
+        &mut self,
+        renderer: &mut crate::graphics::renderer::Renderer,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Render main menu UI
         self.main_menu.render_ui(renderer);
         Ok(())

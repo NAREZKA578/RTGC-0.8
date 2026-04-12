@@ -130,7 +130,7 @@ impl VehiclePart {
     /// Get diagnostic info based on mechanic skill rank
     pub fn get_diagnostic_info(&self, mechanic_rank: u8) -> PartDiagnostic {
         let accuracy = (mechanic_rank as f32 / 12.0).clamp(0.1, 1.0);
-        
+
         PartDiagnostic {
             name: self.name.clone(),
             integrity_display: if accuracy >= 0.9 {
@@ -186,7 +186,7 @@ impl VehiclePart {
         if accuracy < 0.5 {
             return "Неизвестно".to_string();
         }
-        
+
         let percent = self.integrity_percent();
         if percent >= 90.0 {
             "Новое".to_string()
@@ -247,12 +247,12 @@ impl VehiclePartsSystem {
         if part.is_critical {
             self.critical_parts.push(part.id.clone());
         }
-        
+
         let category = part.category;
         let part_id = part.id.clone();
-        
+
         self.parts.insert(part_id.clone(), part);
-        
+
         self.by_category
             .entry(category)
             .or_insert_with(Vec::new)
@@ -278,12 +278,17 @@ impl VehiclePartsSystem {
     }
 
     /// Apply collision damage to nearest parts
-    pub fn apply_collision_damage(&mut self, force: f32, impact_point: &str, damage_vector: nalgebra::Vector3<f32>) {
+    pub fn apply_collision_damage(
+        &mut self,
+        force: f32,
+        impact_point: &str,
+        damage_vector: nalgebra::Vector3<f32>,
+    ) {
         let base_damage = (force / 1000.0).min(50.0); // Cap at 50% damage
-        
+
         // Damage distribution based on impact location
         let affected_categories = self.get_affected_categories(impact_point);
-        
+
         for category in affected_categories {
             if let Some(part_ids) = self.by_category.get(&category) {
                 for part_id in part_ids {
@@ -293,7 +298,7 @@ impl VehiclePartsSystem {
                     } else {
                         1.0
                     };
-                    
+
                     if let Some(part) = self.parts.get_mut(part_id) {
                         let damage = base_damage * multiplier;
                         part.apply_damage(damage);
@@ -312,17 +317,46 @@ impl VehiclePartsSystem {
 
     fn get_affected_categories(&self, impact_point: &str) -> Vec<PartCategory> {
         match impact_point {
-            "front" => vec![PartCategory::Body, PartCategory::Engine, PartCategory::Suspension, PartCategory::Wheels],
-            "rear" => vec![PartCategory::Body, PartCategory::Fuel, PartCategory::Suspension, PartCategory::Wheels],
-            "left" => vec![PartCategory::Body, PartCategory::Suspension, PartCategory::Wheels, PartCategory::Steering],
-            "right" => vec![PartCategory::Body, PartCategory::Suspension, PartCategory::Wheels, PartCategory::Steering],
+            "front" => vec![
+                PartCategory::Body,
+                PartCategory::Engine,
+                PartCategory::Suspension,
+                PartCategory::Wheels,
+            ],
+            "rear" => vec![
+                PartCategory::Body,
+                PartCategory::Fuel,
+                PartCategory::Suspension,
+                PartCategory::Wheels,
+            ],
+            "left" => vec![
+                PartCategory::Body,
+                PartCategory::Suspension,
+                PartCategory::Wheels,
+                PartCategory::Steering,
+            ],
+            "right" => vec![
+                PartCategory::Body,
+                PartCategory::Suspension,
+                PartCategory::Wheels,
+                PartCategory::Steering,
+            ],
             "top" => vec![PartCategory::Body],
-            "bottom" => vec![PartCategory::Frame, PartCategory::Suspension, PartCategory::Drivetrain],
+            "bottom" => vec![
+                PartCategory::Frame,
+                PartCategory::Suspension,
+                PartCategory::Drivetrain,
+            ],
             _ => vec![PartCategory::Body],
         }
     }
 
-    fn get_damage_multiplier(&self, part: &VehiclePart, impact_point: &str, _damage_vector: &nalgebra::Vector3<f32>) -> f32 {
+    fn get_damage_multiplier(
+        &self,
+        part: &VehiclePart,
+        impact_point: &str,
+        _damage_vector: &nalgebra::Vector3<f32>,
+    ) -> f32 {
         // Simplified damage multiplier based on part location and type
         let base_multiplier = match part.category {
             PartCategory::Body => 1.0,
@@ -331,7 +365,7 @@ impl VehiclePartsSystem {
             PartCategory::Frame => 0.5,
             _ => 0.8,
         };
-        
+
         // Direct hits do more damage
         let direct_hit = match (part.category, impact_point) {
             (PartCategory::Engine, "front") => true,
@@ -339,7 +373,7 @@ impl VehiclePartsSystem {
             (PartCategory::Wheels, "left") | (PartCategory::Wheels, "right") => true,
             _ => false,
         };
-        
+
         if direct_hit {
             base_multiplier * 1.5
         } else {
@@ -350,15 +384,17 @@ impl VehiclePartsSystem {
     /// Apply wear to all parts based on usage
     pub fn apply_wear(&mut self, dt_hours: f32, surface_severity: f32, rpm_load: f32) {
         let engine_load = (rpm_load / 6000.0).clamp(0.5, 2.0);
-        
+
         for part in self.parts.values_mut() {
             let severity = match part.category {
                 PartCategory::Engine | PartCategory::Transmission => surface_severity * engine_load,
-                PartCategory::Wheels | PartCategory::Brakes | PartCategory::Suspension => surface_severity,
+                PartCategory::Wheels | PartCategory::Brakes | PartCategory::Suspension => {
+                    surface_severity
+                }
                 PartCategory::Frame => surface_severity * 0.3,
                 _ => surface_severity * 0.5,
             };
-            
+
             part.apply_wear(dt_hours, severity);
         }
     }
@@ -377,11 +413,13 @@ impl VehiclePartsSystem {
         if engine_parts.is_empty() {
             return 1.0;
         }
-        
-        let avg_integrity = engine_parts.iter()
+
+        let avg_integrity = engine_parts
+            .iter()
             .map(|p| p.integrity_percent() / 100.0)
-            .sum::<f32>() / engine_parts.len() as f32;
-        
+            .sum::<f32>()
+            / engine_parts.len() as f32;
+
         avg_integrity.clamp(0.0, 1.0)
     }
 
@@ -391,11 +429,12 @@ impl VehiclePartsSystem {
         if wheel_parts.is_empty() {
             return 1.0;
         }
-        
-        let min_tire_integrity = wheel_parts.iter()
+
+        let min_tire_integrity = wheel_parts
+            .iter()
             .map(|p| p.integrity_percent())
             .fold(100.0_f32, |min: f32, val| min.min(val));
-        
+
         if min_tire_integrity < 20.0 {
             0.4 // Severely reduced grip
         } else if min_tire_integrity < 40.0 {
@@ -413,11 +452,13 @@ impl VehiclePartsSystem {
         if brake_parts.is_empty() {
             return 1.0;
         }
-        
-        let avg_integrity = brake_parts.iter()
+
+        let avg_integrity = brake_parts
+            .iter()
             .map(|p| p.integrity_percent() / 100.0)
-            .sum::<f32>() / brake_parts.len() as f32;
-        
+            .sum::<f32>()
+            / brake_parts.len() as f32;
+
         if avg_integrity < 0.3 {
             0.5 // Doubled braking distance
         } else if avg_integrity < 0.5 {
@@ -433,11 +474,13 @@ impl VehiclePartsSystem {
         if suspension_parts.is_empty() {
             return 1.0;
         }
-        
-        let avg_integrity = suspension_parts.iter()
+
+        let avg_integrity = suspension_parts
+            .iter()
             .map(|p| p.integrity_percent() / 100.0)
-            .sum::<f32>() / suspension_parts.len() as f32;
-        
+            .sum::<f32>()
+            / suspension_parts.len() as f32;
+
         if avg_integrity < 0.4 {
             0.6 // Much harder to control
         } else if avg_integrity < 0.6 {
@@ -468,17 +511,21 @@ impl VehiclePartsSystem {
 
     /// Проблема 15: Deform mesh based on part damage
     /// Возвращает смещения вершин для визуальной деформации
-    pub fn deform_mesh(&self, impact_point: &str, damage_amount: f32) -> Vec<(usize, nalgebra::Vector3<f32>)> {
+    pub fn deform_mesh(
+        &self,
+        impact_point: &str,
+        damage_amount: f32,
+    ) -> Vec<(usize, nalgebra::Vector3<f32>)> {
         let mut deformations = Vec::new();
-        
+
         // Определяем зону повреждения
         let affected_vertices = self.get_affected_vertices(impact_point);
-        
+
         // Применяем деформацию к вершинам
         for (vertex_idx, base_offset) in &affected_vertices {
             // Сила деформации зависит от повреждения
             let deform_strength = damage_amount / 100.0;
-            
+
             // Направление деформации (внутрь меша)
             let deform_direction = match impact_point {
                 "front" => nalgebra::Vector3::new(0.0, 0.0, -1.0),
@@ -489,14 +536,14 @@ impl VehiclePartsSystem {
                 "bottom" => nalgebra::Vector3::new(0.0, 1.0, 0.0),
                 _ => nalgebra::Vector3::new(0.0, 0.0, 0.0),
             };
-            
+
             // Добавляем случайность для реалистичности
             let random_factor = ((*vertex_idx % 10) as f32 / 10.0).sin().abs();
             let offset = deform_direction * deform_strength * (0.5 + random_factor * 0.5);
-            
+
             deformations.push((*vertex_idx, offset));
         }
-        
+
         deformations
     }
 
@@ -527,17 +574,26 @@ impl VehiclePartsSystem {
     }
 
     /// Apply mesh deformation to render command
-    pub fn apply_to_render_command(&self, command: &mut crate::graphics::renderer::RenderCommand, impact_point: &str, damage: f32) {
+    pub fn apply_to_render_command(
+        &self,
+        command: &mut crate::graphics::renderer::RenderCommand,
+        impact_point: &str,
+        damage: f32,
+    ) {
         let deformations = self.deform_mesh(impact_point, damage);
-        
+
         // В реальной реализации применить деформацию к мешу
         // Здесь заглушка для демонстрации интеграции
-        eprintln!("DEBUG: Applying {} deformations to mesh", deformations.len());
+        eprintln!(
+            "DEBUG: Applying {} deformations to mesh",
+            deformations.len()
+        );
     }
 
     /// Get total repair cost for all damaged parts
     pub fn get_total_repair_cost(&self) -> f32 {
-        self.parts.values()
+        self.parts
+            .values()
             .filter(|p| p.integrity < p.max_integrity)
             .map(|p| {
                 let damage_ratio = 1.0 - (p.integrity / p.max_integrity);
@@ -568,7 +624,7 @@ mod tests {
             50000.0,
             10000.0,
         );
-        
+
         assert_eq!(part.integrity, 85.0);
         assert!(part.is_functional());
         assert_eq!(part.integrity_percent(), 85.0);
@@ -585,11 +641,11 @@ mod tests {
             8000.0,
             50000.0,
         );
-        
+
         part.apply_damage(25.0);
         assert_eq!(part.integrity, 75.0);
         assert!(part.is_functional());
-        
+
         part.apply_damage(60.0);
         assert_eq!(part.integrity, 15.0);
         assert!(!part.is_functional());
@@ -606,10 +662,10 @@ mod tests {
             3000.0,
             20000.0, // 20k hours lifetime
         );
-        
+
         // Apply 100 hours of wear with normal severity
         part.apply_wear(100.0, 1.0);
-        
+
         // Should have worn down proportionally
         assert!(part.integrity < 100.0);
         assert!(part.integrity > 90.0); // Should still be mostly good

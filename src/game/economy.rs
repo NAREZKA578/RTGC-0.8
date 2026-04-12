@@ -1,8 +1,8 @@
 //! Economy System for RTGC-0.8
 //! Handles player wallet, market prices, shops, wages, and contracts
 
-use std::collections::HashMap;
 use crate::game::skills::{PlayerSkills, SkillType};
+use std::collections::HashMap;
 
 /// Player wallet with multiple currencies
 #[derive(Debug, Clone)]
@@ -18,7 +18,7 @@ pub struct PlayerWallet {
 impl Default for PlayerWallet {
     fn default() -> Self {
         Self {
-            rub: 50_000.0,  // Starting money after education
+            rub: 50_000.0, // Starting money after education
             cny: 0.0,
             usd: 0.0,
         }
@@ -198,29 +198,40 @@ impl Shop {
 
     /// Add item to shop inventory
     pub fn add_item(&mut self, name: &str, quantity: u32, price: f64) {
-        self.inventory.insert(name.to_string(), ShopItem {
-            name: name.to_string(),
-            quantity,
-            price_per_unit: price,
-            max_stack: 100,
-        });
+        self.inventory.insert(
+            name.to_string(),
+            ShopItem {
+                name: name.to_string(),
+                quantity,
+                price_per_unit: price,
+                max_stack: 100,
+            },
+        );
     }
 
     /// Add buy order
     pub fn add_buy_order(&mut self, resource: &str, quantity: u32, price: f64, deadline: f32) {
-        self.buy_orders.insert(resource.to_string(), BuyOrder {
-            resource: resource.to_string(),
-            quantity_needed: quantity,
-            price_per_unit: price,
-            deadline_hours: deadline,
-        });
+        self.buy_orders.insert(
+            resource.to_string(),
+            BuyOrder {
+                resource: resource.to_string(),
+                quantity_needed: quantity,
+                price_per_unit: price,
+                deadline_hours: deadline,
+            },
+        );
     }
 
     /// Buy item from shop
-    pub fn buy_item(&mut self, item_name: &str, quantity: u32, wallet: &mut PlayerWallet) -> Option<u32> {
+    pub fn buy_item(
+        &mut self,
+        item_name: &str,
+        quantity: u32,
+        wallet: &mut PlayerWallet,
+    ) -> Option<u32> {
         let item = self.inventory.get_mut(item_name)?;
         let total_cost = item.price_per_unit * quantity as f64;
-        
+
         if wallet.remove_rub(total_cost) && item.quantity >= quantity {
             item.quantity -= quantity;
             Some(quantity)
@@ -230,11 +241,16 @@ impl Shop {
     }
 
     /// Sell item to shop (fulfill buy order)
-    pub fn sell_item(&mut self, resource: &str, quantity: u32, wallet: &mut PlayerWallet) -> Option<f64> {
+    pub fn sell_item(
+        &mut self,
+        resource: &str,
+        quantity: u32,
+        wallet: &mut PlayerWallet,
+    ) -> Option<f64> {
         let order = self.buy_orders.get(resource)?;
         let sell_qty = quantity.min(order.quantity_needed);
         let earnings = order.price_per_unit * sell_qty as f64;
-        
+
         wallet.add_rub(earnings);
         Some(earnings)
     }
@@ -263,21 +279,22 @@ pub fn calculate_wage(skill_rank: u8, base_salary: f64) -> f64 {
 
 /// Base salaries for different professions (rub/month at rank 4)
 pub const BASE_SALARIES: &[(&str, f64)] = &[
-    ("driver_rank2", 45_000.0),      // Driver rank 2
-    ("pilot_rank4", 80_000.0),       // Pilot rank 4
-    ("mechanic_rank3", 35_000.0),    // Mechanic rank 3
-    ("welder_rank3", 40_000.0),      // Welder rank 3
-    ("builder_rank3", 38_000.0),     // Builder rank 3
-    ("geologist_rank4", 55_000.0),   // Geologist rank 4
-    ("logger_rank3", 42_000.0),      // Logger rank 3
-    ("miner_rank4", 60_000.0),       // Miner rank 4
-    ("business_rank5", 100_000.0),   // Business owner rank 5
-    ("logistics_rank6", 70_000.0),   // Logistics manager rank 6
+    ("driver_rank2", 45_000.0),    // Driver rank 2
+    ("pilot_rank4", 80_000.0),     // Pilot rank 4
+    ("mechanic_rank3", 35_000.0),  // Mechanic rank 3
+    ("welder_rank3", 40_000.0),    // Welder rank 3
+    ("builder_rank3", 38_000.0),   // Builder rank 3
+    ("geologist_rank4", 55_000.0), // Geologist rank 4
+    ("logger_rank3", 42_000.0),    // Logger rank 3
+    ("miner_rank4", 60_000.0),     // Miner rank 4
+    ("business_rank5", 100_000.0), // Business owner rank 5
+    ("logistics_rank6", 70_000.0), // Logistics manager rank 6
 ];
 
 /// Get base salary for a profession
 pub fn get_base_salary(profession: &str) -> f64 {
-    BASE_SALARIES.iter()
+    BASE_SALARIES
+        .iter()
         .find(|(name, _)| *name == profession)
         .map(|(_, salary)| *salary)
         .unwrap_or(30_000.0) // Default minimum wage
@@ -315,7 +332,8 @@ impl JobBoard {
 
     /// Get available jobs filtered by player skill
     pub fn get_available_jobs(&self, skills: &PlayerSkills) -> Vec<&ContractJob> {
-        self.jobs.iter()
+        self.jobs
+            .iter()
             .filter(|job| {
                 let skill = skills.get_skill(job.required_skill);
                 skill.rank >= job.min_skill_rank
@@ -430,27 +448,27 @@ impl EconomySystem {
             shops: HashMap::new(),
             job_board: JobBoard::default(),
         };
-        
+
         // Initialize market prices for common resources
         system.init_market_prices();
         system.init_sample_shops();
-        
+
         system
     }
 
     fn init_market_prices(&mut self) {
         let resources = [
-            ("fuel_ai92", 52.0),      // RUB per liter
+            ("fuel_ai92", 52.0), // RUB per liter
             ("fuel_ai95", 56.0),
             ("fuel_diesel", 58.0),
-            ("engine_oil", 800.0),   // RUB per 4L
-            ("cement", 450.0),        // RUB per 50kg bag
-            ("sand", 150.0),          // RUB per ton
-            ("gravel", 280.0),        // RUB per ton
-            ("metal_scrap", 12_000.0), // RUB per ton
-            ("logs", 3500.0),         // RUB per m³
-            ("spark_plug", 450.0),    // RUB per piece
-            ("brake_pads", 2500.0),   // RUB per set
+            ("engine_oil", 800.0),       // RUB per 4L
+            ("cement", 450.0),           // RUB per 50kg bag
+            ("sand", 150.0),             // RUB per ton
+            ("gravel", 280.0),           // RUB per ton
+            ("metal_scrap", 12_000.0),   // RUB per ton
+            ("logs", 3500.0),            // RUB per m³
+            ("spark_plug", 450.0),       // RUB per piece
+            ("brake_pads", 2500.0),      // RUB per set
             ("tire_235_75_r16", 8500.0), // RUB per tire
         ];
 
@@ -472,21 +490,25 @@ impl EconomySystem {
         self.shops.insert("gas_station_1".to_string(), gas_station);
 
         // Service station
-        let mut service_station = Shop::new(ShopType::ServiceStation, "АвтоСервис Профи", "ул. Гоголя");
+        let mut service_station =
+            Shop::new(ShopType::ServiceStation, "АвтоСервис Профи", "ул. Гоголя");
         service_station.add_item("spark_plug", 100, 450.0);
         service_station.add_item("brake_pads", 30, 2500.0);
         service_station.add_item("tire_235_75_r16", 40, 8500.0);
         service_station.add_item("engine_oil", 80, 800.0);
         service_station.add_buy_order("metal_scrap", 500, 11_000.0, 168.0); // 1 week
-        self.shops.insert("service_station_1".to_string(), service_station);
+        self.shops
+            .insert("service_station_1".to_string(), service_station);
 
         // Construction supply
-        let mut construction = Shop::new(ShopType::ConstructionSupply, "СтройБаза", "ул. Станционная");
+        let mut construction =
+            Shop::new(ShopType::ConstructionSupply, "СтройБаза", "ул. Станционная");
         construction.add_item("cement", 500, 450.0);
         construction.add_item("sand", 200, 150.0);
         construction.add_item("gravel", 150, 280.0);
         construction.add_buy_order("logs", 100, 3200.0, 336.0); // 2 weeks
-        self.shops.insert("construction_1".to_string(), construction);
+        self.shops
+            .insert("construction_1".to_string(), construction);
     }
 
     /// Calculate wage for a profession based on skill rank
@@ -520,12 +542,12 @@ mod tests {
     #[test]
     fn test_wallet_operations() {
         let mut wallet = PlayerWallet::new(100_000.0, 0.0, 0.0);
-        
+
         assert!(wallet.remove_rub(50_000.0));
         assert_eq!(wallet.rub, 50_000.0);
-        
+
         assert!(!wallet.remove_rub(100_000.0)); // Insufficient funds
-        
+
         wallet.add_rub(25_000.0);
         assert_eq!(wallet.rub, 75_000.0);
     }
@@ -533,7 +555,7 @@ mod tests {
     #[test]
     fn test_currency_exchange() {
         let mut wallet = PlayerWallet::new(90_000.0, 0.0, 0.0);
-        
+
         let usd_received = wallet.exchange_rub_to_usd(90_000.0);
         assert_eq!(usd_received, Some(1000.0));
         assert_eq!(wallet.rub, 0.0);
@@ -551,7 +573,7 @@ mod tests {
     #[test]
     fn test_logistics_bonus() {
         let econ = EconomySystem::new();
-        
+
         assert_eq!(econ.get_logistics_bonus(5), 1.0); // No bonus
         assert_eq!(econ.get_logistics_bonus(6), 1.08); // +8%
         assert_eq!(econ.get_logistics_bonus(10), 1.40); // +40%
@@ -561,12 +583,12 @@ mod tests {
     #[test]
     fn test_market_price_modifiers() {
         let mut price = MarketPrice::new("fuel_ai92", 52.0);
-        
+
         assert_eq!(price.final_price(), 52.0);
-        
+
         price.set_location_modifier(1.3); // Remote area
         price.adjust_supply(true, 50.0); // Sold 50 units
-        
+
         assert!(price.final_price() < 52.0 * 1.3); // Price dropped due to oversupply
     }
 }

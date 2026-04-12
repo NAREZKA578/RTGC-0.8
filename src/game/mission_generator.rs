@@ -1,5 +1,5 @@
 //! Mission generator - creates delivery missions from settlement infrastructure
-//! 
+//!
 //! Implements:
 //! - Automatic mission generation from POI (Points of Interest)
 //! - Cargo types based on settlement specialization
@@ -9,8 +9,8 @@ use nalgebra::Vector3;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-use crate::world::{Settlement, SettlementType, BuildingType};
 use crate::world::RoadNetwork;
+use crate::world::{BuildingType, Settlement, SettlementType};
 
 /// Cargo types available for transport
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -94,11 +94,11 @@ impl Mission {
         let cargo_fragility = self.cargo_type.fragility();
         // Impact threshold before damage starts
         let threshold = 5.0;
-        
+
         if total_impact < threshold {
             return 0.0;
         }
-        
+
         // Penalty scales with fragility and impact above threshold
         let damage = (total_impact - threshold) * cargo_fragility * 0.1;
         damage.min(0.75) // Max 75% penalty
@@ -120,10 +120,10 @@ impl Mission {
     pub fn calculate_final_reward(&self, total_impact: f32, time_taken: f32) -> i32 {
         let damage_penalty = self.calculate_damage_penalty(total_impact);
         let time_penalty = self.calculate_time_penalty(time_taken);
-        
+
         let total_penalty = (damage_penalty + time_penalty).min(0.9);
         let final_reward = self.base_reward as f32 * (1.0 - total_penalty);
-        
+
         final_reward.max(0.0) as i32
     }
 }
@@ -153,13 +153,13 @@ impl MissionGenerator {
 
         // Find nearest settlement with cargo depot to player
         let pickup_settlement = self.find_nearest_cargo_source(player_pos)?;
-        
+
         // Find suitable delivery destination
         let delivery_settlement = self.find_suitable_destination(&pickup_settlement, &mut rng)?;
 
         // Determine cargo type based on pickup settlement's specialization
         let cargo_type = self.determine_cargo_type(&pickup_settlement, &mut rng);
-        
+
         // Calculate distance
         let dx = pickup_settlement.center[0] - delivery_settlement.center[0];
         let dz = pickup_settlement.center[2] - delivery_settlement.center[2];
@@ -214,7 +214,8 @@ impl MissionGenerator {
             }
 
             let dist = ((player_pos.x - settlement.center[0]).powi(2)
-                + (player_pos.z - settlement.center[2]).powi(2)).sqrt();
+                + (player_pos.z - settlement.center[2]).powi(2))
+            .sqrt();
 
             if best.is_none() || dist < best.map_or(f32::MAX, |(_, d)| d) {
                 best = Some((settlement, dist));
@@ -230,10 +231,10 @@ impl MissionGenerator {
         pickup: &Settlement,
         rng: &mut ChaCha8Rng,
     ) -> Option<&Settlement> {
-        let candidates: Vec<_> = self.settlements.iter()
-            .filter(|s| {
-                s.id != pickup.id && s.has_delivery_point()
-            })
+        let candidates: Vec<_> = self
+            .settlements
+            .iter()
+            .filter(|s| s.id != pickup.id && s.has_delivery_point())
             .collect();
 
         if candidates.is_empty() {
@@ -246,7 +247,7 @@ impl MissionGenerator {
             let dx = pickup.center[0] - candidate.center[0];
             let dz = pickup.center[2] - candidate.center[2];
             let dist = (dx * dx + dz * dz).sqrt();
-            
+
             // Prefer 5-50km distances
             let dist_km = dist / 1000.0;
             let weight = if dist_km >= 5.0 && dist_km <= 50.0 {

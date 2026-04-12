@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Статус загрузки ресурса
 #[derive(Debug, Clone, PartialEq)]
@@ -169,7 +169,7 @@ impl LoadingManager {
 
         self.resources.insert(path.to_string(), resource);
         self.load_queue.push(path.to_string());
-        
+
         // Сортировка очереди по приоритету
         self.load_queue.sort_by(|a, b| {
             let priority_a = self.resources.get(a).map(|r| r.priority).unwrap_or(255);
@@ -177,20 +177,23 @@ impl LoadingManager {
             priority_a.cmp(&priority_b)
         });
 
-        debug!("Added resource: {} (type: {:?}, priority: {})", path, resource_type, priority);
+        debug!(
+            "Added resource: {} (type: {:?}, priority: {})",
+            path, resource_type, priority
+        );
     }
 
     /// Проверить наличие всех файлов
     pub fn check_all_files(&mut self) -> LoadingProgress {
         info!("Checking all files...");
         self.state = LoadingState::Checking;
-        
+
         let mut checked = 0;
         let mut not_found = 0;
 
         for (path, resource) in &mut self.resources {
             let full_path = self.asset_root.join(path);
-            
+
             if full_path.exists() {
                 // Получение размера файла
                 if let Ok(metadata) = std::fs::metadata(&full_path) {
@@ -225,27 +228,30 @@ impl LoadingManager {
         // Копируем очередь и callback, чтобы избежать проблем с заимствованием
         let queue: Vec<String> = self.load_queue.drain(..).collect();
         let callback = self.progress_callback.take();
-        
+
         // Загрузка ресурсов по очереди
         for path in &queue {
             // Сначала копируем всю необходимую информацию
             let (resource_type_opt, status) = {
                 if let Some(resource) = self.resources.get(path) {
-                    (Some(resource.resource_type.clone()), resource.status.clone())
+                    (
+                        Some(resource.resource_type.clone()),
+                        resource.status.clone(),
+                    )
                 } else {
                     (None, LoadStatus::NotFound)
                 }
             };
-            
+
             if status == LoadStatus::NotFound {
                 continue;
             }
-            
+
             let resource_type = match resource_type_opt {
                 Some(rt) => rt,
                 None => continue,
             };
-            
+
             // Обновляем статус загрузки
             if let Some(resource) = self.resources.get_mut(path) {
                 resource.status = LoadStatus::Loading;
@@ -255,10 +261,12 @@ impl LoadingManager {
             // Загрузка ресурса (вне borrow)
             let full_path = self.asset_root.join(path);
             let load_result = self.load_resource_internal(path, &full_path, &resource_type);
-            
+
             let load_time = Instant::now();
             let size_result = load_result.and_then(|_| {
-                std::fs::metadata(&full_path).map(|m| m.len()).map_err(|e| e.to_string())
+                std::fs::metadata(&full_path)
+                    .map(|m| m.len())
+                    .map_err(|e| e.to_string())
             });
 
             // Обновляем результат загрузки
@@ -280,7 +288,9 @@ impl LoadingManager {
                             if duration > self.stats.max_load_time_ms {
                                 self.stats.max_load_time_ms = duration;
                             }
-                            if self.stats.min_load_time_ms == 0 || duration < self.stats.min_load_time_ms {
+                            if self.stats.min_load_time_ms == 0
+                                || duration < self.stats.min_load_time_ms
+                            {
                                 self.stats.min_load_time_ms = duration;
                             }
                         }
@@ -338,9 +348,9 @@ impl LoadingManager {
         }
 
         // Получение размера файла
-        let metadata = std::fs::metadata(full_path)
-            .map_err(|e| format!("Failed to read metadata: {}", e))?;
-        
+        let metadata =
+            std::fs::metadata(full_path).map_err(|e| format!("Failed to read metadata: {}", e))?;
+
         let size = metadata.len();
 
         // Имитация загрузки (в реальности здесь будет загрузка конкретного типа)
@@ -360,7 +370,8 @@ impl LoadingManager {
             }
             ResourceType::Shader => {
                 // Проверка формата шейдера
-                if !path.ends_with(".glsl") && !path.ends_with(".vert") && !path.ends_with(".frag") {
+                if !path.ends_with(".glsl") && !path.ends_with(".vert") && !path.ends_with(".frag")
+                {
                     warn!("Unknown shader format: {}", path);
                 }
             }
@@ -373,10 +384,14 @@ impl LoadingManager {
     /// Получить текущий прогресс загрузки
     pub fn get_progress(&self) -> LoadingProgress {
         let total = self.resources.len();
-        let loaded = self.resources.values()
+        let loaded = self
+            .resources
+            .values()
             .filter(|r| r.status == LoadStatus::Loaded)
             .count();
-        let failed = self.resources.values()
+        let failed = self
+            .resources
+            .values()
             .filter(|r| matches!(r.status, LoadStatus::Failed(_) | LoadStatus::NotFound))
             .count();
 
@@ -434,21 +449,24 @@ impl LoadingManager {
 
     /// Получить только загруженные ресурсы
     pub fn get_loaded_resources(&self) -> Vec<&LoadableResource> {
-        self.resources.values()
+        self.resources
+            .values()
             .filter(|r| r.status == LoadStatus::Loaded)
             .collect()
     }
 
     /// Получить ресурсы с ошибкой загрузки
     pub fn get_failed_resources(&self) -> Vec<&LoadableResource> {
-        self.resources.values()
+        self.resources
+            .values()
             .filter(|r| matches!(r.status, LoadStatus::Failed(_) | LoadStatus::NotFound))
             .collect()
     }
 
     /// Проверить, загружен ли конкретный ресурс
     pub fn is_resource_loaded(&self, path: &str) -> bool {
-        self.resources.get(path)
+        self.resources
+            .get(path)
             .map(|r| r.status == LoadStatus::Loaded)
             .unwrap_or(false)
     }
@@ -471,7 +489,8 @@ impl LoadingManager {
 
     /// Получить ресурсы, которые не используются (ref_count == 0)
     pub fn get_unused_resources(&self) -> Vec<&LoadableResource> {
-        self.resources.values()
+        self.resources
+            .values()
             .filter(|r| r.ref_count == 0 && r.status == LoadStatus::Loaded)
             .collect()
     }
@@ -479,13 +498,15 @@ impl LoadingManager {
     /// Выгрузить неиспользуемые ресурсы
     pub fn unload_unused_resources(&mut self) -> usize {
         // Сначала собираем пути неиспользуемых ресурсов
-        let unused_paths: Vec<String> = self.resources.iter()
+        let unused_paths: Vec<String> = self
+            .resources
+            .iter()
             .filter(|(_, r)| r.ref_count == 0 && r.status == LoadStatus::Loaded)
             .map(|(path, _)| path.clone())
             .collect();
-        
+
         let count = unused_paths.len();
-        
+
         // Теперь выгружаем по путям
         for path in unused_paths {
             if let Some(resource) = self.resources.get_mut(&path) {
@@ -494,7 +515,7 @@ impl LoadingManager {
                 resource.ref_count = 0;
             }
         }
-        
+
         count
     }
 
@@ -512,9 +533,8 @@ impl LoadingManager {
 /// Глобальный экземпляр LoadingManager (для доступа из любого места)
 use once_cell::sync::Lazy;
 
-static GLOBAL_LOADING_MANAGER: Lazy<Arc<Mutex<LoadingManager>>> = Lazy::new(|| {
-    Arc::new(Mutex::new(LoadingManager::new("assets")))
-});
+static GLOBAL_LOADING_MANAGER: Lazy<Arc<Mutex<LoadingManager>>> =
+    Lazy::new(|| Arc::new(Mutex::new(LoadingManager::new("assets"))));
 
 /// Получить глобальный менеджер загрузки
 pub fn get_global_loading_manager() -> Arc<Mutex<LoadingManager>> {
@@ -558,7 +578,7 @@ mod tests {
     fn test_loading_progress() {
         let mut manager = LoadingManager::new("assets");
         manager.add_resource("test.obj", ResourceType::Mesh, 1);
-        
+
         let progress = manager.get_progress();
         assert_eq!(progress.total_resources, 1);
         assert_eq!(progress.loaded_resources, 0);

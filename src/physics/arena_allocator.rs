@@ -1,6 +1,6 @@
-use std::vec::Vec;
 use std::ops::Index;
 use std::ops::IndexMut;
+use std::vec::Vec;
 
 /// A simple arena allocator for efficient memory management with generation tracking to prevent use-after-free bugs
 pub struct ArenaAllocator<T> {
@@ -106,6 +106,11 @@ impl<T> ArenaAllocator<T> {
         self.get_mut_unchecked(index)
     }
 
+    /// Gets a mutable reference by index (alias for get_mut_by_index)
+    pub fn get_by_index_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.get_mut_by_index(index)
+    }
+
     /// Checks if an index is valid and allocated
     pub fn is_allocated(&self, index: usize) -> bool {
         if index < self.items.len() {
@@ -186,7 +191,9 @@ impl<T> Index<usize> for ArenaAllocator<T> {
     fn index(&self, index: usize) -> &Self::Output {
         // SAFETY: This will panic if index is out of bounds or not allocated.
         // Prefer using get() or get_unchecked() for safer access patterns.
-        self.items[index].as_ref().expect("Index out of bounds or not allocated")
+        self.items[index]
+            .as_ref()
+            .expect("Index out of bounds or not allocated")
     }
 }
 
@@ -194,6 +201,8 @@ impl<T> IndexMut<usize> for ArenaAllocator<T> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         // SAFETY: This will panic if index is out of bounds or not allocated.
         // Prefer using get_mut() or get_mut_unchecked() for safer access patterns.
-        self.items[index].as_mut().expect("Index out of bounds or not allocated")
+        self.items[index]
+            .as_mut()
+            .expect("Index out of bounds or not allocated")
     }
 }

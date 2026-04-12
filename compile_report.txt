@@ -1,0 +1,349 @@
+1:warning: unused import: `tracing::warn`
+9:warning: unused imports: `Gltf` and `buffer::Data`
+15:warning: unused import: `WheelState`
+21:warning: unused import: `std::io::Cursor`
+27:warning: unused import: `crate::graphics::mesh::Vertex`
+33:warning: unused import: `HashSet`
+39:warning: unused imports: `info` and `warn`
+45:warning: unused import: `std::sync::Arc`
+51:warning: unused imports: `debug`, `info`, and `warn`
+57:warning: unused import: `std::fs::File`
+63:warning: unused import: `std::io::BufReader`
+69:warning: unused import: `crate::config::AudioConfig`
+75:warning: unused import: `warn`
+81:warning: unused import: `std::sync::Arc`
+87:warning: unused import: `std::fmt`
+88: --> src\error.rs:5:5
+93:warning: unused import: `LodObject`
+99:warning: unused import: `crate::ui::hud::HudFlashElement`
+105:warning: unused import: `Matrix4`
+111:warning: unused imports: `AddressMode`, `BufferDesc`, `BufferDescription`, `BufferType`, `BufferUsage`, `ClearValue`, `ColorBlendState`, `CullMode`, `DepthState`, `FilterMode`, `FrontFace`, `InputLayout`, `LoadOp`, `PipelineStateObject`, `PrimitiveTopology`, `RasterizerState`, `RenderAttachment`, `RenderPassDescription`, `ResourceBarrier`, `RhiResult`, `SamplerDescription`, `ScissorRect`, `ShaderDescription`, `ShaderStage`, `StoreOp`, `VertexAttribute`, `VertexFormat`, and `Viewport`
+129:warning: unused import: `LodObject`
+135:warning: unused import: `Quaternion`
+141:warning: unused import: `nalgebra::Vector3`
+147:warning: unused import: `Matrix3`
+153:warning: unused doc comment
+162:warning: unused doc comment
+170:warning: unused import: `std::sync::Arc`
+176:warning: unused import: `crate::graphics::rhi::gl::GlDevice`
+182:warning: unused imports: `DepthStencilAttachment`, `RenderAttachment`, and `StoreOp`
+190:warning: unused imports: `NativeRenderbuffer` and `NativeUniformLocation`
+196:warning: unused import: `std::path::Path`
+202:warning: unused import: `Display`
+208:warning: unused import: `crate::graphics::rhi::device::IDevice`
+214:warning: unused import: `crate::graphics::material::Material`
+220:warning: unused import: `std::collections::HashMap`
+226:warning: unused import: `NamedKey`
+232:warning: unused import: `NamedKey`
+238:warning: unused import: `PhysicalKey`
+244:warning: unused import: `MouseButton as WinitMouseButton`
+250:warning: unused imports: `InputAction` and `InputMapping`
+256:warning: unused imports: `GamepadAxis` and `GamepadState`
+262:warning: unused imports: `Matrix3` and `UnitQuaternion`
+268:warning: unused import: `Point3`
+274:warning: unused imports: `Matrix3`, `Point3`, and `Quaternion`
+280:warning: unused imports: `LAYER_CARGO`, `LAYER_WORLD`, `Ray`, `RaycastHit`, and `RigidBody`
+286:warning: variant `TruckCrane_25t` should have an upper camel case name
+294:warning: variant `TruckCrane_50t` should have an upper camel case name
+300:warning: unused import: `crate::physics::physics_module::Shape`
+306:warning: unused import: `crate::physics::RigidBody`
+312:warning: unused imports: `Matrix3` and `UnitQuaternion`
+318:warning: unused import: `UnitQuaternion`
+324:warning: unused imports: `Point3` and `Quaternion`
+330:warning: unused import: `std::sync::Arc`
+336:warning: unused import: `std::collections::HashMap`
+342:warning: unused imports: `Matrix3` and `Quaternion`
+348:warning: unused import: `std::f32::consts::PI`
+354:warning: unused imports: `LAYER_WORLD`, `Ray`, `RaycastHit`, and `RigidBody`
+360:warning: variant `GTS_M` should have an upper camel case name
+366:warning: variant `GAZ_71` should have an upper camel case name
+372:warning: variant `MT_LB` should have an upper camel case name
+378:warning: variant `T_150K` should have an upper camel case name
+384:warning: variant `DT_75` should have an upper camel case name
+390:warning: variant `Vityaz_DT30` should have an upper camel case name
+396:warning: unused imports: `Matrix3`, `Quaternion`, and `UnitQuaternion`
+402:warning: unused imports: `UnitQuaternion` and `Vector3`
+408:warning: unused imports: `InventoryItem` and `ItemType`
+414:warning: unused imports: `AtomicU64`, `AtomicUsize`, and `Ordering`
+420:warning: unused import: `crate::assets::VehicleLoader`
+426:warning: unused import: `crate::graphics::mesh::Mesh`
+432:warning: unused import: `crate::network::PlayerInput`
+438:warning: unused imports: `ChunkId`, `HEIGHTMAP_RESOLUTION`, `TerrainVertex`, and `generate_chunk_mesh`
+444:warning: unused import: `BuildingPlacer`
+450:warning: unused import: `UnitQuaternion`
+456:warning: unused import: `std::sync::Arc`
+462:warning: unused import: `winit::application::ApplicationHandler`
+468:warning: unused import: `winit::event::WindowEvent as WinitWindowEvent`
+474:warning: unused import: `winit::event_loop::ActiveEventLoop`
+480:warning: unused import: `winit::window::WindowId`
+486:warning: unused import: `warn`
+492:warning: unused import: `std::sync::Arc`
+498:warning: unused imports: `CHUNK_SIZE` and `HEIGHTMAP_RESOLUTION`
+504:warning: unused import: `nalgebra::Vector3`
+510:warning: unused import: `Point3`
+516:warning: unused import: `Chunk`
+522:warning: unused imports: `info` and `warn`
+528:warning: unnecessary parentheses around index expression
+541:warning: unused import: `VecDeque`
+547:warning: unused import: `std::sync::Arc`
+553:warning: unused import: `info`
+556:13 | use tracing::{info, debug, warn, error};
+559:warning: unused import: `ChunkData`
+565:warning: unused import: `UnitQuaternion`
+571:warning: unused import: `std::collections::HashMap`
+577:warning: unused import: `Vector3`
+583:warning: unused import: `BinaryHeap`
+589:warning: unused import: `std::cmp::Ordering`
+595:warning: unused import: `nalgebra::Vector3`
+601:warning: unused import: `crate::game::economy::PlayerWallet`
+607:warning: unused import: `crate::game::InventoryItem`
+613:warning: unused import: `nalgebra::Vector3`
+619:warning: unused import: `std::time::Duration`
+625:warning: unused import: `Ray`
+631:warning: unused import: `HashSet`
+637:warning: unused imports: `SystemTime` and `UNIX_EPOCH`
+643:warning: unused import: `SaveSystem`
+649:warning: unused import: `chrono::Local`
+655:warning: unused import: `crate::game::player::Player`
+661:warning: unused import: `crate::ui::hud::HudManager`
+667:warning: unused import: `Path`
+673:warning: unused import: `crate::game::economy::PlayerWallet`
+679:warning: unused import: `crate::game::skills::PlayerSkills`
+685:warning: unused imports: `ActionMap` and `ExtendedAction`
+691:warning: unused import: `crate::game::mission_save::WorldState`
+697:warning: unused import: `crate::game::skills::PlayerSkills`
+703:warning: unused import: `crate::game::InventoryItem`
+709:warning: unused import: `TransitionEffect`
+715:warning: unused import: `SceneId`
+721:warning: unused imports: `InteractableType` and `InteractionResult`
+727:warning: unused import: `crate::game::skills::PlayerSkills`
+733:warning: unused imports: `Quaternion` and `Vector3`
+739:warning: unused import: `std::sync::Arc`
+745:warning: unused import: `parking_lot::RwLock`
+751:warning: unused imports: `error` and `warn`
+754:18 | use tracing::{info, warn, debug, error};
+757:warning: unused import: `Quaternion`
+763:warning: unused import: `warn`
+769:warning: unused import: `Duration`
+775:warning: unused imports: `error` and `warn`
+778:7 | use tracing::{info, warn, debug, error};
+781:warning: unused import: `rayon::prelude`
+787:warning: unused variable: `path`
+795:warning: unused variable: `asset_type`
+801:warning: unused variable: `is_glb`
+807:warning: value assigned to `vertices` is never read
+816:warning: value assigned to `indices` is never read
+824:warning: variable does not need to be mutable
+834:warning: unused variable: `frequency`
+840:warning: unused variable: `elevation`
+846:warning: unused variable: `index`
+852:warning: unused variable: `worker_id`
+858:warning: unused variable: `execution_time`
+864:warning: unused variable: `start`
+870:warning: unused variable: `end`
+876:warning: unused variable: `color`
+882:warning: unused variable: `rect`
+888:warning: unused variable: `texture`
+894:warning: unused variable: `color`
+900:warning: unused variable: `depth`
+906:warning: variable does not need to be mutable
+914:warning: unused variable: `pos`
+920:warning: unused variable: `ctx`
+926:warning: unused variable: `max_uniforms`
+932:warning: unused variable: `format`
+938:warning: unused variable: `ty`
+944:warning: unnecessary `unsafe` block
+952:warning: unused variable: `pso`
+958:warning: unused variable: `topology`
+964:warning: unused variable: `offset`
+970:warning: unused variable: `format`
+976:warning: unused variable: `stage`
+982:warning: unused variable: `stage`
+988:warning: unused variable: `view`
+994:warning: unused variable: `stage`
+1000:warning: unused variable: `start_instance`
+1006:warning: unused variable: `base_vertex`
+1012:warning: unused variable: `start_instance`
+1018:warning: unused variable: `offset`
+1024:warning: unused variable: `offset`
+1030:warning: unused variable: `view`
+1036:warning: unused variable: `view`
+1042:warning: unused variable: `command_lists`
+1048:warning: unused variable: `wait_semaphores`
+1054:warning: unused variable: `signal_semaphores`
+1060:warning: unused variable: `swap_chain`
+1066:warning: unused variable: `timeout_ms`
+1072:warning: unused variable: `value`
+1078:warning: unused variable: `quality`
+1084:warning: unused variable: `loader`
+1090:warning: unused variable: `speed_multiplier`
+1096:warning: unused variable: `t`
+1102:warning: unused variable: `window`
+1108:warning: unused variable: `renderer`
+1114:warning: unused variable: `renderer`
+1120:warning: unused variable: `view_proj`
+1126:warning: unused variable: `renderer`
+1132:warning: unused variable: `view_proj`
+1138:warning: unused variable: `window`
+1141:255 |     pub fn new_from_window(window: &Window) -> Result<Self, Box<dyn std::error::Error>> {
+1144:warning: unused variable: `action`
+1150:warning: unused variable: `dt`
+1156:warning: unused variable: `contact_normal`
+1162:warning: unused variable: `dt`
+1168:warning: unused variable: `vehicle_angular_velocity`
+1174:warning: unused variable: `lateral_force`
+1180:warning: unused variable: `normal_force`
+1186:warning: unused variable: `dt`
+1192:warning: unused variable: `sub_steps`
+1198:warning: variable does not need to be mutable
+1206:warning: unused variable: `dt`
+1212:warning: unused variable: `hook_pos`
+1218:warning: unused variable: `disk_loading`
+1224:warning: variable `total_torque` is assigned to, but never used
+1232:warning: value assigned to `total_torque` is never read
+1240:warning: unused variable: `main_rotor_torque`
+1246:warning: unused variable: `speed`
+1252:warning: variable does not need to be mutable
+1260:warning: variable does not need to be mutable
+1268:warning: unused variable: `box_in_capsule_space`
+1274:warning: unused variable: `s`
+1280:warning: unused variable: `t`
+1286:warning: value assigned to `s` is never read
+1294:warning: value assigned to `t` is never read
+1302:warning: unused variable: `abs_z`
+1308:warning: variable `ray_t` is assigned to, but never used
+1316:warning: value assigned to `ray_t` is never read
+1324:warning: value assigned to `ray_t` is never read
+1332:warning: value assigned to `seg_t` is never read
+1340:warning: unused variable: `height_map`
+1346:warning: unused variable: `origin`
+1352:warning: unused variable: `direction`
+1358:warning: unused variable: `max_distance`
+1364:warning: unused variable: `right`
+1370:warning: unused variable: `avg_force`
+1376:warning: unused variable: `terrain_getter`
+1382:warning: unused variable: `wheel_steering`
+1388:warning: unused variable: `wheel_contact`
+1394:warning: unused variable: `ray_origin`
+1400:warning: unused variable: `ray_direction`
+1406:warning: unused variable: `ray_length`
+1412:warning: unused variable: `dt`
+1418:warning: unused variable: `ground_y`
+1424:warning: unused variable: `forward_vel`
+1430:warning: unused variable: `lateral_vel`
+1436:warning: unused variable: `friction_multiplier`
+1442:warning: unused variable: `rolling_resistance_force`
+1448:warning: unused variable: `dt`
+1454:warning: unused variable: `ground_y`
+1460:warning: unused variable: `forward_vel`
+1466:warning: unused variable: `lateral_vel`
+1472:warning: unused variable: `friction_multiplier`
+1478:warning: unused variable: `rolling_resistance_force`
+1484:warning: unused variable: `dt`
+1490:warning: unused variable: `chassis_body`
+1496:warning: unused variable: `alignment`
+1502:warning: variable does not need to be mutable
+1510:warning: unused variable: `config`
+1516:warning: unused variable: `window`
+1522:warning: unused variable: `window_id`
+1528:warning: unused variable: `event`
+1534:warning: unused variable: `dt`
+1540:warning: unused variable: `vertices`
+1546:warning: unused variable: `indices`
+1552:warning: unused variable: `h_center`
+1558:warning: unused variable: `props`
+1564:warning: unused variable: `moisture`
+1570:warning: unused variable: `size`
+1576:warning: unused variable: `chunk_id`
+1582:warning: unused variable: `body`
+1588:warning: unused variable: `distance`
+1594:warning: unused variable: `index`
+1600:warning: variable does not need to be mutable
+1608:warning: unused variable: `rng`
+1614:warning: variable does not need to be mutable
+1622:warning: variable does not need to be mutable
+1630:warning: variable does not need to be mutable
+1638:warning: unused variable: `terrain_getter`
+1644:warning: unused variable: `chunk_size`
+1650:warning: unused variable: `main_road_dir`
+1656:warning: unused variable: `main_road_dir`
+1662:warning: unused variable: `main_road_dir`
+1668:warning: unused variable: `rng`
+1674:warning: unused variable: `full_path`
+1680:warning: unused variable: `mesh`
+1686:warning: unused variable: `full_path`
+1692:warning: unused variable: `texture`
+1698:warning: value assigned to `y` is never read
+1706:warning: unreachable pattern
+1730:warning: unused variable: `camera_distance`
+1736:warning: unused variable: `door_id`
+1742:warning: unused variable: `object_id`
+1748:warning: unused variable: `bed_id`
+1754:warning: unused variable: `btn`
+1760:warning: unused variable: `dt`
+1766:warning: unused variable: `scene`
+1772:warning: unused variable: `x`
+1778:warning: unused variable: `z`
+1784:warning: unreachable pattern
+1811:warning: unused variable: `base_offset`
+1817:warning: unused variable: `command`
+1823:warning: unused variable: `client`
+1829:warning: unused variable: `client`
+1835:warning: unused variable: `filter`
+1841:warning: variable does not need to be mutable
+1849:warning: field `sound_cache` is never read
+1860:warning: field `required_components` is never read
+1869:warning: methods `deallocate`, `iter`, and `iter_mut` are never used
+1884:warning: fields `priority` and `dependencies` are never read
+1896:warning: method `get_ready_jobs` is never used
+1905:warning: field `config` is never read
+1913:warning: fields `components` and `update_func` are never read
+1923:warning: associated function `new` is never used
+1932:warning: fields `hud_vao`, `hud_vbo`, `hud_vertices`, `minimap_texture`, and `minimap_size` are never read
+1950:warning: multiple fields are never read
+1985:warning: field `max_cache_size` is never read
+1994:warning: field `cmd_type` is never read
+2003:warning: field `cmd_type` is never read
+2012:warning: field `max_particles` is never read
+2023:warning: function `create_dummy_window` is never used
+2029:warning: field `command_type` is never read
+2037:warning: method `update_load_physics` is never used
+2046:warning: field `thread_pool` is never read
+2055:warning: methods `handle_collisions`, `resolve_contact`, `apply_friction`, `correct_position`, and `solve_constraints` are never used
+2076:warning: method `apply_buoyancy` is never used
+2085:warning: field `friction` is never read
+2096:warning: field `active_jobs` is never read
+2105:warning: methods `update_wheel` and `apply_tire_forces` are never used
+2117:warning: field `settings_enabled` is never read
+2126:warning: fields `last_frame_time`, `material_manager`, `compass_heading`, `chunk_mesh_data`, `asset_manager`, and `ui_manager` are never read
+2150:warning: fields `config` and `pending_chunks` are never read
+2162:warning: type alias `Vec3` is never used
+2168:warning: type alias `Vec3` is never used
+2174:warning: type alias `Vec3` is never used
+2180:warning: field `pending_acks` is never read
+2189:warning: field `path` is never read
+2199:warning: associated constant `Immutable` should have an upper case name
+2207:warning: associated constant `Dynamic` should have an upper case name
+2213:warning: associated constant `Transient` should have an upper case name
+2219:warning: associated constant `Upload` should have an upper case name
+2225:warning: associated constant `Readback` should have an upper case name
+2231:warning: method `maxBoomLength` should have a snake case name
+2239:warning: method `minBoomLength` should have a snake case name
+2245:warning: variable `dL` should have a snake case name
+2251:warning: variable `dD` should have a snake case name
+2257:warning: variable `dD` should have a snake case name
+2263:warning: variable `inv_I_a` should have a snake case name
+2269:warning: variable `inv_I_b` should have a snake case name
+2275:warning: unused `std::result::Result` that must be used
+2288:warning: unused `std::result::Result` that must be used
+2302:warning: unused `std::result::Result` that must be used
+2314:warning: unused `std::result::Result` that must be used
+2326:warning: unused `std::result::Result` that must be used
+2341:warning: unused `std::result::Result` that must be used
+2355:warning: unused `std::result::Result` that must be used
+2372:warning: unused `std::result::Result` that must be used
+2389:warning: unused `std::result::Result` that must be used
+2407:warning: unused `std::result::Result` that must be used
+2423:warning: unused `std::result::Result` that must be used
+2439:warning: `rtgc` (lib) generated 342 warnings (run `cargo fix --lib -p rtgc` to apply 263 suggestions)
+2440:    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.41s

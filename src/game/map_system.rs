@@ -8,23 +8,23 @@ use serde::{Deserialize, Serialize};
 /// Marker type for custom player markers
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum MarkerType {
-    Player,      // Игрок (синий)
-    Objective,   // Цель (красный)
-    Friend,      // Друг/союзник (зелёный)
-    Danger,      // Опасность (оранжевый)
-    Custom1,     // Пользовательская 1 (жёлтый)
-    Custom2,     // Пользовательская 2 (фиолетовый)
+    Player,    // Игрок (синий)
+    Objective, // Цель (красный)
+    Friend,    // Друг/союзник (зелёный)
+    Danger,    // Опасность (оранжевый)
+    Custom1,   // Пользовательская 1 (жёлтый)
+    Custom2,   // Пользовательская 2 (фиолетовый)
 }
 
 impl MarkerType {
     pub fn color(&self) -> [f32; 4] {
         match self {
-            MarkerType::Player => [0.0, 0.5, 1.0, 1.0],      // Синий
-            MarkerType::Objective => [1.0, 0.0, 0.0, 1.0],   // Красный
-            MarkerType::Friend => [0.0, 1.0, 0.0, 1.0],      // Зелёный
-            MarkerType::Danger => [1.0, 0.5, 0.0, 1.0],      // Оранжевый
-            MarkerType::Custom1 => [1.0, 1.0, 0.0, 1.0],     // Жёлтый
-            MarkerType::Custom2 => [0.5, 0.0, 1.0, 1.0],     // Фиолетовый
+            MarkerType::Player => [0.0, 0.5, 1.0, 1.0],    // Синий
+            MarkerType::Objective => [1.0, 0.0, 0.0, 1.0], // Красный
+            MarkerType::Friend => [0.0, 1.0, 0.0, 1.0],    // Зелёный
+            MarkerType::Danger => [1.0, 0.5, 0.0, 1.0],    // Оранжевый
+            MarkerType::Custom1 => [1.0, 1.0, 0.0, 1.0],   // Жёлтый
+            MarkerType::Custom2 => [0.5, 0.0, 1.0, 1.0],   // Фиолетовый
         }
     }
 
@@ -45,7 +45,7 @@ impl MarkerType {
 pub struct MapMarker {
     pub id: u32,
     pub marker_type: MarkerType,
-    pub position: (f32, f32),  // World coordinates (x, z)
+    pub position: (f32, f32), // World coordinates (x, z)
     pub label: String,
     pub visible_on_compass: bool,
 }
@@ -136,17 +136,23 @@ impl MapSystem {
     }
 
     /// Add custom marker (max 4)
-    pub fn add_marker(&mut self, marker_type: MarkerType, x: f32, z: f32, label: String) -> Option<u32> {
+    pub fn add_marker(
+        &mut self,
+        marker_type: MarkerType,
+        x: f32,
+        z: f32,
+        label: String,
+    ) -> Option<u32> {
         if self.markers.len() >= 4 {
             return None; // Max 4 markers
         }
-        
+
         let id = self.next_marker_id;
         self.next_marker_id += 1;
-        
+
         let marker = MapMarker::new(id, marker_type, x, z, label);
         self.markers.push(marker);
-        
+
         Some(id)
     }
 
@@ -157,7 +163,10 @@ impl MapSystem {
 
     /// Get markers visible on compass
     pub fn get_compass_markers(&self) -> Vec<&MapMarker> {
-        self.markers.iter().filter(|m| m.visible_on_compass).collect()
+        self.markers
+            .iter()
+            .filter(|m| m.visible_on_compass)
+            .collect()
     }
 
     /// Clear all custom markers

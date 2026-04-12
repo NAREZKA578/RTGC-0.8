@@ -1,10 +1,10 @@
 //! Chunk Manager for RTGC-0.8
 //! Менеджер жизненного цикла чанков
 
-use std::collections::{HashMap, HashSet};
-use nalgebra::Vector3;
 use crate::world::chunk::Chunk;
-use crate::world::{CHUNK_SIZE, HEIGHTMAP_RESOLUTION, generate_chunk_mesh};
+use crate::world::{generate_chunk_mesh, CHUNK_SIZE, HEIGHTMAP_RESOLUTION};
+use nalgebra::Vector3;
+use std::collections::{HashMap, HashSet};
 
 /// Координаты чанка
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,7 +17,7 @@ impl ChunkCoords {
     pub fn new(x: i32, z: i32) -> Self {
         Self { x, z }
     }
-    
+
     pub fn from_world_pos(world_x: f32, world_z: f32, chunk_size: f32) -> Self {
         Self {
             x: (world_x / chunk_size).floor() as i32,
@@ -45,11 +45,11 @@ impl ChunkManager {
             pending_unloads: Vec::new(),
         }
     }
-    
+
     /// Обновление позиции камеры и управление загрузкой/выгрузкой чанков
     pub fn update_camera_position(&mut self, camera_x: f32, camera_z: f32) {
         let center = ChunkCoords::from_world_pos(camera_x, camera_z, self.chunk_size);
-        
+
         // Определяем какие чанки должны быть загружены
         let mut required_chunks = HashSet::new();
         for dx in -self.render_distance..=self.render_distance {
@@ -60,14 +60,14 @@ impl ChunkManager {
                 });
             }
         }
-        
+
         // Находим чанки для загрузки
         for coords in &required_chunks {
             if !self.chunks.contains_key(coords) && !self.pending_loads.contains(coords) {
                 self.pending_loads.push(*coords);
             }
         }
-        
+
         // Находим чанки для выгрузки
         for coords in self.chunks.keys() {
             if !required_chunks.contains(coords) && !self.pending_unloads.contains(coords) {
@@ -75,45 +75,41 @@ impl ChunkManager {
             }
         }
     }
-    
+
     /// Асинхронная загрузка чанка
     pub fn load_chunk(&mut self, coords: ChunkCoords) -> Option<Chunk> {
+        // Создаём пустые данные чанка
+        let chunk_data = crate::world::chunk::ChunkData::new();
+
         // Генерируем меш чанка
-        let (vertices, indices) = generate_chunk_mesh(
-            coords.x,
-            coords.z,
-            CHUNK_SIZE,
-            HEIGHTMAP_RESOLUTION,
-        );
-        
+        let (vertices, indices) = generate_chunk_mesh(&chunk_data, 0);
+
+        // Создаём ID чанка
+        let chunk_id = crate::world::chunk::ChunkId::new(coords.x, coords.z);
+
         // Создаём чанк
-        let chunk = Chunk::new(
-            coords,
-            CHUNK_SIZE,
-            vertices,
-            indices,
-        );
-        
+        let chunk = Chunk::new(chunk_id, chunk_data);
+
         self.chunks.insert(coords, chunk);
         self.chunks.get(&coords).cloned()
     }
-    
+
     /// Выгрузка чанка
     pub fn unload_chunk(&mut self, coords: ChunkCoords) -> Option<Chunk> {
         self.chunks.remove(&coords)
     }
-    
+
     /// Получение чанка по координатам
     pub fn get_chunk(&self, coords: ChunkCoords) -> Option<&Chunk> {
         self.chunks.get(&coords)
     }
-    
+
     /// Получение чанка по мировым координатам
     pub fn get_chunk_at_world_pos(&self, world_x: f32, world_z: f32) -> Option<&Chunk> {
         let coords = ChunkCoords::from_world_pos(world_x, world_z, self.chunk_size);
         self.get_chunk(coords)
     }
-    
+
     /// Обработка очереди загрузки
     pub fn process_load_queue(&mut self, max_per_frame: usize) -> usize {
         let mut loaded = 0;
@@ -127,7 +123,7 @@ impl ChunkManager {
         }
         loaded
     }
-    
+
     /// Обработка очереди выгрузки
     pub fn process_unload_queue(&mut self, max_per_frame: usize) -> usize {
         let mut unloaded = 0;
@@ -139,17 +135,17 @@ impl ChunkManager {
         }
         unloaded
     }
-    
+
     /// Получить количество загруженных чанков
     pub fn loaded_chunk_count(&self) -> usize {
         self.chunks.len()
     }
-    
+
     /// Получить размер чанка
     pub fn chunk_size(&self) -> f32 {
         self.chunk_size
     }
-    
+
     /// Получить дистанцию рендеринга
     pub fn render_distance(&self) -> i32 {
         self.render_distance
@@ -159,18 +155,18 @@ impl ChunkManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_chunk_coords_from_world_pos() {
         let coords = ChunkCoords::from_world_pos(50.0, 75.0, 100.0);
         assert_eq!(coords.x, 0);
         assert_eq!(coords.z, 0);
-        
+
         let coords = ChunkCoords::from_world_pos(150.0, 250.0, 100.0);
         assert_eq!(coords.x, 1);
         assert_eq!(coords.z, 2);
     }
-    
+
     #[test]
     fn test_chunk_manager_creation() {
         let manager = ChunkManager::new(100.0, 5);

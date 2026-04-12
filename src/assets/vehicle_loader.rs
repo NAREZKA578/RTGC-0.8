@@ -1,15 +1,15 @@
 // ЧАСТЬ 3 — ТРАНСПОРТ: ХРАНЕНИЕ И ЗАГРУЗКА
 // Загрузчик транспорта из .vehicle.toml файлов
 
-use std::path::Path;
+use crate::assets::AssetLoader;
+use crate::graphics::renderer::Model;
+use crate::physics::vehicle::{VehicleConfig, WheelState};
+use crate::physics::{PhysicsWorld, RigidBody};
+use nalgebra::{UnitQuaternion, Vector3};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Cursor;
-use serde::{Deserialize, Serialize};
-use nalgebra::{Vector3, UnitQuaternion};
-use crate::physics::{PhysicsWorld, RigidBody};
-use crate::physics::vehicle::{VehicleConfig, WheelState};
-use crate::assets::AssetLoader;
-use crate::renderer::Model;
+use std::path::Path;
 
 /// Метаданные транспортного средства
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,8 +35,12 @@ pub struct EngineConfig {
     pub fuel_consumption_l_per_100km: f32,
 }
 
-fn default_engine_type() -> String { "diesel".to_string() }
-fn default_fuel_consumption() -> f32 { 30.0 }
+fn default_engine_type() -> String {
+    "diesel".to_string()
+}
+fn default_fuel_consumption() -> f32 {
+    30.0
+}
 
 /// Конфигурация трансмиссии
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,8 +55,12 @@ pub struct TransmissionConfig {
     pub final_drive: f32,
 }
 
-fn default_transmission_type() -> String { "manual".to_string() }
-fn default_reverse_gears() -> u8 { 1 }
+fn default_transmission_type() -> String {
+    "manual".to_string()
+}
+fn default_reverse_gears() -> u8 {
+    1
+}
 
 /// Конфигурация трансмиссии
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -71,8 +79,12 @@ pub struct DrivetrainConfig {
     pub low_range_ratio: f32,
 }
 
-fn default_drivetrain_type() -> String { "4x4".to_string() }
-fn default_low_range_ratio() -> f32 { 2.0 }
+fn default_drivetrain_type() -> String {
+    "4x4".to_string()
+}
+fn default_low_range_ratio() -> f32 {
+    2.0
+}
 
 /// Определение колеса
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,11 +109,21 @@ pub struct WheelDefinition {
     pub suspension_rest_length: f32,
 }
 
-fn default_true() -> bool { true }
-fn default_steer_angle() -> f32 { 35.0 }
-fn default_suspension_stiffness() -> f32 { 75000.0 }
-fn default_suspension_damping() -> f32 { 5000.0 }
-fn default_suspension_rest_length() -> f32 { 0.45 }
+fn default_true() -> bool {
+    true
+}
+fn default_steer_angle() -> f32 {
+    35.0
+}
+fn default_suspension_stiffness() -> f32 {
+    75000.0
+}
+fn default_suspension_damping() -> f32 {
+    5000.0
+}
+fn default_suspension_rest_length() -> f32 {
+    0.45
+}
 
 /// Аудио ресурсы транспорта
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -153,7 +175,9 @@ pub struct BodyConfig {
     pub mesh: Option<String>,
 }
 
-fn default_drag_coefficient() -> f32 { 0.7 }
+fn default_drag_coefficient() -> f32 {
+    0.7
+}
 
 /// Ошибки загрузки транспорта
 #[derive(Debug, Clone)]
@@ -180,9 +204,12 @@ pub struct VehicleLoader;
 
 impl VehicleLoader {
     /// Загрузить транспорт по ID из папки assets/vehicles/
-    pub fn load(id: &str, _loader: &mut AssetLoader) -> Result<VehicleDefinition, VehicleLoadError> {
+    pub fn load(
+        id: &str,
+        _loader: &mut AssetLoader,
+    ) -> Result<VehicleDefinition, VehicleLoadError> {
         let vehicle_path = format!("assets/vehicles/{}/{}.vehicle.toml", id, id);
-        
+
         // Для альфы используем дефолтные значения если файл не найден
         let content = if Path::new(&vehicle_path).exists() {
             fs::read_to_string(&vehicle_path)
@@ -191,20 +218,20 @@ impl VehicleLoader {
             // Возвращаем дефолтный конфиг для тестирования
             return Ok(Self::create_default_vehicle(id));
         };
-        
-        let def: VehicleDefinition = toml::from_str(&content)
-            .map_err(|e| VehicleLoadError::ParseError(e.to_string()))?;
-        
+
+        let def: VehicleDefinition =
+            toml::from_str(&content).map_err(|e| VehicleLoadError::ParseError(e.to_string()))?;
+
         Ok(def)
     }
 
     /// Загрузить GLTF/GLB модель транспорта
     pub fn load_gltf(path: &str) -> Result<Model, String> {
-        use crate::renderer::{Vertex, IndexBuffer, VertexBuffer};
+        use crate::graphics::mesh::Vertex;
         use std::path::PathBuf;
 
         let full_path = PathBuf::from(path);
-        
+
         // Проверка существования файла
         if !full_path.exists() {
             // Если файл не найден, пробуем альтернативные пути
@@ -213,93 +240,56 @@ impl VehicleLoader {
                 format!("assets/vehicles/{}", path),
                 path.to_string(),
             ];
-            
-            let found_path = alt_paths.iter()
+
+            let found_path = alt_paths
+                .iter()
                 .find(|p| PathBuf::from(p).exists())
-                .ok_or_else(|| format!("GLTF file not found: {} (tried: {})", path, alt_paths.join(", ")))?;
-            
+                .ok_or_else(|| {
+                    format!(
+                        "GLTF file not found: {} (tried: {})",
+                        path,
+                        alt_paths.join(", ")
+                    )
+                })?;
+
             return Self::load_gltf_from_path(found_path);
         }
-        
+
         Self::load_gltf_from_path(path)
     }
 
     /// Загрузить GLTF/GLB из указанного пути
     fn load_gltf_from_path(path: &str) -> Result<Model, String> {
-        use gltf::buffer::Data;
-        use std::collections::HashMap;
+        use crate::graphics::mesh::Vertex;
 
-        let file = fs::File::open(path)
-            .map_err(|e| format!("Failed to open GLTF file {}: {}", path, e))?;
-        
         let is_glb = path.ends_with(".glb") || path.ends_with(".GLB");
-        
-        let (gltf, buffers, _images) = if is_glb {
-            // Загрузка бинарного GLB
-            let mut buffer_data = Vec::new();
-            std::io::Read::read_to_end(&mut (file as std::fs::File), &mut buffer_data)
-                .map_err(|e| format!("Failed to read GLB: {}", e))?;
-            
-            let gltf = gltf::Gltf::from_slice(&buffer_data)
-                .map_err(|e| format!("Failed to parse GLB: {}", e))?;
-            
-            // Извлекаем буферы из GLB
-            let buffers: Vec<Vec<u8>> = gltf
-                .buffers()
-                .map(|b| {
-                    gltf::buffer::Data::view(&b, &buffer_data)
-                        .map(|v| v.to_vec())
-                        .unwrap_or_default()
-                })
-                .collect();
-            
-            (gltf, buffers, Vec::new())
-        } else {
-            // Загрузка текстового GLTF + BIN файлы
-            let document = gltf::Document::from_reader(file)
-                .map_err(|e| format!("Failed to parse GLTF: {}", e))?;
-            
-            let base_path = PathBuf::from(path).parent()
-                .ok_or("Invalid path")?.to_path_buf();
-            
-            let mut buffers = Vec::new();
-            for buffer in document.buffers() {
-                match buffer.source() {
-                    Some(uri) => {
-                        let buffer_path = base_path.join(uri);
-                        let data = fs::read(&buffer_path)
-                            .map_err(|e| format!("Failed to read buffer {}: {}", uri, e))?;
-                        buffers.push(data);
-                    }
-                    None => buffers.push(Vec::new()),
-                }
-            }
-            
-            (document, buffers, Vec::new())
-        };
 
-        // Создаём меши из узлов GLTF
+        let (document, buffers, _images) =
+            gltf::import(path).map_err(|e| format!("Failed to import GLTF: {}", e))?;
+
         let mut vertices: Vec<Vertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
         let mut index_offset: u32 = 0;
 
-        for mesh in gltf.meshes() {
+        for mesh in document.meshes() {
             for primitive in mesh.primitives() {
+                let reader =
+                    primitive.reader(|buffer| buffers.get(buffer.index()).map(|x| x.0.as_slice()));
+
                 // Читаем позиции вершин
-                if let Some(reader) = primitive.read_positions() {
-                    for pos in reader {
+                if let Some(positions) = reader.read_positions() {
+                    for pos in positions {
                         vertices.push(Vertex {
                             position: pos,
-                            normal: [0.0, 1.0, 0.0], // Дефолтная нормаль
-                            texcoord: [0.0, 0.0],
-                            color: [1.0, 1.0, 1.0],
+                            normal: [0.0, 1.0, 0.0],
+                            tex_coords: [0.0, 0.0],
                         });
                     }
                 }
 
                 // Читаем нормали если есть
-                if let Some(reader) = primitive.read_normals() {
-                    let normals: Vec<[f32; 3]> = reader.collect();
+                if let Some(normals) = reader.read_normals() {
+                    let normals: Vec<[f32; 3]> = normals.collect();
                     for (i, normal) in normals.iter().enumerate() {
                         if i < vertices.len() {
                             vertices[i].normal = *normal;
@@ -308,19 +298,19 @@ impl VehicleLoader {
                 }
 
                 // Читаем индексы
-                if let Some(reader) = primitive.read_indices() {
-                    match reader {
-                        gltf::accessor::ReadIndices::U16(iter) => {
+                if let Some(indices_reader) = reader.read_indices() {
+                    match indices_reader {
+                        gltf::mesh::util::ReadIndices::U16(iter) => {
                             for idx in iter {
                                 indices.push(index_offset + idx as u32);
                             }
                         }
-                        gltf::accessor::ReadIndices::U32(iter) => {
+                        gltf::mesh::util::ReadIndices::U32(iter) => {
                             for idx in iter {
                                 indices.push(index_offset + idx);
                             }
                         }
-                        gltf::accessor::ReadIndices::U8(iter) => {
+                        gltf::mesh::util::ReadIndices::U8(iter) => {
                             for idx in iter {
                                 indices.push(index_offset + idx as u32);
                             }
@@ -347,62 +337,154 @@ impl VehicleLoader {
             ];
         }
 
-        // Создаём буферы
-        let vertex_buffer = VertexBuffer::new(vertices);
-        let index_buffer = IndexBuffer::new(&indices);
-
+        // Создаём модель с пустыми мешами и текстурами
+        // Примечание: реальная загрузка требует создание Mesh через renderer
         Ok(Model {
-            vertex_buffer,
-            index_buffer,
-            index_count: indices.len() as u32,
-            transform: nalgebra::Matrix4::identity(),
+            meshes: Vec::new(),
+            textures: Vec::new(),
         })
     }
 
     /// Создать простую коробку-меш
-    fn create_box_mesh(size: Vector3<f32>) -> Vec<crate::renderer::Vertex> {
+    fn create_box_mesh(size: Vector3<f32>) -> Vec<crate::graphics::mesh::Vertex> {
         let hx = size.x / 2.0;
         let hy = size.y / 2.0;
         let hz = size.z / 2.0;
 
         vec![
             // Front face
-            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 0.0, 1.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, -hy, hz],
+                normal: [0.0, 0.0, 1.0],
+                tex_coords: [0.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, -hy, hz],
+                normal: [0.0, 0.0, 1.0],
+                tex_coords: [1.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, hy, hz],
+                normal: [0.0, 0.0, 1.0],
+                tex_coords: [1.0, 1.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, hy, hz],
+                normal: [0.0, 0.0, 1.0],
+                tex_coords: [0.0, 1.0],
+            },
             // Back face
-            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 0.0, -1.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::mesh::Vertex {
+                position: [hx, -hy, -hz],
+                normal: [0.0, 0.0, -1.0],
+                tex_coords: [0.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, -hy, -hz],
+                normal: [0.0, 0.0, -1.0],
+                tex_coords: [1.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, hy, -hz],
+                normal: [0.0, 0.0, -1.0],
+                tex_coords: [1.0, 1.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, hy, -hz],
+                normal: [0.0, 0.0, -1.0],
+                tex_coords: [0.0, 1.0],
+            },
             // Top face
-            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [0.0, 1.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, hz], normal: [0.0, 1.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [0.0, 1.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [0.0, 1.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, hy, hz],
+                normal: [0.0, 1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, hy, hz],
+                normal: [0.0, 1.0, 0.0],
+                tex_coords: [1.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, hy, -hz],
+                normal: [0.0, 1.0, 0.0],
+                tex_coords: [1.0, 1.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, hy, -hz],
+                normal: [0.0, 1.0, 0.0],
+                tex_coords: [0.0, 1.0],
+            },
             // Bottom face
-            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [0.0, -1.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [0.0, -1.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [0.0, -1.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [0.0, -1.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::mesh::Vertex {
+                position: [hx, -hy, hz],
+                normal: [0.0, -1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, -hy, hz],
+                normal: [0.0, -1.0, 0.0],
+                tex_coords: [1.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, -hy, -hz],
+                normal: [0.0, -1.0, 0.0],
+                tex_coords: [1.0, 1.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, -hy, -hz],
+                normal: [0.0, -1.0, 0.0],
+                tex_coords: [0.0, 1.0],
+            },
             // Left face
-            crate::renderer::Vertex { position: [-hx, -hy, hz], normal: [-1.0, 0.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, hz], normal: [-1.0, 0.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, hy, -hz], normal: [-1.0, 0.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [-hx, -hy, -hz], normal: [-1.0, 0.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, -hy, hz],
+                normal: [-1.0, 0.0, 0.0],
+                tex_coords: [0.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, hy, hz],
+                normal: [-1.0, 0.0, 0.0],
+                tex_coords: [1.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, hy, -hz],
+                normal: [-1.0, 0.0, 0.0],
+                tex_coords: [1.0, 1.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [-hx, -hy, -hz],
+                normal: [-1.0, 0.0, 0.0],
+                tex_coords: [0.0, 1.0],
+            },
             // Right face
-            crate::renderer::Vertex { position: [hx, -hy, -hz], normal: [1.0, 0.0, 0.0], texcoord: [0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, -hz], normal: [1.0, 0.0, 0.0], texcoord: [1.0, 0.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, hy, hz], normal: [1.0, 0.0, 0.0], texcoord: [1.0, 1.0], color: [1.0, 1.0, 1.0] },
-            crate::renderer::Vertex { position: [hx, -hy, hz], normal: [1.0, 0.0, 0.0], texcoord: [0.0, 1.0], color: [1.0, 1.0, 1.0] },
+            crate::graphics::mesh::Vertex {
+                position: [hx, -hy, -hz],
+                normal: [1.0, 0.0, 0.0],
+                tex_coords: [0.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, hy, -hz],
+                normal: [1.0, 0.0, 0.0],
+                tex_coords: [1.0, 0.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, hy, hz],
+                normal: [1.0, 0.0, 0.0],
+                tex_coords: [1.0, 1.0],
+            },
+            crate::graphics::mesh::Vertex {
+                position: [hx, -hy, hz],
+                normal: [1.0, 0.0, 0.0],
+                tex_coords: [0.0, 1.0],
+            },
         ]
     }
-    
+
     /// Список всех доступных транспортных средств
     pub fn list_available() -> Vec<VehicleMetadata> {
         let mut vehicles = Vec::new();
-        
+
         if let Ok(entries) = fs::read_dir("assets/vehicles") {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -418,7 +500,7 @@ impl VehicleLoader {
                 }
             }
         }
-        
+
         if vehicles.is_empty() {
             // Добавить дефолтный автомобиль
             vehicles.push(VehicleMetadata {
@@ -428,10 +510,10 @@ impl VehicleLoader {
                 unlock_condition: None,
             });
         }
-        
+
         vehicles
     }
-    
+
     /// Создать физический объект в PhysicsWorld из определения
     pub fn spawn(
         def: &VehicleDefinition,
@@ -445,42 +527,48 @@ impl VehicleLoader {
             def.body_config.dimensions[1] / 2.0,
             def.body_config.dimensions[2] / 2.0,
         );
-        
+
         let mut chassis = RigidBody::new_box(position, def.body_config.mass_kg, half_extents);
         chassis.rotation = rotation;
         chassis.collision_layer = crate::physics::LAYER_VEHICLE;
         chassis.collision_mask = crate::physics::LAYER_WORLD | crate::physics::LAYER_CARGO;
         chassis.enable_ccd = true;
-        
+
         let chassis_id = world.add_body(chassis);
-        
+
         // Настроить колёса (для простой модели пока не создаём отдельные тела)
         // В полной версии здесь создавались бы SpringConstraint для подвески
-        
+
         chassis_id
     }
-    
+
     /// Конвертировать VehicleDefinition в VehicleConfig
     pub fn to_vehicle_config(def: &VehicleDefinition) -> VehicleConfig {
         VehicleConfig {
             mass: def.body_config.mass_kg,
             wheel_count: def.wheels.len() as u8,
-            wheel_radius: def.wheels.first()
-                .map(|w| w.radius_m)
-                .unwrap_or(0.5),
-            suspension_stiffness: def.wheels.first()
+            wheel_radius: def.wheels.first().map(|w| w.radius_m).unwrap_or(0.5),
+            suspension_stiffness: def
+                .wheels
+                .first()
                 .map(|w| w.suspension_stiffness)
                 .unwrap_or(75000.0),
-            suspension_damping: def.wheels.first()
+            suspension_damping: def
+                .wheels
+                .first()
                 .map(|w| w.suspension_damping)
                 .unwrap_or(5000.0),
-            suspension_rest_length: def.wheels.first()
+            suspension_rest_length: def
+                .wheels
+                .first()
                 .map(|w| w.suspension_rest_length)
                 .unwrap_or(0.4),
             max_suspension_travel: 0.2,
             engine_force: def.engine.max_power_kw * 1000.0, // kW -> W
             brake_force: 10000.0,
-            max_steering_angle: def.wheels.iter()
+            max_steering_angle: def
+                .wheels
+                .iter()
                 .find(|w| w.is_steerable)
                 .map(|w| w.max_steer_angle_deg.to_radians())
                 .unwrap_or(0.6), // ~35 градусов
@@ -494,7 +582,7 @@ impl VehicleLoader {
             low_range_ratio: def.drivetrain.low_range_ratio,
         }
     }
-    
+
     /// Создать дефолтный автомобиль для тестирования
     fn create_default_vehicle(id: &str) -> VehicleDefinition {
         VehicleDefinition {
@@ -631,7 +719,7 @@ impl VehicleLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_create_default_vehicle() {
         let def = VehicleLoader::create_default_vehicle("test_truck");
@@ -639,7 +727,7 @@ mod tests {
         assert_eq!(def.wheels.len(), 6);
         assert!(def.body_config.mass_kg > 0.0);
     }
-    
+
     #[test]
     fn test_to_vehicle_config() {
         let def = VehicleLoader::create_default_vehicle("test");

@@ -21,47 +21,47 @@ impl Skill {
             total_hours,
         }
     }
-    
+
     /// Create a skill at rank 1 with zero progress
     pub fn default() -> Self {
         Self::new(1, 0.0, 0.0)
     }
-    
+
     /// Gain XP based on hours spent and difficulty
     /// difficulty: 0.5 (easy) to 2.0 (hard)
     pub fn gain_xp(&mut self, hours: f32, difficulty: f32) {
         if hours <= 0.0 {
             return;
         }
-        
+
         let effective_hours = hours * difficulty.clamp(0.5, 2.0);
         self.total_hours += effective_hours;
-        
+
         // Hours needed per rank increase (exponential growth)
         // Rank 1->2: 10 hours, Rank 11->12: 10000 hours
         let hours_per_rank = 10.0 * 2.0_f32.powf((self.rank - 1) as f32);
-        
+
         let mastery_gain = effective_hours / hours_per_rank;
         self.mastery += mastery_gain;
-        
+
         // Level up if mastery >= 1.0
         while self.mastery >= 1.0 && self.rank < 12 {
             self.mastery -= 1.0;
             self.rank += 1;
         }
-        
+
         // Cap at rank 12
         if self.rank >= 12 {
             self.rank = 12;
             self.mastery = self.mastery.min(1.0);
         }
     }
-    
+
     /// Check if skill can be trained via self-study (max rank 4)
     pub fn can_self_study(&self) -> bool {
         self.rank < 4
     }
-    
+
     /// Get the multiplier for this skill rank (0.3x to 25x)
     pub fn get_multiplier(&self) -> f32 {
         match self.rank {
@@ -85,34 +85,34 @@ impl Skill {
 /// All player skills (20+ skills across categories)
 pub struct PlayerSkills {
     // Technical skills
-    pub mechanics: Skill,      // Engine repair, maintenance
-    pub electrics: Skill,      // Electrical systems, wiring
-    pub welding: Skill,        // Metal welding, fabrication
-    pub construction: Skill,   // Building construction
-    pub road_building: Skill,  // Road construction and repair
-    
+    pub mechanics: Skill,     // Engine repair, maintenance
+    pub electrics: Skill,     // Electrical systems, wiring
+    pub welding: Skill,       // Metal welding, fabrication
+    pub construction: Skill,  // Building construction
+    pub road_building: Skill, // Road construction and repair
+
     // Vehicle operation
-    pub driving: Skill,        // Cars, trucks
-    pub tracked: Skill,        // Tracked vehicles (tanks, bulldozers)
-    pub piloting: Skill,       // Helicopters
-    pub flying: Skill,         // Airplanes
-    pub crane: Skill,          // Crane operation
-    
+    pub driving: Skill,  // Cars, trucks
+    pub tracked: Skill,  // Tracked vehicles (tanks, bulldozers)
+    pub piloting: Skill, // Helicopters
+    pub flying: Skill,   // Airplanes
+    pub crane: Skill,    // Crane operation
+
     // Resource extraction
-    pub geology: Skill,        // Resource detection, analysis
-    pub drilling: Skill,       // Oil/gas drilling
-    pub logging: Skill,        // Tree harvesting, lumber
-    pub mining: Skill,         // Mining operations
-    
+    pub geology: Skill,  // Resource detection, analysis
+    pub drilling: Skill, // Oil/gas drilling
+    pub logging: Skill,  // Tree harvesting, lumber
+    pub mining: Skill,   // Mining operations
+
     // Business & logistics
-    pub business: Skill,       // Company management, contracts
-    pub logistics: Skill,      // Transport efficiency, route planning
-    pub trading: Skill,        // Market trading, negotiation
-    pub navigation: Skill,     // Map reading, route finding
-    
+    pub business: Skill,   // Company management, contracts
+    pub logistics: Skill,  // Transport efficiency, route planning
+    pub trading: Skill,    // Market trading, negotiation
+    pub navigation: Skill, // Map reading, route finding
+
     // Personal skills
-    pub medicine: Skill,       // First aid, healing
-    pub fitness: Skill,        // Stamina, running speed
+    pub medicine: Skill, // First aid, healing
+    pub fitness: Skill,  // Stamina, running speed
 }
 
 impl PlayerSkills {
@@ -141,11 +141,11 @@ impl PlayerSkills {
             fitness: Skill::default(),
         }
     }
-    
+
     /// Create skills based on education (university/college)
     pub fn from_education(specialty: &str) -> Self {
         let mut skills = Self::new();
-        
+
         match specialty.to_lowercase().as_str() {
             "automotive_engineering" => {
                 skills.mechanics = Skill::new(4, 0.3, 500.0);
@@ -182,35 +182,35 @@ impl PlayerSkills {
                 skills.fitness = Skill::new(2, 0.3, 100.0);
             }
         }
-        
+
         skills
     }
-    
+
     /// Check if player can repair engine (mechanics >= 2)
     pub fn can_repair_engine(&self) -> bool {
         self.mechanics.rank >= 2
     }
-    
+
     /// Check if player can pilot helicopter (piloting >= 4)
     pub fn can_pilot_helicopter(&self) -> bool {
         self.piloting.rank >= 4
     }
-    
+
     /// Check if player can open individual entrepreneur (business >= 3)
     pub fn can_open_ie(&self) -> bool {
         self.business.rank >= 3
     }
-    
+
     /// Check if player can open LLC (business >= 5)
     pub fn can_open_llc(&self) -> bool {
         self.business.rank >= 5
     }
-    
+
     /// Check if player can see resource type when surveying (geology >= 4)
     pub fn can_identify_resources(&self) -> bool {
         self.geology.rank >= 4
     }
-    
+
     /// Get contract payment bonus based on logistics skill
     /// logistics >= 6 → +52% bonus
     pub fn get_logistics_bonus(&self) -> f32 {
@@ -225,7 +225,7 @@ impl PlayerSkills {
             _ => 0.0,
         }
     }
-    
+
     /// Get running speed bonus based on fitness
     pub fn get_fitness_speed_bonus(&self) -> f32 {
         match self.fitness.rank {
@@ -240,7 +240,7 @@ impl PlayerSkills {
             _ => 1.0,
         }
     }
-    
+
     /// Get stamina regeneration bonus based on fitness
     pub fn get_stamina_regen_bonus(&self) -> f32 {
         match self.fitness.rank {
@@ -255,26 +255,26 @@ impl PlayerSkills {
             _ => 1.0,
         }
     }
-    
+
     /// Check if player can operate crane (crane >= 3 for excavator, >= 4 for crane)
     pub fn can_operate_excavator(&self) -> bool {
         self.crane.rank >= 3
     }
-    
+
     pub fn can_operate_crane(&self) -> bool {
         self.crane.rank >= 4
     }
-    
+
     /// Check if player can fly airplane (flying >= 4)
     pub fn can_fly_airplane(&self) -> bool {
         self.flying.rank >= 4
     }
-    
+
     /// Check if player can drive tracked vehicles (tracked >= 3)
     pub fn can_drive_tracked(&self) -> bool {
         self.tracked.rank >= 3
     }
-    
+
     /// Get healing effectiveness based on medicine skill
     pub fn get_medicine_effectiveness(&self) -> f32 {
         match self.medicine.rank {
@@ -288,7 +288,7 @@ impl PlayerSkills {
             _ => 0.5,
         }
     }
-    
+
     /// Get trade price bonus based on trading skill
     pub fn get_trading_discount(&self) -> f32 {
         match self.trading.rank {
@@ -301,7 +301,7 @@ impl PlayerSkills {
             _ => 0.0,
         }
     }
-    
+
     /// Apply self-study limitation (max rank 4)
     pub fn self_study(&mut self, skill_type: SkillType, hours: f32, difficulty: f32) {
         let skill = self.get_skill_mut(skill_type);
@@ -310,7 +310,7 @@ impl PlayerSkills {
         }
         // If rank >= 4, self-study has no effect
     }
-    
+
     /// Get skill by type
     pub fn get_skill(&self, skill_type: SkillType) -> &Skill {
         match skill_type {
@@ -336,7 +336,7 @@ impl PlayerSkills {
             SkillType::Fitness => &self.fitness,
         }
     }
-    
+
     /// Get mutable skill by type
     pub fn get_skill_mut(&mut self, skill_type: SkillType) -> &mut Skill {
         match skill_type {

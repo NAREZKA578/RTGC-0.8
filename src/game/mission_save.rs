@@ -1,5 +1,5 @@
 //! Mission and Save System
-//! 
+//!
 //! Implements:
 //! - Mission definitions with objectives and rewards
 //! - Mission progress tracking
@@ -49,7 +49,7 @@ impl ObjectiveStatus {
             MissionObjective::Survive { duration_seconds } => (*duration_seconds * 100.0) as u32,
             _ => 1,
         };
-        
+
         Self {
             objective,
             current_progress: 0,
@@ -57,16 +57,16 @@ impl ObjectiveStatus {
             completed: false,
         }
     }
-    
+
     pub fn update(&mut self, progress: u32) {
         self.current_progress = progress.min(self.required_progress);
         self.completed = self.current_progress >= self.required_progress;
     }
-    
+
     pub fn is_complete(&self) -> bool {
         self.completed
     }
-    
+
     pub fn get_completion_percentage(&self) -> f32 {
         if self.required_progress == 0 {
             return 100.0;
@@ -115,26 +115,28 @@ impl Mission {
             is_repeatable: false,
         }
     }
-    
+
     pub fn add_objective(&mut self, objective: MissionObjective) {
         self.objectives.push(ObjectiveStatus::new(objective));
     }
-    
+
     pub fn get_completion_percentage(&self) -> f32 {
         if self.objectives.is_empty() {
             return 0.0;
         }
-        
-        let total: f32 = self.objectives.iter()
+
+        let total: f32 = self
+            .objectives
+            .iter()
             .map(|o| o.get_completion_percentage())
             .sum();
         total / self.objectives.len() as f32
     }
-    
+
     pub fn is_complete(&self) -> bool {
         !self.objectives.is_empty() && self.objectives.iter().all(|o| o.is_complete())
     }
-    
+
     pub fn update_objective(&mut self, objective_index: usize, progress: u32) {
         if let Some(obj) = self.objectives.get_mut(objective_index) {
             obj.update(progress);
@@ -272,7 +274,7 @@ impl MissionSaveManager {
             fs::create_dir_all(&save_directory)
                 .map_err(|e| format!("Cannot create save dir: {}", e))?;
         }
-        
+
         Ok(Self {
             save_directory,
             max_save_slots: 10,
@@ -280,13 +282,18 @@ impl MissionSaveManager {
             last_autosave_time: 0.0,
         })
     }
-    
+
     /// Create a new save game
-    pub fn create_save(&self, slot: u32, name: String, player: PlayerProgress) -> Result<SaveGame, String> {
+    pub fn create_save(
+        &self,
+        slot: u32,
+        name: String,
+        player: PlayerProgress,
+    ) -> Result<SaveGame, String> {
         if slot >= self.max_save_slots {
             return Err(format!("Invalid save slot: {}", slot));
         }
-        
+
         let save = SaveGame {
             save_slot: slot,
             save_name: name,
@@ -310,64 +317,64 @@ impl MissionSaveManager {
             },
             settings: GameSettings::default(),
         };
-        
+
         Ok(save)
     }
-    
+
     /// Save game to file
     pub fn save_game(&self, save: &SaveGame) -> Result<(), String> {
-        let filename = self.save_directory.join(format!("save_{}.json", save.save_slot));
-        
-        let file = File::create(&filename)
-            .map_err(|e| format!("Failed to create save file: {}", e))?;
-        
+        let filename = self
+            .save_directory
+            .join(format!("save_{}.json", save.save_slot));
+
+        let file =
+            File::create(&filename).map_err(|e| format!("Failed to create save file: {}", e))?;
+
         let writer = BufWriter::new(file);
         serde_json::to_writer_pretty(writer, save)
             .map_err(|e| format!("Failed to serialize save data: {}", e))?;
-        
+
         info!("Game saved to slot {}", save.save_slot);
         Ok(())
     }
-    
+
     /// Load game from file
     pub fn load_game(&self, slot: u32) -> Result<SaveGame, String> {
         let filename = self.save_directory.join(format!("save_{}.json", slot));
-        
+
         if !filename.exists() {
             return Err(format!("Save file not found for slot {}", slot));
         }
-        
-        let file = File::open(&filename)
-            .map_err(|e| format!("Failed to open save file: {}", e))?;
-        
+
+        let file = File::open(&filename).map_err(|e| format!("Failed to open save file: {}", e))?;
+
         let reader = BufReader::new(file);
         let save: SaveGame = serde_json::from_reader(reader)
             .map_err(|e| format!("Failed to deserialize save data: {}", e))?;
-        
+
         info!("Game loaded from slot {}", slot);
         Ok(save)
     }
-    
+
     /// Delete a save file
     pub fn delete_save(&self, slot: u32) -> Result<(), String> {
         let filename = self.save_directory.join(format!("save_{}.json", slot));
-        
+
         if filename.exists() {
-            fs::remove_file(&filename)
-                .map_err(|e| format!("Failed to delete save file: {}", e))?;
+            fs::remove_file(&filename).map_err(|e| format!("Failed to delete save file: {}", e))?;
             info!("Save deleted from slot {}", slot);
         }
-        
+
         Ok(())
     }
-    
+
     /// List all available saves
     pub fn list_saves(&self) -> Vec<SaveGameInfo> {
         let mut saves = Vec::new();
-        
+
         for slot in 0..self.max_save_slots {
             let filename = self.save_directory.join(format!("save_{}.json", slot));
-            
+
             if filename.exists() {
                 if let Ok(file) = File::open(&filename) {
                     let reader = BufReader::new(file);
@@ -383,10 +390,10 @@ impl MissionSaveManager {
                 }
             }
         }
-        
+
         saves
     }
-    
+
     /// Perform auto-save if enough time has passed
     pub fn try_autosave(&mut self, current_time: f64, save: &SaveGame) -> Result<bool, String> {
         if current_time - self.last_autosave_time >= self.autosave_interval_seconds {
@@ -396,13 +403,16 @@ impl MissionSaveManager {
         }
         Ok(false)
     }
-    
+
     /// Add mission to active missions
     pub fn add_mission(&mut self, save: &mut SaveGame, mission: Mission) {
         // Check prerequisites
         for prereq in &mission.prerequisites {
             if !save.completed_missions.contains(prereq) {
-                warn!("Cannot add mission {}: prerequisite {} not completed", mission.id, prereq);
+                warn!(
+                    "Cannot add mission {}: prerequisite {} not completed",
+                    mission.id, prereq
+                );
                 return;
             }
         }
@@ -411,41 +421,53 @@ impl MissionSaveManager {
         save.active_missions.push(mission);
         info!("Mission added: {}", mission_name);
     }
-    
+
     /// Complete a mission
     pub fn complete_mission(&mut self, save: &mut SaveGame, mission_id: &str) -> Option<Mission> {
         if let Some(pos) = save.active_missions.iter().position(|m| m.id == mission_id) {
             let mission = save.active_missions.remove(pos);
-            
+
             if mission.is_complete() {
                 // Grant rewards
                 save.player.experience += mission.reward_xp;
                 save.player.money += mission.reward_money;
-                
+
                 // Add items to inventory
                 for item in &mission.reward_items {
                     *save.player.inventory.entry(item.clone()).or_insert(0) += 1;
                 }
-                
+
                 save.completed_missions.push(mission_id.to_string());
                 save.player.statistics.missions_completed += 1;
-                
-                info!("Mission completed: {} - XP: {}, Money: {}", mission.name, mission.reward_xp, mission.reward_money);
+
+                info!(
+                    "Mission completed: {} - XP: {}, Money: {}",
+                    mission.name, mission.reward_xp, mission.reward_money
+                );
                 Some(mission)
             } else {
-                warn!("Cannot complete mission {}: objectives not finished", mission_id);
+                warn!(
+                    "Cannot complete mission {}: objectives not finished",
+                    mission_id
+                );
                 None
             }
         } else {
             None
         }
     }
-    
+
     /// Update mission objective progress
-    pub fn update_mission_objective(&mut self, save: &mut SaveGame, mission_id: &str, objective_index: usize, progress: u32) {
+    pub fn update_mission_objective(
+        &mut self,
+        save: &mut SaveGame,
+        mission_id: &str,
+        objective_index: usize,
+        progress: u32,
+    ) {
         if let Some(mission) = save.active_missions.iter_mut().find(|m| m.id == mission_id) {
             mission.update_objective(objective_index, progress);
-            
+
             if mission.is_complete() {
                 info!("Mission {} objectives complete!", mission.name);
             }
@@ -467,32 +489,36 @@ pub struct SaveGameInfo {
 mod tests {
     use super::*;
     use tempfile::tempdir;
-    
+
     #[test]
     fn test_mission_creation() {
-        let mut mission = Mission::new("test_1".to_string(), "Test Mission".to_string(), "A test mission".to_string());
+        let mut mission = Mission::new(
+            "test_1".to_string(),
+            "Test Mission".to_string(),
+            "A test mission".to_string(),
+        );
         mission.add_objective(MissionObjective::CollectItems {
             item_id: "apples".to_string(),
             count: 10,
         });
-        
+
         assert_eq!(mission.get_completion_percentage(), 0.0);
         assert!(!mission.is_complete());
-        
+
         mission.update_objective(0, 5);
         assert!((mission.get_completion_percentage() - 50.0).abs() < 0.1);
-        
+
         mission.update_objective(0, 10);
         assert!((mission.get_completion_percentage() - 100.0).abs() < 0.1);
         assert!(mission.is_complete());
     }
-    
+
     #[test]
     fn test_save_load_cycle() {
         let temp_dir = tempdir().expect("Failed to create temp directory");
         let manager = MissionSaveManager::new(temp_dir.path().to_path_buf())
             .expect("Failed to create MissionSaveManager");
-        
+
         let player = PlayerProgress {
             player_id: "player1".to_string(),
             level: 5,
@@ -503,11 +529,12 @@ mod tests {
             unlocked_maps: Vec::new(),
             statistics: GameStatistics::default(),
         };
-        
-        let save = manager.create_save(0, "Test Save".to_string(), player.clone())
+
+        let save = manager
+            .create_save(0, "Test Save".to_string(), player.clone())
             .expect("Failed to create save");
         manager.save_game(&save).expect("Failed to save game");
-        
+
         let loaded = manager.load_game(0).expect("Failed to load game");
         assert_eq!(loaded.player.level, 5);
         assert_eq!(loaded.player.experience, 1500);

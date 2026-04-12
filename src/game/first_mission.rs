@@ -1,9 +1,9 @@
 //! First Mission System for RTGC-0.8
 //! Handles the initial contract from "Серега" - tutorial mission
 
-use std::time::Duration;
-use crate::game::events::{GameEvent, publish_event};
+use crate::game::events::{publish_event, GameEvent};
 use crate::game::skills::SkillType;
+use std::time::Duration;
 
 /// Mission states for the first contract
 #[derive(Debug, Clone, PartialEq)]
@@ -80,7 +80,9 @@ impl FirstMission {
                 self.time_elapsed_hours += delta_seconds / 3600.0;
                 if self.time_elapsed_hours >= self.timeout_hours {
                     self.state = FirstMissionState::Failed;
-                    publish_event(GameEvent::FirstMissionFailed { reason: "timeout".to_string() });
+                    publish_event(GameEvent::FirstMissionFailed {
+                        reason: "timeout".to_string(),
+                    });
                 }
             }
             _ => {}
@@ -108,9 +110,13 @@ impl FirstMission {
 
     /// Update distance to destination
     pub fn update_distance(&mut self, current_distance_km: f64) {
-        if let FirstMissionState::InProgress { distance_remaining_km, .. } = &mut self.state {
+        if let FirstMissionState::InProgress {
+            distance_remaining_km,
+            ..
+        } = &mut self.state
+        {
             *distance_remaining_km = current_distance_km.max(0.0);
-            
+
             // Check if delivered
             if *distance_remaining_km < 0.5 {
                 self.complete();
@@ -130,15 +136,13 @@ impl FirstMission {
     /// Get tutorial hints based on current state
     pub fn get_tutorial_hint(&self) -> Option<&'static str> {
         match self.state {
-            FirstMissionState::PhoneRinging => Some(
-                "Вам звонят! Нажмите F чтобы принять вызов"
-            ),
-            FirstMissionState::LoadingCargo => Some(
-                "Подъедьте к складу задним ходом и нажмите F для погрузки кирпича"
-            ),
-            FirstMissionState::InProgress { .. } => Some(
-                "Двигайтесь к точке доставки. Следите за расходом топлива и состоянием дороги"
-            ),
+            FirstMissionState::PhoneRinging => Some("Вам звонят! Нажмите F чтобы принять вызов"),
+            FirstMissionState::LoadingCargo => {
+                Some("Подъедьте к складу задним ходом и нажмите F для погрузки кирпича")
+            }
+            FirstMissionState::InProgress { .. } => {
+                Some("Двигайтесь к точке доставки. Следите за расходом топлива и состоянием дороги")
+            }
             _ => None,
         }
     }
@@ -160,13 +164,18 @@ impl FirstMission {
             FirstMissionState::WaitingForTrigger(_) => String::new(),
             FirstMissionState::PhoneRinging => format!("📞 {} звонит!", self.client_name),
             FirstMissionState::LoadingCargo => {
-                format!("📦 Погрузка: {} ({:.0} кг)", self.cargo_type, self.cargo_weight_kg)
+                format!(
+                    "📦 Погрузка: {} ({:.0} кг)",
+                    self.cargo_type, self.cargo_weight_kg
+                )
             }
-            FirstMissionState::InProgress { distance_remaining_km, .. } => {
+            FirstMissionState::InProgress {
+                distance_remaining_km,
+                ..
+            } => {
                 format!(
                     "🚚 Доставка: осталось {:.1} км | Награда: {}₽",
-                    distance_remaining_km,
-                    self.reward_rub as u32
+                    distance_remaining_km, self.reward_rub as u32
                 )
             }
             FirstMissionState::Completed => "✅ Задание выполнено!".to_string(),
@@ -206,7 +215,7 @@ impl FirstMissionManager {
     /// Update mission state
     pub fn update(&mut self, delta_seconds: f32) {
         self.mission.update(delta_seconds);
-        
+
         // Unlock contacts when mission completes
         if self.mission.state == FirstMissionState::Completed && self.contacts_unlocked.is_empty() {
             self.contacts_unlocked = vec![
@@ -259,9 +268,9 @@ impl FirstMissionManager {
     /// Get skill XP rewards for completion
     pub fn get_skill_rewards(&self) -> Vec<(SkillType, f32)> {
         vec![
-            (SkillType::Driving, 2.5),      // 2.5 hours of driving
-            (SkillType::Logistics, 1.0),    // Planning route
-            (SkillType::Navigation, 0.5),   // Finding destination
+            (SkillType::Driving, 2.5),    // 2.5 hours of driving
+            (SkillType::Logistics, 1.0),  // Planning route
+            (SkillType::Navigation, 0.5), // Finding destination
         ]
     }
 }
@@ -294,8 +303,11 @@ mod tests {
     fn test_mission_initialization() {
         let mut manager = FirstMissionManager::new();
         manager.initialize();
-        
-        assert!(matches!(manager.mission.state, FirstMissionState::WaitingForTrigger(_)));
+
+        assert!(matches!(
+            manager.mission.state,
+            FirstMissionState::WaitingForTrigger(_)
+        ));
         assert_eq!(manager.mission.client_name, "Серёга");
         assert_eq!(manager.mission.cargo_weight_kg, 800.0);
         assert_eq!(manager.mission.reward_rub, 18_000.0);
@@ -305,11 +317,14 @@ mod tests {
     fn test_trigger_timer() {
         let mut manager = FirstMissionManager::new();
         manager.initialize();
-        
+
         // Simulate 30 seconds passing
         manager.update(30.0);
-        
-        assert!(matches!(manager.mission.state, FirstMissionState::PhoneRinging));
+
+        assert!(matches!(
+            manager.mission.state,
+            FirstMissionState::PhoneRinging
+        ));
     }
 
     #[test]
@@ -317,9 +332,12 @@ mod tests {
         let mut manager = FirstMissionManager::new();
         manager.initialize();
         manager.update(30.0); // Trigger phone call
-        
+
         assert!(manager.accept_call());
-        assert!(matches!(manager.mission.state, FirstMissionState::LoadingCargo));
+        assert!(matches!(
+            manager.mission.state,
+            FirstMissionState::LoadingCargo
+        ));
     }
 
     #[test]
@@ -329,18 +347,28 @@ mod tests {
         manager.update(30.0);
         manager.accept_call();
         manager.load_cargo();
-        
-        assert!(matches!(manager.mission.state, FirstMissionState::InProgress { .. }));
-        
+
+        assert!(matches!(
+            manager.mission.state,
+            FirstMissionState::InProgress { .. }
+        ));
+
         // Simulate approaching destination
         manager.update_distance(15.0);
-        if let FirstMissionState::InProgress { distance_remaining_km, .. } = manager.mission.state {
+        if let FirstMissionState::InProgress {
+            distance_remaining_km,
+            ..
+        } = manager.mission.state
+        {
             assert_eq!(distance_remaining_km, 15.0);
         }
-        
+
         // Arrive at destination
         manager.update_distance(0.3);
-        assert!(matches!(manager.mission.state, FirstMissionState::Completed));
+        assert!(matches!(
+            manager.mission.state,
+            FirstMissionState::Completed
+        ));
     }
 
     #[test]
@@ -350,10 +378,10 @@ mod tests {
         manager.update(30.0);
         manager.accept_call();
         manager.load_cargo();
-        
+
         // Simulate 4+ hours passing (timeout)
         manager.update(4.0 * 3600.0 + 1.0);
-        
+
         assert!(matches!(manager.mission.state, FirstMissionState::Failed));
     }
 
@@ -361,10 +389,16 @@ mod tests {
     fn test_skill_rewards() {
         let manager = FirstMissionManager::new();
         let rewards = manager.get_skill_rewards();
-        
+
         assert_eq!(rewards.len(), 3);
-        assert!(rewards.iter().any(|(skill, _)| *skill == SkillType::Driving));
-        assert!(rewards.iter().any(|(skill, _)| *skill == SkillType::Logistics));
-        assert!(rewards.iter().any(|(skill, _)| *skill == SkillType::Navigation));
+        assert!(rewards
+            .iter()
+            .any(|(skill, _)| *skill == SkillType::Driving));
+        assert!(rewards
+            .iter()
+            .any(|(skill, _)| *skill == SkillType::Logistics));
+        assert!(rewards
+            .iter()
+            .any(|(skill, _)| *skill == SkillType::Navigation));
     }
 }

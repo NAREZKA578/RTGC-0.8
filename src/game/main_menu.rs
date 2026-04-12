@@ -2,7 +2,7 @@
 //! Handles main menu, new game, continue, options, exit
 
 use crate::game::character_creation::CharacterCreationManager;
-use crate::game::save::{SaveSystem, SaveMetadata};
+use crate::game::save::{SaveMetadata, SaveSystem};
 use chrono::Local;
 use std::path::PathBuf;
 
@@ -60,7 +60,7 @@ impl MainMenu {
         let save_dir = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
             .join("saves");
-        
+
         if save_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&save_dir) {
                 for entry in entries.flatten() {
@@ -107,7 +107,9 @@ impl MainMenu {
     }
 
     /// Get character creation data if complete
-    pub fn get_character_data(&self) -> Option<&crate::game::character_creation::CharacterCreationData> {
+    pub fn get_character_data(
+        &self,
+    ) -> Option<&crate::game::character_creation::CharacterCreationData> {
         self.character_creation
             .as_ref()
             .and_then(|cc| cc.get_final_data())
@@ -118,15 +120,15 @@ impl MainMenu {
         if self.saves.is_empty() {
             return None;
         }
-        
+
         // Load most recent save
         let save_dir = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
             .join("saves");
-        
+
         // Find most recent save file
         let mut latest_save: Option<(PathBuf, std::time::SystemTime)> = None;
-        
+
         if save_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&save_dir) {
                 for entry in entries.flatten() {
@@ -148,7 +150,7 @@ impl MainMenu {
                 }
             }
         }
-        
+
         latest_save.map(|(path, _)| path)
     }
 
@@ -187,7 +189,7 @@ impl MainMenu {
     pub fn update(&mut self, dt: f32) {
         if let Some(cc) = &mut self.character_creation {
             cc.update(dt);
-            
+
             // If character creation is complete, transition to loading
             if cc.is_complete() {
                 self.state = MenuState::Loading;
@@ -214,12 +216,18 @@ impl MainMenu {
     pub fn render_ui(&self, renderer: &mut crate::graphics::renderer::Renderer) {
         let w = renderer.width as f32;
         let h = renderer.height as f32;
-        
+
         match self.state {
             MenuState::MainMenu => {
                 // Центральная панель
                 unsafe {
-                    renderer.draw_rect(w/2.0 - 150.0, h/2.0 - 120.0, 300.0, 240.0, [0.1, 0.1, 0.15, 0.9]);
+                    renderer.draw_rect(
+                        w / 2.0 - 150.0,
+                        h / 2.0 - 120.0,
+                        300.0,
+                        240.0,
+                        [0.1, 0.1, 0.15, 0.9],
+                    );
                 }
 
                 let button_width = 240.0;
@@ -232,28 +240,61 @@ impl MainMenu {
                 let is_hovered = |mouse_x: f32, mouse_y: f32, y: f32| -> bool {
                     mouse_x >= center_x - button_width / 2.0
                         && mouse_x <= center_x + button_width / 2.0
-                        && mouse_y >= y && mouse_y <= y + button_height
+                        && mouse_y >= y
+                        && mouse_y <= y + button_height
                 };
 
                 // Пункты меню с hover-эффектами
                 let buttons = [
-                    (MenuButton::NewGame, "НОВАЯ ИГРА", h/2.0 - 80.0, 
-                     [0.0, 0.8, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]),
-                    (MenuButton::Continue, "ПРОДОЛЖИТЬ", h/2.0 - 30.0,
-                     [0.0, 0.3, 0.8, 1.0], [0.0, 0.5, 1.0, 1.0]),
-                    (MenuButton::Options, "НАСТРОЙКИ", h/2.0 + 20.0,
-                     [0.5, 0.5, 0.5, 1.0], [0.7, 0.7, 0.7, 1.0]),
-                    (MenuButton::Exit, "ВЫХОД", h/2.0 + 70.0,
-                     [0.8, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0]),
+                    (
+                        MenuButton::NewGame,
+                        "НОВАЯ ИГРА",
+                        h / 2.0 - 80.0,
+                        [0.0, 0.8, 0.0, 1.0],
+                        [0.0, 1.0, 0.0, 1.0],
+                    ),
+                    (
+                        MenuButton::Continue,
+                        "ПРОДОЛЖИТЬ",
+                        h / 2.0 - 30.0,
+                        [0.0, 0.3, 0.8, 1.0],
+                        [0.0, 0.5, 1.0, 1.0],
+                    ),
+                    (
+                        MenuButton::Options,
+                        "НАСТРОЙКИ",
+                        h / 2.0 + 20.0,
+                        [0.5, 0.5, 0.5, 1.0],
+                        [0.7, 0.7, 0.7, 1.0],
+                    ),
+                    (
+                        MenuButton::Exit,
+                        "ВЫХОД",
+                        h / 2.0 + 70.0,
+                        [0.8, 0.0, 0.0, 1.0],
+                        [1.0, 0.0, 0.0, 1.0],
+                    ),
                 ];
 
                 for (btn, text, y, color_normal, color_hover) in buttons.iter() {
                     let hovered = is_hovered(mouse_x, mouse_y, *y);
                     let color = if hovered { *color_hover } else { *color_normal };
-                    
+
                     unsafe {
-                        renderer.draw_rect(w/2.0 - button_width/2.0, *y, button_width, button_height, color);
-                        renderer.draw_text(text, w/2.0 - 60.0, *y + 12.0, 1.0, [1.0, 1.0, 1.0, 1.0]);
+                        renderer.draw_rect(
+                            w / 2.0 - button_width / 2.0,
+                            *y,
+                            button_width,
+                            button_height,
+                            color,
+                        );
+                        renderer.draw_text(
+                            text,
+                            w / 2.0 - 60.0,
+                            *y + 12.0,
+                            1.0,
+                            [1.0, 1.0, 1.0, 1.0],
+                        );
                     }
                 }
             }
@@ -267,14 +308,32 @@ impl MainMenu {
                 // Loading screen
                 unsafe {
                     renderer.draw_rect(0.0, 0.0, w, h, [0.0, 0.0, 0.0, 1.0]);
-                    renderer.draw_text("ЗАГРУЗКА...", w/2.0 - 80.0, h/2.0, 1.5, [1.0, 1.0, 1.0, 1.0]);
+                    renderer.draw_text(
+                        "ЗАГРУЗКА...",
+                        w / 2.0 - 80.0,
+                        h / 2.0,
+                        1.5,
+                        [1.0, 1.0, 1.0, 1.0],
+                    );
                 }
             }
             MenuState::Paused => {
                 // Pause menu
                 unsafe {
-                    renderer.draw_rect(w/2.0 - 150.0, h/2.0 - 100.0, 300.0, 200.0, [0.1, 0.1, 0.15, 0.95]);
-                    renderer.draw_text("ПАУЗА", w/2.0 - 40.0, h/2.0 - 60.0, 1.2, [1.0, 1.0, 1.0, 1.0]);
+                    renderer.draw_rect(
+                        w / 2.0 - 150.0,
+                        h / 2.0 - 100.0,
+                        300.0,
+                        200.0,
+                        [0.1, 0.1, 0.15, 0.95],
+                    );
+                    renderer.draw_text(
+                        "ПАУЗА",
+                        w / 2.0 - 40.0,
+                        h / 2.0 - 60.0,
+                        1.2,
+                        [1.0, 1.0, 1.0, 1.0],
+                    );
                 }
             }
         }

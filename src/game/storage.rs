@@ -35,8 +35,8 @@ impl ItemDimensions {
 /// Common item dimensions presets
 impl ItemDimensions {
     pub const EMPTY: Self = Self::new(0, 0);
-    pub const AMMO_BOX_SMALL: Self = Self::new(1, 1);   // Pistol ammo
-    pub const AMMO_BOX_LARGE: Self = Self::new(2, 1);   // Rifle ammo
+    pub const AMMO_BOX_SMALL: Self = Self::new(1, 1); // Pistol ammo
+    pub const AMMO_BOX_LARGE: Self = Self::new(2, 1); // Rifle ammo
     pub const MEDKIT: Self = Self::new(1, 2);
     pub const TOOL_KIT: Self = Self::new(2, 2);
     pub const FUEL_CANISTER: Self = Self::new(2, 3);
@@ -50,8 +50,8 @@ impl ItemDimensions {
     pub const BACKPACK_SMALL: Self = Self::new(2, 3);
     pub const BACKPACK_LARGE: Self = Self::new(3, 4);
     pub const WEAPON_CASE: Self = Self::new(4, 2);
-    pub const CEMENT_BAG: Self = Self::new(2, 2);      // 50kg bag
-    pub const BRICK_STACK: Self = Self::new(2, 2);     // Stack of bricks
+    pub const CEMENT_BAG: Self = Self::new(2, 2); // 50kg bag
+    pub const BRICK_STACK: Self = Self::new(2, 2); // Stack of bricks
     pub const WOOD_PLANK: Self = Self::new(4, 1);
     pub const METAL_SHEET: Self = Self::new(4, 2);
 }
@@ -84,9 +84,9 @@ pub struct StoredItem {
     pub item_type: String,
     pub dimensions: ItemDimensions,
     pub weight_kg: f32,
-    pub x: u8,          // Grid position X
-    pub y: u8,          // Grid position Y
-    pub rotated: bool,  // 90° rotation
+    pub x: u8,         // Grid position X
+    pub y: u8,         // Grid position Y
+    pub rotated: bool, // 90° rotation
     pub stack_size: u32,
     pub max_stack: u32,
     pub metadata: HashMap<String, String>,
@@ -232,13 +232,7 @@ impl StorageContainer {
     }
 
     /// Check if item can be placed at position
-    pub fn can_place_at(
-        &self,
-        dimensions: ItemDimensions,
-        x: u8,
-        y: u8,
-        rotated: bool,
-    ) -> bool {
+    pub fn can_place_at(&self, dimensions: ItemDimensions, x: u8, y: u8, rotated: bool) -> bool {
         let (w, h) = if rotated {
             (dimensions.height, dimensions.width)
         } else {
@@ -366,7 +360,7 @@ impl StorageContainer {
         } else {
             return Err("Предмет не найден");
         };
-        
+
         let grid_width = self.grid_width;
         let grid_height = self.grid_height;
 
@@ -400,7 +394,7 @@ impl StorageContainer {
             item.y = new_y;
             item.rotated = rotated;
         }
-        
+
         self.rebuild_grid();
         Ok(())
     }
@@ -522,7 +516,7 @@ impl StorageSystem {
 
         // Clone item before moving for potential error handling
         let item_clone = item.clone();
-        
+
         // Add to destination
         let dst = self
             .containers
@@ -569,14 +563,8 @@ mod tests {
 
     #[test]
     fn test_storage_container_creation() {
-        let container = StorageContainer::new(
-            1,
-            "Test Backpack",
-            ContainerType::Backpack,
-            5,
-            4,
-            20.0,
-        );
+        let container =
+            StorageContainer::new(1, "Test Backpack", ContainerType::Backpack, 5, 4, 20.0);
 
         assert_eq!(container.grid_width, 5);
         assert_eq!(container.grid_height, 4);
@@ -586,22 +574,9 @@ mod tests {
 
     #[test]
     fn test_add_item_auto_position() {
-        let mut container = StorageContainer::new(
-            1,
-            "Test",
-            ContainerType::Backpack,
-            5,
-            4,
-            50.0,
-        );
+        let mut container = StorageContainer::new(1, "Test", ContainerType::Backpack, 5, 4, 50.0);
 
-        let item = StoredItem::new(
-            1,
-            "Medkit",
-            "medical",
-            ItemDimensions::MEDKIT,
-            0.5,
-        );
+        let item = StoredItem::new(1, "Medkit", "medical", ItemDimensions::MEDKIT, 0.5);
 
         assert!(container.add_item(item).is_ok());
         assert_eq!(container.items.len(), 1);
@@ -610,14 +585,7 @@ mod tests {
 
     #[test]
     fn test_no_space_for_item() {
-        let mut container = StorageContainer::new(
-            1,
-            "Small Box",
-            ContainerType::Crate,
-            2,
-            2,
-            10.0,
-        );
+        let mut container = StorageContainer::new(1, "Small Box", ContainerType::Crate, 2, 2, 10.0);
 
         // Add large item
         let big_item = StoredItem::new(1, "Big Box", "misc", ItemDimensions::new(2, 2), 5.0);
@@ -630,7 +598,8 @@ mod tests {
 
     #[test]
     fn test_weight_limit() {
-        let mut container = StorageContainer::new(1, "Light Box", ContainerType::Crate, 10, 10, 5.0);
+        let mut container =
+            StorageContainer::new(1, "Light Box", ContainerType::Crate, 10, 10, 5.0);
 
         let heavy_item = StoredItem::new(1, "Heavy", "misc", ItemDimensions::new(1, 1), 10.0);
         assert!(container.add_item(heavy_item).is_err()); // Over weight limit

@@ -1,5 +1,5 @@
 //! Crane Arm Physics for RTGC-0.8
-//! 
+//!
 //! Реализация крановой техники:
 //! - Автомобильные краны (Ивановец, Галичанин)
 //! - Буровые установки
@@ -7,10 +7,10 @@
 //! - Физика тросов и грузов
 //! - Ограничители грузоподъёмности
 
-use nalgebra::{Vector3, UnitQuaternion, Matrix3, Quaternion, Point3};
+use nalgebra::{Matrix3, Point3, Quaternion, UnitQuaternion, Vector3};
 use std::f32::consts::PI;
 
-use super::physics_module::{RigidBody, Ray, RaycastHit, LAYER_WORLD, LAYER_CARGO};
+use super::physics_module::{Ray, RaycastHit, RigidBody, LAYER_CARGO, LAYER_WORLD};
 
 /// Типы крановых установок
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,7 +152,7 @@ impl Default for CraneConfig {
             crane_type: CraneType::TruckCrane_25t,
             base_position: Vector3::zeros(),
             max_elevation_angle: PI / 2.0 - 0.1, // Почти вертикально
-            min_elevation_angle: 0.05,          // Почти горизонтально
+            min_elevation_angle: 0.05,           // Почти горизонтально
         }
     }
 }
@@ -221,12 +221,11 @@ impl CraneArm {
     /// Прицепить груз
     pub fn attach_load(&mut self, mass: f32, position: Vector3<f32>) -> Result<(), String> {
         let capacity = self.config.crane_type.max_load_capacity();
-        
+
         if mass > capacity {
             return Err(format!(
                 "Перегрузка! Масса {} кг превышает максимальную {} кг",
-                mass as u32,
-                capacity as u32
+                mass as u32, capacity as u32
             ));
         }
 
@@ -236,7 +235,7 @@ impl CraneArm {
             velocity: Vector3::zeros(),
             attached: true,
         });
-        
+
         Ok(())
     }
 
@@ -255,16 +254,18 @@ impl CraneArm {
         // Проверка опрокидывающего момента
         if let Some(ref load) = self.load {
             let boom_tip = self.get_boom_tip_position();
-            let horizontal_distance = ((load.position.x - boom_tip.x).powi(2) + 
-                                       (load.position.z - boom_tip.z).powi(2)).sqrt();
-            
+            let horizontal_distance = ((load.position.x - boom_tip.x).powi(2)
+                + (load.position.z - boom_tip.z).powi(2))
+            .sqrt();
+
             // Опрокидывающий момент
             let overturning_moment = load.mass * 9.81 * horizontal_distance;
-            
+
             // Удерживающий момент (упрощённо)
             let holding_moment = self.mass * 9.81 * 2.0; // 2м - половина ширины базы
-            
-            if overturning_moment > holding_moment * 0.8 { // 80% запас
+
+            if overturning_moment > holding_moment * 0.8 {
+                // 80% запас
                 return false;
             }
         }
@@ -277,11 +278,11 @@ impl CraneArm {
         // Локальная позиция конца стрелы
         let local_x = self.boom.length * self.boom.elevation_angle.cos();
         let local_y = self.boom.length * self.boom.elevation_angle.sin();
-        
+
         // Поворот вокруг оси Y (башня)
         let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.boom.slew_angle);
         let rotated = rotation * Vector3::new(local_x, local_y, 0.0);
-        
+
         self.config.base_position + rotated
     }
 
@@ -328,17 +329,17 @@ impl CraneArm {
             let extension_speed = 0.3; // м/с
             let extension_delta = self.controls.boom_extension * extension_speed * dt;
             self.boom.length += extension_delta;
-            self.boom.length = self.boom.length.clamp(
-                crane_type.minBoomLength(),
-                crane_type.maxBoomLength(),
-            );
+            self.boom.length = self
+                .boom
+                .length
+                .clamp(crane_type.minBoomLength(), crane_type.maxBoomLength());
         }
 
         // Подъём/опускание груза
         if self.controls.hoist != 0.0 && self.check_stability() {
             // Get hook position first to avoid borrow issues
             let hook_pos = self.get_hook_position();
-            
+
             if let Some(ref mut load) = self.load {
                 let hoist_speed = crane_type.hoist_speed();
                 let hoist_delta = self.controls.hoist * hoist_speed * dt;
@@ -357,12 +358,12 @@ impl CraneArm {
         } else {
             None
         };
-        
+
         if let Some((pos, mass, vel)) = load_physics_data {
             // Update physics and get new position
             let hook_pos = self.get_hook_position();
             let new_pos = pos + vel * dt; // Simple physics update
-            
+
             if let Some(ref mut load) = self.load {
                 load.position = new_pos;
                 // Проверка перегрузки
@@ -373,11 +374,12 @@ impl CraneArm {
         }
 
         // Нагрев гидравлики
-        let activity = (self.controls.boom_elevation.abs() + 
-                       self.controls.boom_extension.abs() + 
-                       self.controls.slew.abs() + 
-                       self.controls.hoist.abs()) / 4.0;
-        
+        let activity = (self.controls.boom_elevation.abs()
+            + self.controls.boom_extension.abs()
+            + self.controls.slew.abs()
+            + self.controls.hoist.abs())
+            / 4.0;
+
         let target_temp = 40.0 + activity * 60.0;
         self.hydraulic_temperature += (target_temp - self.hydraulic_temperature) * dt * 0.05;
     }
@@ -385,30 +387,30 @@ impl CraneArm {
     /// Физика подвешенного груза (простой маятник)
     fn update_load_physics(&mut self, load: &mut SuspendedLoad, dt: f32) {
         let hook_pos = self.get_hook_position();
-        
+
         // Вектор от крюка к грузу
         let to_load = load.position - hook_pos;
         let distance = to_load.norm();
-        
+
         if distance < 0.1 {
             return;
         }
 
         // Направление троса
         let cable_dir = to_load.normalize();
-        
+
         // Сила тяжести
         let gravity = Vector3::new(0.0, -9.81, 0.0);
-        
+
         // Сила натяжения троса (упрощённо)
         let tension = -cable_dir * load.mass * 9.81;
-        
+
         // Демпфирование колебаний
         let damping = -load.velocity * 0.5;
-        
+
         // Ускорение
         let acceleration = gravity + tension / load.mass + damping / load.mass;
-        
+
         // Обновление скорости и позиции
         load.velocity += acceleration * dt;
         load.position += load.velocity * dt;
@@ -418,7 +420,7 @@ impl CraneArm {
             // Возвращаем груз в пределах длины троса
             let correction = (distance - self.boom.cable_length) * cable_dir;
             load.position -= correction;
-            
+
             // Гасим скорость вдоль троса
             let vel_along_cable = load.velocity.dot(&cable_dir);
             load.velocity -= cable_dir * vel_along_cable;
@@ -426,10 +428,7 @@ impl CraneArm {
     }
 
     /// Обновить давление на аутригеры
-    fn update_outrigger_pressure(
-        &mut self,
-        terrain_getter: &dyn Fn(f32, f32) -> f32,
-    ) {
+    fn update_outrigger_pressure(&mut self, terrain_getter: &dyn Fn(f32, f32) -> f32) {
         // Позиции аутригеров относительно базы
         let outrigger_offsets = [
             Vector3::new(2.5, 0.0, 2.0),   // перед-лев
@@ -439,11 +438,11 @@ impl CraneArm {
         ];
 
         let rotation = self.base_orientation;
-        
+
         for (i, offset) in outrigger_offsets.iter().enumerate() {
             let world_pos = self.config.base_position + rotation * offset;
             let terrain_height = terrain_getter(world_pos.x, world_pos.z);
-            
+
             // Простая модель: давление зависит от разницы высот
             let height_diff = (world_pos.y - terrain_height).abs();
             self.outrigger_pressure[i] = if height_diff < 0.3 {
@@ -479,7 +478,8 @@ impl CraneArm {
 
     /// Может ли кран работать на данной поверхности
     pub fn can_operate_on(&self, surface_type: &str) -> bool {
-        matches!(surface_type, 
+        matches!(
+            surface_type,
             "asphalt_good" | "asphalt_bad" | "concrete" | "gravel" | "dirt"
         )
     }
@@ -508,11 +508,8 @@ mod tests {
 
     #[test]
     fn test_crane_creation() {
-        let crane = CraneArm::new(
-            CraneType::TruckCrane_25t,
-            Vector3::new(0.0, 0.0, 0.0)
-        );
-        
+        let crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::new(0.0, 0.0, 0.0));
+
         assert_eq!(crane.config.crane_type, CraneType::TruckCrane_25t);
         assert_eq!(crane.mass, 28_000.0);
         assert!(!crane.overloaded);
@@ -520,53 +517,48 @@ mod tests {
 
     #[test]
     fn test_attach_load() {
-        let mut crane = CraneArm::new(
-            CraneType::TruckCrane_25t,
-            Vector3::zeros()
-        );
-        
+        let mut crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::zeros());
+
         // Должен успешно прицепить груз 10 тонн
-        assert!(crane.attach_load(10_000.0, Vector3::new(5.0, -2.0, 0.0)).is_ok());
+        assert!(crane
+            .attach_load(10_000.0, Vector3::new(5.0, -2.0, 0.0))
+            .is_ok());
         assert!(crane.load.is_some());
-        
+
         // Не должен прицепить перегруз
         assert!(crane.attach_load(30_000.0, Vector3::zeros()).is_err());
     }
 
     #[test]
     fn test_boom_tip_position() {
-        let crane = CraneArm::new(
-            CraneType::TruckCrane_25t,
-            Vector3::new(0.0, 10.0, 0.0)
-        );
-        
+        let crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::new(0.0, 10.0, 0.0));
+
         let tip = crane.get_boom_tip_position();
-        
+
         // Длина стрелы 10м под углом 30°
         let expected_x = 10.0 * (PI / 6.0).cos();
         let expected_y = 10.0 + 10.0 * (PI / 6.0).sin();
-        
+
         assert!((tip.x - expected_x).abs() < 0.1);
         assert!((tip.y - expected_y).abs() < 0.1);
     }
 
     #[test]
     fn test_stability_check() {
-        let mut crane = CraneArm::new(
-            CraneType::TruckCrane_25t,
-            Vector3::zeros()
-        );
-        
+        let mut crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::zeros());
+
         // Без аутригеров - нестабилен
         assert!(!crane.check_stability());
-        
+
         // С аутригерами но без груза - стабилен
         crane.controls.outriggers_deployed = true;
         assert!(crane.check_stability());
-        
+
         // Прицепить груз
-        crane.attach_load(5_000.0, Vector3::new(10.0, -5.0, 0.0)).unwrap();
-        
+        crane
+            .attach_load(5_000.0, Vector3::new(10.0, -5.0, 0.0))
+            .unwrap();
+
         // Должен быть стабилен с нормальным грузом
         assert!(crane.check_stability());
     }

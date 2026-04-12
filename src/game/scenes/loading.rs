@@ -55,34 +55,49 @@ impl Scene for LoadingScene {
         // Simulate loading progress or check async loading tasks
     }
 
-    fn render(&mut self, renderer: &mut crate::graphics::renderer::Renderer) -> Result<(), Box<dyn std::error::Error>> {
+    fn render(
+        &mut self,
+        renderer: &mut crate::graphics::renderer::Renderer,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Render loading screen with progress bar
         let w = renderer.width as f32;
         let h = renderer.height as f32;
-        
+
         unsafe {
             // Background
             renderer.draw_rect(0.0, 0.0, w, h, [0.0, 0.0, 0.0, 1.0]);
-            
+
             // Progress bar background
             let bar_width = 400.0;
             let bar_height = 30.0;
-            let bar_x = w/2.0 - bar_width/2.0;
-            let bar_y = h/2.0;
+            let bar_x = w / 2.0 - bar_width / 2.0;
+            let bar_y = h / 2.0;
             renderer.draw_rect(bar_x, bar_y, bar_width, bar_height, [0.2, 0.2, 0.2, 1.0]);
-            
+
             // Progress bar fill
             let fill_width = bar_width * self.progress;
             if fill_width > 0.0 {
-                renderer.draw_rect(bar_x + 2.0, bar_y + 2.0, fill_width - 4.0, bar_height - 4.0, [0.0, 0.8, 0.0, 1.0]);
+                renderer.draw_rect(
+                    bar_x + 2.0,
+                    bar_y + 2.0,
+                    fill_width - 4.0,
+                    bar_height - 4.0,
+                    [0.0, 0.8, 0.0, 1.0],
+                );
             }
-            
+
             // Progress text
             let progress_pct = (self.progress * 100.0) as i32;
             let text = format!("ЗАГРУЗКА... {}%", progress_pct);
-            renderer.draw_text(&text, w/2.0 - 80.0, bar_y - 40.0, 1.2, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(
+                &text,
+                w / 2.0 - 80.0,
+                bar_y - 40.0,
+                1.2,
+                [1.0, 1.0, 1.0, 1.0],
+            );
         }
-        
+
         Ok(())
     }
 

@@ -33,8 +33,12 @@ impl SpatialHash {
                 ((x % 1000003) + 1000003) % 1000003
             }
         };
-        
-        (hash_coord(coords.0), hash_coord(coords.1), hash_coord(coords.2))
+
+        (
+            hash_coord(coords.0),
+            hash_coord(coords.1),
+            hash_coord(coords.2),
+        )
     }
 
     /// Converts world position to cell coordinates
@@ -58,8 +62,11 @@ impl SpatialHash {
     pub fn insert(&mut self, body_index: usize, position: &Vector3<f32>) {
         let cell_coords = self.world_to_cell(position);
         let hashed_coords = self.hash_coords(cell_coords);
-        
-        self.hash_map.entry(hashed_coords).or_insert_with(Vec::new).push(body_index);
+
+        self.hash_map
+            .entry(hashed_coords)
+            .or_insert_with(Vec::new)
+            .push(body_index);
     }
 
     /// Inserts an AABB-defined object into all overlapping cells
@@ -67,13 +74,16 @@ impl SpatialHash {
     pub fn insert_aabb(&mut self, body_index: usize, min: &Vector3<f32>, max: &Vector3<f32>) {
         let min_cell = self.world_to_cell(min);
         let max_cell = self.world_to_cell(max);
-        
+
         // Iterate through all cells the AABB overlaps
         for x in min_cell.0..=max_cell.0 {
             for y in min_cell.1..=max_cell.1 {
                 for z in min_cell.2..=max_cell.2 {
                     let hashed_coords = self.hash_coords((x, y, z));
-                    self.hash_map.entry(hashed_coords).or_insert_with(Vec::new).push(body_index);
+                    self.hash_map
+                        .entry(hashed_coords)
+                        .or_insert_with(Vec::new)
+                        .push(body_index);
                 }
             }
         }
@@ -89,14 +99,11 @@ impl SpatialHash {
         for dx in -1..=1 {
             for dy in -1..=1 {
                 for dz in -1..=1 {
-                    let neighbor_coords = (
-                        cell_coords.0 + dx,
-                        cell_coords.1 + dy,
-                        cell_coords.2 + dz,
-                    );
-                    
+                    let neighbor_coords =
+                        (cell_coords.0 + dx, cell_coords.1 + dy, cell_coords.2 + dz);
+
                     let hashed_coords = self.hash_coords(neighbor_coords);
-                    
+
                     if let Some(bodies) = self.hash_map.get(&hashed_coords) {
                         candidates.extend_from_slice(bodies);
                     }
@@ -109,19 +116,23 @@ impl SpatialHash {
 
     /// Gets all potential collision candidates for an AABB query
     /// More accurate than point query for larger objects
-    pub fn get_potential_collisions_aabb(&self, min: &Vector3<f32>, max: &Vector3<f32>) -> Vec<usize> {
+    pub fn get_potential_collisions_aabb(
+        &self,
+        min: &Vector3<f32>,
+        max: &Vector3<f32>,
+    ) -> Vec<usize> {
         let mut candidates = Vec::new();
         let min_cell = self.world_to_cell(min);
         let max_cell = self.world_to_cell(max);
-        
+
         // Track seen indices to avoid duplicates
         let mut seen = std::collections::HashSet::new();
-        
+
         for x in min_cell.0..=max_cell.0 {
             for y in min_cell.1..=max_cell.1 {
                 for z in min_cell.2..=max_cell.2 {
                     let hashed_coords = self.hash_coords((x, y, z));
-                    
+
                     if let Some(bodies) = self.hash_map.get(&hashed_coords) {
                         for &body_index in bodies {
                             if seen.insert(body_index) {
@@ -132,7 +143,7 @@ impl SpatialHash {
                 }
             }
         }
-        
+
         candidates
     }
 
@@ -143,8 +154,13 @@ impl SpatialHash {
 
     /// Returns the approximate memory usage in bytes
     pub fn memory_usage(&self) -> usize {
-        let map_overhead = self.hash_map.capacity() * std::mem::size_of::<((i32, i32, i32), Vec<usize>)>();
-        let vec_overhead = self.hash_map.values().map(|v| v.capacity() * std::mem::size_of::<usize>()).sum::<usize>();
+        let map_overhead =
+            self.hash_map.capacity() * std::mem::size_of::<((i32, i32, i32), Vec<usize>)>();
+        let vec_overhead = self
+            .hash_map
+            .values()
+            .map(|v| v.capacity() * std::mem::size_of::<usize>())
+            .sum::<usize>();
         map_overhead + vec_overhead
     }
 
@@ -161,20 +177,20 @@ mod tests {
     #[test]
     fn test_spatial_hash_insert_and_query() {
         let mut hash = SpatialHash::new(10.0);
-        
+
         // Insert some objects
         hash.insert(0, &Vector3::new(5.0, 5.0, 5.0));
         hash.insert(1, &Vector3::new(15.0, 5.0, 5.0));
         hash.insert(2, &Vector3::new(100.0, 100.0, 100.0));
-        
+
         // Query near first object
         let candidates = hash.get_potential_collisions(&Vector3::new(5.0, 5.0, 5.0));
         assert!(candidates.contains(&0));
-        
+
         // Query near second object (should also find first due to adjacent cells)
         let candidates = hash.get_potential_collisions(&Vector3::new(15.0, 5.0, 5.0));
         assert!(candidates.contains(&1));
-        
+
         // Query far away (should only find object 2)
         let candidates = hash.get_potential_collisions(&Vector3::new(100.0, 100.0, 100.0));
         assert!(candidates.contains(&2));
@@ -185,30 +201,36 @@ mod tests {
     #[test]
     fn test_aabb_insert() {
         let mut hash = SpatialHash::new(10.0);
-        
+
         // Insert a large AABB spanning multiple cells
         let min = Vector3::new(-5.0, -5.0, -5.0);
         let max = Vector3::new(15.0, 15.0, 15.0);
         hash.insert_aabb(0, &min, &max);
-        
+
         // Query at different points within the AABB should all find the object
-        assert!(hash.get_potential_collisions(&Vector3::new(0.0, 0.0, 0.0)).contains(&0));
-        assert!(hash.get_potential_collisions(&Vector3::new(10.0, 10.0, 10.0)).contains(&0));
-        assert!(hash.get_potential_collisions(&Vector3::new(-5.0, -5.0, -5.0)).contains(&0));
+        assert!(hash
+            .get_potential_collisions(&Vector3::new(0.0, 0.0, 0.0))
+            .contains(&0));
+        assert!(hash
+            .get_potential_collisions(&Vector3::new(10.0, 10.0, 10.0))
+            .contains(&0));
+        assert!(hash
+            .get_potential_collisions(&Vector3::new(-5.0, -5.0, -5.0))
+            .contains(&0));
     }
 
     #[test]
     fn test_negative_coordinates() {
         let mut hash = SpatialHash::new(10.0);
-        
+
         // Test with negative coordinates
         hash.insert(0, &Vector3::new(-50.0, -50.0, -50.0));
         hash.insert(1, &Vector3::new(50.0, 50.0, 50.0));
-        
+
         let candidates_neg = hash.get_potential_collisions(&Vector3::new(-50.0, -50.0, -50.0));
         assert!(candidates_neg.contains(&0));
         assert!(!candidates_neg.contains(&1));
-        
+
         let candidates_pos = hash.get_potential_collisions(&Vector3::new(50.0, 50.0, 50.0));
         assert!(candidates_pos.contains(&1));
         assert!(!candidates_pos.contains(&0));

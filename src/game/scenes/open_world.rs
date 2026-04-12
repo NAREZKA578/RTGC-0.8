@@ -6,7 +6,7 @@ use std::any::Any;
 pub struct OpenWorldScene {
     name: String,
     world_loaded: bool,
-    seed: u64,  // Seed for terrain generation
+    seed: u64, // Seed for terrain generation
 }
 
 impl OpenWorldScene {
@@ -14,7 +14,7 @@ impl OpenWorldScene {
         Self {
             name: "Open World".to_string(),
             world_loaded: false,
-            seed: 42,  // Default seed
+            seed: 42, // Default seed
         }
     }
 
@@ -70,7 +70,10 @@ impl Scene for OpenWorldScene {
         // Update world entities, physics, etc.
     }
 
-    fn render(&mut self, _renderer: &mut crate::graphics::renderer::Renderer) -> Result<(), Box<dyn std::error::Error>> {
+    fn render(
+        &mut self,
+        _renderer: &mut crate::graphics::renderer::Renderer,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Render the open world - handled by engine renderer
         // This scene uses the full 3D renderer, not UI
         Ok(())

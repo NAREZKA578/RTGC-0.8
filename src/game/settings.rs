@@ -2,8 +2,8 @@
 // Provides runtime access to all configurable game options
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 /// Display settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +62,7 @@ impl Default for AAMode {
 /// Graphics settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphicsSettings {
-    pub backend: String,  // "opengl", "vulkan", "dx12"
+    pub backend: String, // "opengl", "vulkan", "dx12"
     pub texture_quality: QualityLevel,
     pub shadow_quality: QualityLevel,
     pub lod_distance: f32,
@@ -126,12 +126,16 @@ impl Default for AudioSettings {
 #[serde(rename_all = "snake_case")]
 pub enum CameraMode {
     FirstPerson,
-    ThirdPerson,
+    ThirdPerson { distance: f32, yaw: f32, pitch: f32 },
 }
 
 impl Default for CameraMode {
     fn default() -> Self {
-        CameraMode::ThirdPerson
+        CameraMode::ThirdPerson {
+            distance: 4.0,
+            yaw: 0.0,
+            pitch: 0.3,
+        }
     }
 }
 
@@ -175,7 +179,7 @@ pub struct ControlsSettings {
     pub camera_distance: f32,
     pub camera_height: f32,
     pub camera_smoothing: f32,
-    
+
     // Key bindings
     pub key_forward: String,
     pub key_backward: String,
@@ -192,7 +196,7 @@ pub struct ControlsSettings {
     pub key_handbrake: String,
     pub key_view_change: String,
     pub key_debug: String,
-    
+
     // Vehicle controls
     pub key_gear_up: String,
     pub key_gear_down: String,
@@ -209,11 +213,15 @@ impl Default for ControlsSettings {
             mouse_sensitivity: 1.0,
             invert_y_axis: false,
             vehicle_mouse_steering: false,
-            camera_mode: CameraMode::ThirdPerson,
+            camera_mode: CameraMode::ThirdPerson {
+                distance: 5.0,
+                yaw: 0.0,
+                pitch: 0.3,
+            },
             camera_distance: 5.0,
             camera_height: 2.5,
             camera_smoothing: 0.8,
-            
+
             key_forward: "W".to_string(),
             key_backward: "S".to_string(),
             key_left: "A".to_string(),
@@ -229,7 +237,7 @@ impl Default for ControlsSettings {
             key_handbrake: "Space".to_string(),
             key_view_change: "V".to_string(),
             key_debug: "F3".to_string(),
-            
+
             key_gear_up: "Z".to_string(),
             key_gear_down: "X".to_string(),
             key_diff_lock: "K".to_string(),
@@ -246,14 +254,14 @@ impl Default for ControlsSettings {
 pub struct GameplaySettings {
     pub difficulty: Difficulty,
     pub auto_save: bool,
-    pub auto_save_interval: u32,  // seconds
+    pub auto_save_interval: u32, // seconds
     pub show_hints: bool,
     pub show_waypoints: bool,
     pub show_minimap: bool,
     pub show_compass: bool,
     pub units: UnitsSystem,
-    pub fuel_consumption: f32,  // multiplier
-    pub wear_rate: f32,  // multiplier
+    pub fuel_consumption: f32, // multiplier
+    pub wear_rate: f32,        // multiplier
     pub damage_multiplier: f32,
     pub respawn_on_crash: bool,
     pub financial_penalties: bool,
@@ -453,34 +461,34 @@ impl SettingsManager {
             config_path: "assets/settings/settings.toml".to_string(),
         }
     }
-    
+
     /// Load settings from TOML file
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let path_str = path.as_ref().to_string_lossy().to_string();
         self.config_path = path_str.clone();
-        
+
         if !path.as_ref().exists() {
             tracing::warn!("Settings file not found: {}, using defaults", path_str);
             return Ok(());
         }
-        
+
         let content = fs::read_to_string(path)?;
         let settings: GameSettings = toml::from_str(&content)?;
         self.settings = settings;
-        
+
         tracing::info!("Settings loaded from {}", path_str);
         Ok(())
     }
-    
+
     /// Save settings to TOML file
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(&self.settings)?;
         fs::write(&self.config_path, content)?;
-        
+
         tracing::info!("Settings saved to {}", self.config_path);
         Ok(())
     }
-    
+
     /// Save settings to a specific path
     pub fn save_to<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(&self.settings)?;
@@ -490,37 +498,37 @@ impl SettingsManager {
         tracing::info!("Settings saved to {:?}", path_ref);
         Ok(())
     }
-    
+
     /// Get immutable reference to settings
     pub fn get(&self) -> &GameSettings {
         &self.settings
     }
-    
+
     /// Get mutable reference to settings
     pub fn get_mut(&mut self) -> &mut GameSettings {
         &mut self.settings
     }
-    
+
     /// Apply settings to the game (called after loading/modifying)
     pub fn apply(&self) {
         // Apply display settings
         // Note: Actual application would be done in engine.rs
-        
+
         // Apply graphics settings
         // Note: Actual application would be done in renderer
-        
+
         // Apply audio settings
         // Note: Actual application would be done in audio system
-        
+
         tracing::debug!("Settings applied");
     }
-    
+
     /// Reset all settings to default
     pub fn reset_to_defaults(&mut self) {
         self.settings = GameSettings::default();
         tracing::info!("Settings reset to defaults");
     }
-    
+
     /// Reset a specific category to defaults
     pub fn reset_category(&mut self, category: &str) {
         match category {
@@ -548,7 +556,7 @@ impl Default for SettingsManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_settings() {
         let settings = GameSettings::default();
@@ -557,13 +565,13 @@ mod tests {
         assert_eq!(settings.audio.master_volume, 0.8);
         assert_eq!(settings.controls.key_inventory, "Tab");
     }
-    
+
     #[test]
     fn test_settings_manager_creation() {
         let manager = SettingsManager::new();
         assert_eq!(manager.get().display.fps_limit, 60);
     }
-    
+
     #[test]
     fn test_settings_serialization() {
         let settings = GameSettings::default();

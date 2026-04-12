@@ -1,17 +1,17 @@
-use nalgebra::Vector3;
 use crate::physics::{PhysicsWorld, SpringConstraint};
+use nalgebra::Vector3;
 // Re-export InventoryItem for backwards compatibility
 pub use crate::game::inventory::InventoryItem;
 
 /// Груз — физический объект который можно прицепить к машине
 pub struct Cargo {
     pub id: String,
-    pub body_index: usize,        // Индекс RigidBody в PhysicsWorld
+    pub body_index: usize, // Индекс RigidBody в PhysicsWorld
     pub weight_kg: f32,
     pub is_attached: bool,
-    pub attachment_body: Option<usize>,  // К чему прицеплено (индекс тела машины)
-    pub health: f32,              // 1.0 = целый, 0.0 = разрушен
-    pub position: Vector3<f32>,   // Текущая позиция (кэш из physics)
+    pub attachment_body: Option<usize>, // К чему прицеплено (индекс тела машины)
+    pub health: f32,                    // 1.0 = целый, 0.0 = разрушен
+    pub position: Vector3<f32>,         // Текущая позиция (кэш из physics)
 }
 
 impl Cargo {
@@ -28,11 +28,7 @@ impl Cargo {
     }
 
     /// Прицепить груз к машине
-    pub fn attach(
-        &mut self, 
-        vehicle_body_index: usize,
-        _constraints: &mut Vec<SpringConstraint>
-    ) {
+    pub fn attach(&mut self, vehicle_body_index: usize, _constraints: &mut Vec<SpringConstraint>) {
         // В реальной реализации здесь создается жесткая связь (SpringConstraint с rest_length=0)
         // между cargo body и vehicle body
         self.is_attached = true;

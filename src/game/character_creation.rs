@@ -1,10 +1,12 @@
 //! Character Creation System - Full character customization screen
 //! Implements gender, height, skin color, face, hair, education, vehicle color, and starting location
 
-use nalgebra::Vector3;
-use crate::game::skills::{PlayerSkills, SkillType};
-use crate::game::player::{Player, PlayerWallet};
+use crate::game::economy::PlayerWallet;
+use crate::game::player::Player;
+use crate::game::save::PlayerSkillsData;
+use crate::game::skills::SkillType;
 use crate::game::InventoryItem;
+use nalgebra::Vector3;
 
 /// Character creation state machine
 #[derive(Debug, Clone, PartialEq)]
@@ -69,14 +71,38 @@ pub struct SkinTone {
 }
 
 pub const SKIN_TONES: &[SkinTone] = &[
-    SkinTone { name: "Очень светлый", rgb: [0.95, 0.85, 0.80] },
-    SkinTone { name: "Светлый", rgb: [0.88, 0.75, 0.68] },
-    SkinTone { name: "Средний светлый", rgb: [0.80, 0.65, 0.55] },
-    SkinTone { name: "Средний", rgb: [0.72, 0.58, 0.48] },
-    SkinTone { name: "Средний тёмный", rgb: [0.62, 0.48, 0.38] },
-    SkinTone { name: "Тёмный", rgb: [0.50, 0.38, 0.28] },
-    SkinTone { name: "Очень тёмный", rgb: [0.35, 0.25, 0.18] },
-    SkinTone { name: "Глубокий тёмный", rgb: [0.22, 0.15, 0.10] },
+    SkinTone {
+        name: "Очень светлый",
+        rgb: [0.95, 0.85, 0.80],
+    },
+    SkinTone {
+        name: "Светлый",
+        rgb: [0.88, 0.75, 0.68],
+    },
+    SkinTone {
+        name: "Средний светлый",
+        rgb: [0.80, 0.65, 0.55],
+    },
+    SkinTone {
+        name: "Средний",
+        rgb: [0.72, 0.58, 0.48],
+    },
+    SkinTone {
+        name: "Средний тёмный",
+        rgb: [0.62, 0.48, 0.38],
+    },
+    SkinTone {
+        name: "Тёмный",
+        rgb: [0.50, 0.38, 0.28],
+    },
+    SkinTone {
+        name: "Очень тёмный",
+        rgb: [0.35, 0.25, 0.18],
+    },
+    SkinTone {
+        name: "Глубокий тёмный",
+        rgb: [0.22, 0.15, 0.10],
+    },
 ];
 
 /// Hair color preset
@@ -87,17 +113,50 @@ pub struct HairColor {
 }
 
 pub const HAIR_COLORS: &[HairColor] = &[
-    HairColor { name: "Чёрный", rgb: [0.08, 0.06, 0.05] },
-    HairColor { name: "Тёмно-коричневый", rgb: [0.25, 0.18, 0.12] },
-    HairColor { name: "Коричневый", rgb: [0.38, 0.28, 0.18] },
-    HairColor { name: "Светло-коричневый", rgb: [0.52, 0.40, 0.28] },
-    HairColor { name: "Блонд", rgb: [0.75, 0.65, 0.45] },
-    HairColor { name: "Золотистый блонд", rgb: [0.85, 0.72, 0.45] },
-    HairColor { name: "Рыжий", rgb: [0.70, 0.35, 0.18] },
-    HairColor { name: "Тёмно-рыжий", rgb: [0.55, 0.25, 0.12] },
-    HairColor { name: "Красный", rgb: [0.65, 0.20, 0.15] },
-    HairColor { name: "Седой", rgb: [0.75, 0.75, 0.75] },
-    HairColor { name: "Белый", rgb: [0.92, 0.92, 0.92] },
+    HairColor {
+        name: "Чёрный",
+        rgb: [0.08, 0.06, 0.05],
+    },
+    HairColor {
+        name: "Тёмно-коричневый",
+        rgb: [0.25, 0.18, 0.12],
+    },
+    HairColor {
+        name: "Коричневый",
+        rgb: [0.38, 0.28, 0.18],
+    },
+    HairColor {
+        name: "Светло-коричневый",
+        rgb: [0.52, 0.40, 0.28],
+    },
+    HairColor {
+        name: "Блонд",
+        rgb: [0.75, 0.65, 0.45],
+    },
+    HairColor {
+        name: "Золотистый блонд",
+        rgb: [0.85, 0.72, 0.45],
+    },
+    HairColor {
+        name: "Рыжий",
+        rgb: [0.70, 0.35, 0.18],
+    },
+    HairColor {
+        name: "Тёмно-рыжий",
+        rgb: [0.55, 0.25, 0.12],
+    },
+    HairColor {
+        name: "Красный",
+        rgb: [0.65, 0.20, 0.15],
+    },
+    HairColor {
+        name: "Седой",
+        rgb: [0.75, 0.75, 0.75],
+    },
+    HairColor {
+        name: "Белый",
+        rgb: [0.92, 0.92, 0.92],
+    },
 ];
 
 /// Hair style indices (0-7 for now)
@@ -126,18 +185,54 @@ pub struct VehicleColorOption {
 }
 
 pub const UAZ_COLORS: &[VehicleColorOption] = &[
-    VehicleColorOption { name: "Arctic White", rgb: [0.95, 0.95, 0.95] },
-    VehicleColorOption { name: "Silver Metallic", rgb: [0.75, 0.75, 0.78] },
-    VehicleColorOption { name: "Dark Gray", rgb: [0.35, 0.35, 0.38] },
-    VehicleColorOption { name: "Black", rgb: [0.12, 0.12, 0.15] },
-    VehicleColorOption { name: "Red", rgb: [0.65, 0.15, 0.15] },
-    VehicleColorOption { name: "Blue", rgb: [0.15, 0.25, 0.55] },
-    VehicleColorOption { name: "Green", rgb: [0.20, 0.35, 0.20] },
-    VehicleColorOption { name: "Beige", rgb: [0.75, 0.68, 0.55] },
-    VehicleColorOption { name: "Brown", rgb: [0.40, 0.28, 0.18] },
-    VehicleColorOption { name: "Orange", rgb: [0.80, 0.45, 0.15] },
-    VehicleColorOption { name: "Yellow", rgb: [0.90, 0.80, 0.20] },
-    VehicleColorOption { name: "Khaki", rgb: [0.55, 0.52, 0.40] },
+    VehicleColorOption {
+        name: "Arctic White",
+        rgb: [0.95, 0.95, 0.95],
+    },
+    VehicleColorOption {
+        name: "Silver Metallic",
+        rgb: [0.75, 0.75, 0.78],
+    },
+    VehicleColorOption {
+        name: "Dark Gray",
+        rgb: [0.35, 0.35, 0.38],
+    },
+    VehicleColorOption {
+        name: "Black",
+        rgb: [0.12, 0.12, 0.15],
+    },
+    VehicleColorOption {
+        name: "Red",
+        rgb: [0.65, 0.15, 0.15],
+    },
+    VehicleColorOption {
+        name: "Blue",
+        rgb: [0.15, 0.25, 0.55],
+    },
+    VehicleColorOption {
+        name: "Green",
+        rgb: [0.20, 0.35, 0.20],
+    },
+    VehicleColorOption {
+        name: "Beige",
+        rgb: [0.75, 0.68, 0.55],
+    },
+    VehicleColorOption {
+        name: "Brown",
+        rgb: [0.40, 0.28, 0.18],
+    },
+    VehicleColorOption {
+        name: "Orange",
+        rgb: [0.80, 0.45, 0.15],
+    },
+    VehicleColorOption {
+        name: "Yellow",
+        rgb: [0.90, 0.80, 0.20],
+    },
+    VehicleColorOption {
+        name: "Khaki",
+        rgb: [0.55, 0.52, 0.40],
+    },
 ];
 
 /// Starting location in Novosibirsk
@@ -239,105 +334,105 @@ impl CharacterCreationData {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Set gender
     pub fn set_gender(&mut self, gender: Gender) {
         self.gender = gender;
     }
-    
+
     /// Set height (clamped to 1.50 - 2.10)
     pub fn set_height(&mut self, height: f32) {
         self.height = height.clamp(1.50, 2.10);
     }
-    
+
     /// Adjust height by delta
     pub fn adjust_height(&mut self, delta: f32) {
         self.set_height(self.height + delta);
     }
-    
+
     /// Set skin tone by index
     pub fn set_skin_tone(&mut self, index: usize) {
         let idx = index.min(SKIN_TONES.len() - 1);
         self.skin_tone_index = idx;
         self.skin_color = SKIN_TONES[idx].rgb;
     }
-    
+
     /// Cycle skin tone
     pub fn cycle_skin_tone(&mut self, direction: i32) {
         let len = SKIN_TONES.len() as i32;
         let new_idx = ((self.skin_tone_index as i32) + direction).rem_euclid(len) as usize;
         self.set_skin_tone(new_idx);
     }
-    
+
     /// Set face variant
     pub fn set_face(&mut self, variant: u8) {
         self.face_variant = variant % FACE_VARIANTS as u8;
     }
-    
+
     /// Cycle face variant
     pub fn cycle_face(&mut self, direction: i32) {
         let new_val = ((self.face_variant as i32) + direction).rem_euclid(FACE_VARIANTS as i32);
         self.face_variant = new_val as u8;
     }
-    
+
     /// Set hair style
     pub fn set_hair_style(&mut self, style: u8) {
         self.hair_style = style % HAIR_STYLES as u8;
     }
-    
+
     /// Cycle hair style
     pub fn cycle_hair_style(&mut self, direction: i32) {
         let new_val = ((self.hair_style as i32) + direction).rem_euclid(HAIR_STYLES as i32);
         self.hair_style = new_val as u8;
     }
-    
+
     /// Set hair color by index
     pub fn set_hair_color(&mut self, index: usize) {
         let idx = index.min(HAIR_COLORS.len() - 1);
         self.hair_color_index = idx;
         self.hair_color = HAIR_COLORS[idx].rgb;
     }
-    
+
     /// Cycle hair color
     pub fn cycle_hair_color(&mut self, direction: i32) {
         let len = HAIR_COLORS.len() as i32;
         let new_idx = ((self.hair_color_index as i32) + direction).rem_euclid(len) as usize;
         self.set_hair_color(new_idx);
     }
-    
+
     /// Set education
     pub fn set_education(&mut self, edu: EducationOption) {
         self.education = Some(edu);
     }
-    
+
     /// Set vehicle color
     pub fn set_vehicle_color(&mut self, color: VehicleColorOption) {
         self.vehicle_color = color;
     }
-    
+
     /// Set starting location
     pub fn set_start_location(&mut self, location: StartLocation) {
         self.start_location = location;
     }
-    
+
     /// Build final Player from creation data
     pub fn build_player(&self) -> Player {
         let mut player = Player::new(self.name.clone());
-        
+
         player.is_male = match self.gender {
             Gender::Male => true,
             Gender::Female => false,
         };
-        
+
         player.height = self.height;
         player.skin_color = self.skin_color;
         player.face_variant = self.face_variant;
         player.hair_style = self.hair_style;
         player.hair_color = self.hair_color;
-        
+
         // Apply education skills and starting capital
         if let Some(ref edu) = self.education {
-            player.skills = PlayerSkills::from_education(&edu.specialty_id);
+            player.skills = PlayerSkillsData::from_education(&edu.specialty_id);
             player.money.rub = edu.starting_capital_rub;
         } else {
             // Default: basic driving and fitness, small capital
@@ -347,35 +442,47 @@ impl CharacterCreationData {
             player.skills.fitness.mastery = 0.3;
             player.money.rub = 15000.0;
         }
-        
+
         player
     }
-    
+
     /// Get summary string for final screen
     pub fn get_summary(&self) -> Vec<String> {
         let mut lines = Vec::new();
-        
+
         lines.push(format!("Имя: {}", self.name));
         lines.push(format!("Пол: {}", self.gender));
         lines.push(format!("Рост: {:.2} м", self.height));
-        lines.push(format!("Цвет кожи: {}", SKIN_TONES[self.skin_tone_index].name));
+        lines.push(format!(
+            "Цвет кожи: {}",
+            SKIN_TONES[self.skin_tone_index].name
+        ));
         lines.push(format!("Лицо: вариант #{}", self.face_variant + 1));
         lines.push(format!("Причёска: стиль #{}", self.hair_style + 1));
-        lines.push(format!("Цвет волос: {}", HAIR_COLORS[self.hair_color_index].name));
-        
+        lines.push(format!(
+            "Цвет волос: {}",
+            HAIR_COLORS[self.hair_color_index].name
+        ));
+
         if let Some(ref edu) = self.education {
-            lines.push(format!("Образование: {} - {}", edu.university_name, edu.specialty_name));
-            lines.push(format!("Стартовый капитал: {:.0} RUB", edu.starting_capital_rub));
+            lines.push(format!(
+                "Образование: {} - {}",
+                edu.university_name, edu.specialty_name
+            ));
+            lines.push(format!(
+                "Стартовый капитал: {:.0} RUB",
+                edu.starting_capital_rub
+            ));
             lines.push(format!("Контакты: {}", edu.contacts.join(", ")));
         } else {
             lines.push("Образование: Среднее".to_string());
             lines.push("Стартовый капитал: 15000 RUB".to_string());
         }
-        
+
         lines.push(format!("Цвет UAZ Patriot: {}", self.vehicle_color.name));
         lines.push(format!("Точка старта: {}", self.start_location.name));
         lines.push(format!("Описание: {}", self.start_location.description));
-        
+
         lines
     }
 }
@@ -401,11 +508,11 @@ impl CharacterCreationManager {
             is_active: true,
         }
     }
-    
+
     /// Load education options from toml file
     pub fn load_education_from_toml(&mut self, toml_content: &str) {
         self.education_options.clear();
-        
+
         // Simple TOML parser for specialties
         // In production, use proper toml crate
         for line in toml_content.lines() {
@@ -414,7 +521,7 @@ impl CharacterCreationManager {
                 // This is simplified - real implementation would use toml::from_str
             }
         }
-        
+
         // Add default education options if parsing failed
         if self.education_options.is_empty() {
             self.education_options = vec![
@@ -462,10 +569,7 @@ impl CharacterCreationManager {
                     university_name: "НГМУ".to_string(),
                     specialty_id: "medicine".to_string(),
                     specialty_name: "Лечебное дело".to_string(),
-                    skills: vec![
-                        (SkillType::Medicine, 4, 0.5),
-                        (SkillType::Fitness, 2, 0.3),
-                    ],
+                    skills: vec![(SkillType::Medicine, 4, 0.5), (SkillType::Fitness, 2, 0.3)],
                     starting_capital_rub: 40000.0,
                     contacts: vec!["doctor".to_string(), "pharmacist".to_string()],
                 },
@@ -480,7 +584,10 @@ impl CharacterCreationManager {
                         (SkillType::Driving, 2, 0.5),
                     ],
                     starting_capital_rub: 40000.0,
-                    contacts: vec!["road_worker".to_string(), "construction_company".to_string()],
+                    contacts: vec![
+                        "road_worker".to_string(),
+                        "construction_company".to_string(),
+                    ],
                 },
                 EducationOption {
                     university_id: "mstu_ga".to_string(),
@@ -498,11 +605,11 @@ impl CharacterCreationManager {
             ];
         }
     }
-    
+
     /// Go to next step
     pub fn next_step(&mut self) {
         use CreationStep::*;
-        
+
         self.current_step = match self.current_step {
             Gender => Height,
             Height => SkinColor,
@@ -517,11 +624,11 @@ impl CharacterCreationManager {
             Complete => Complete,
         };
     }
-    
+
     /// Go to previous step
     pub fn prev_step(&mut self) {
         use CreationStep::*;
-        
+
         self.current_step = match self.current_step {
             Gender => Gender,
             Height => Gender,
@@ -536,22 +643,22 @@ impl CharacterCreationManager {
             Complete => Summary,
         };
     }
-    
+
     /// Check if can go back
     pub fn can_go_back(&self) -> bool {
         self.current_step != CreationStep::Gender
     }
-    
+
     /// Check if can go forward
     pub fn can_go_forward(&self) -> bool {
         self.current_step != CreationStep::Complete
     }
-    
+
     /// Check if character creation is complete
     pub fn is_complete(&self) -> bool {
         self.current_step == CreationStep::Complete
     }
-    
+
     /// Finalize and create player
     pub fn finalize(&mut self) -> Option<Player> {
         if self.current_step == CreationStep::Summary {
@@ -561,7 +668,7 @@ impl CharacterCreationManager {
             None
         }
     }
-    
+
     /// Get current step name
     pub fn get_step_name(&self) -> &'static str {
         match self.current_step {
@@ -578,7 +685,7 @@ impl CharacterCreationManager {
             CreationStep::Complete => "Готово",
         }
     }
-    
+
     /// Get step number (1-10)
     pub fn get_step_number(&self) -> usize {
         match self.current_step {
@@ -595,17 +702,17 @@ impl CharacterCreationManager {
             CreationStep::Complete => 11,
         }
     }
-    
+
     /// Get total steps
     pub fn get_total_steps(&self) -> usize {
         10
     }
-    
+
     /// Get final character data for player creation
     pub fn get_final_data(&self) -> Option<&CharacterCreationData> {
         Some(&self.data)
     }
-    
+
     /// Update character creation (placeholder for future async loading)
     pub fn update(&mut self, _dt: f32) {
         // Placeholder for future updates
@@ -624,7 +731,7 @@ impl CharacterCreationManager {
             let step_num = self.get_step_number();
             let total_steps = 10;
             let title = format!("СОЗДАНИЕ ПЕРСОНАЖА - ШАГ {}/{}", step_num, total_steps);
-            renderer.draw_text(&title, w/2.0 - 200.0, 50.0, 1.2, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(&title, w / 2.0 - 200.0, 50.0, 1.2, [1.0, 1.0, 1.0, 1.0]);
 
             // Current step info
             let step_info = match self.current_step {
@@ -640,7 +747,13 @@ impl CharacterCreationManager {
                 CreationStep::Summary => "Проверьте характеристики и нажмите Enter",
                 CreationStep::Complete => "Создание завершено",
             };
-            renderer.draw_text(step_info, w/2.0 - 200.0, h/2.0 - 50.0, 1.0, [0.8, 0.8, 0.8, 1.0]);
+            renderer.draw_text(
+                step_info,
+                w / 2.0 - 200.0,
+                h / 2.0 - 50.0,
+                1.0,
+                [0.8, 0.8, 0.8, 1.0],
+            );
 
             // Character preview info
             let info = format!(
@@ -651,10 +764,22 @@ impl CharacterCreationManager {
                 self.data.skin_tone_index,
                 self.data.hair_color_index
             );
-            renderer.draw_text(&info, w/2.0 - 200.0, h/2.0 + 20.0, 0.9, [0.7, 0.7, 0.7, 1.0]);
+            renderer.draw_text(
+                &info,
+                w / 2.0 - 200.0,
+                h / 2.0 + 20.0,
+                0.9,
+                [0.7, 0.7, 0.7, 1.0],
+            );
 
             // Navigation hint
-            renderer.draw_text("Стрелки - выбор, Enter - далее, Esc - назад", w/2.0 - 180.0, h - 80.0, 0.8, [0.5, 0.5, 0.5, 1.0]);
+            renderer.draw_text(
+                "Стрелки - выбор, Enter - далее, Esc - назад",
+                w / 2.0 - 180.0,
+                h - 80.0,
+                0.8,
+                [0.5, 0.5, 0.5, 1.0],
+            );
         }
     }
 }
@@ -668,38 +793,40 @@ impl Default for CharacterCreationManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_character_creation_flow() {
         let mut manager = CharacterCreationManager::new();
-        
+
         assert_eq!(manager.get_step_number(), 1);
         assert_eq!(manager.current_step, CreationStep::Gender);
-        
+
         // Test height clamping
         manager.data.adjust_height(1.0);
         assert_eq!(manager.data.height, 2.10);
-        
+
         manager.data.adjust_height(-1.0);
         assert_eq!(manager.data.height, 1.50);
-        
+
         // Test cycling
         manager.data.cycle_skin_tone(1);
         assert_eq!(manager.data.skin_tone_index, 3);
-        
+
         manager.data.cycle_skin_tone(-10);
         assert_eq!(manager.data.skin_tone_index, 1);
     }
-    
+
     #[test]
     fn test_build_player() {
         let mut manager = CharacterCreationManager::new();
         manager.data.name = "Test Player".to_string();
         manager.data.height = 1.85;
-        manager.data.set_education(manager.education_options.first().unwrap().clone());
-        
+        manager
+            .data
+            .set_education(manager.education_options.first().unwrap().clone());
+
         let player = manager.data.build_player();
-        
+
         assert_eq!(player.name, "Test Player");
         assert_eq!(player.height, 1.85);
         assert!(player.money.rub > 0.0);

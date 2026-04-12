@@ -1,44 +1,47 @@
-use winit::{
-    event::{WindowEvent, ElementState, MouseButton},
-    keyboard::{KeyCode, PhysicalKey},
-};
-use std::sync::Arc;
-use crate::config::Config;
-use crate::graphics::GlContext;
-use crate::graphics::material::MaterialManager;
-use crate::graphics::mesh::Mesh;
-use crate::input::InputManager;
+use crate::assets::VehicleLoader;
 use crate::audio::AudioSystem;
+use crate::config::Config;
 use crate::ecs::EcsManager;
-use crate::physics;
-use crate::graphics::renderer::{MenuState, Renderer};
-use crate::game::{WeatherSystem, Cargo, Winch, MissionGenerator, Mission, MainMenu};
-use crate::game::loading_manager::{LoadingManager, ResourceType, LoadingProgress, LoadingStats};
-use crate::game::interaction::InteractionSystem;
-use crate::game::debug_menu::DebugMenu;
 use crate::game::asset_manager::AssetManager;
+use crate::game::debug_menu::DebugMenu;
+use crate::game::interaction::InteractionSystem;
+use crate::game::loading_manager::{LoadingManager, LoadingProgress, LoadingStats, ResourceType};
 use crate::game::save::SaveSystem;
 use crate::game::ui::UIManager;
-use crate::world::DayNightCycle;
-use crate::graphics::particles::ParticleSystem;
+use crate::game::{Cargo, MainMenu, Mission, MissionGenerator, WeatherSystem, Winch};
 use crate::graphics::debug_renderer::DebugRenderer;
+use crate::graphics::material::MaterialManager;
+use crate::graphics::mesh::Mesh;
+use crate::graphics::particles::ParticleSystem;
+use crate::graphics::renderer::{MenuState, Renderer};
+use crate::graphics::GlContext;
+use crate::input::InputManager;
+use crate::network::PlayerInput;
+use crate::physics;
+use crate::physics::Vehicle;
 use crate::profiler;
 use crate::ui::HudManager;
-use crate::assets::VehicleLoader;
-use crate::world::{OpenWorld, CHUNK_SIZE, HEIGHTMAP_RESOLUTION, ChunkId, generate_chunk_mesh, TerrainVertex};
-use crate::world::{Settlement, RoadNetwork, BuildingPlacer};
-use nalgebra::{Vector3, UnitQuaternion, Matrix4};
-use crate::physics::Vehicle;
-use crate::network::PlayerInput;
-use winit::event_loop::ActiveEventLoop;
-use winit::window::WindowId;
+use crate::world::DayNightCycle;
+use crate::world::{
+    generate_chunk_mesh, ChunkId, OpenWorld, TerrainVertex, CHUNK_SIZE, HEIGHTMAP_RESOLUTION,
+};
+use crate::world::{BuildingPlacer, RoadNetwork, Settlement};
+use nalgebra::{Matrix4, UnitQuaternion, Vector3};
+use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent as WinitWindowEvent;
+use winit::event_loop::ActiveEventLoop;
+use winit::window::WindowId;
+use winit::{
+    event::{ElementState, MouseButton, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
+};
 
 /// Состояния игры
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameState {
     MainMenu,
+    CharacterCreation,
     Loading,
     Playing,
     Paused,
@@ -87,6 +90,10 @@ pub struct Engine {
     vehicle: Option<Vehicle>,
     vehicle_health: f32,
     vehicle_fuel: f32,
+    tracked_vehicle: Option<crate::physics::TrackedVehicle>,
+    tracked_vehicle_throttle: f32,
+    tracked_vehicle_brake: f32,
+    tracked_vehicle_turn: f32,
     save_timer: f32,
     mouse_x: f32,
     mouse_y: f32,
@@ -102,6 +109,14 @@ pub struct Engine {
     save_system: SaveSystem,
     // Менеджер загрузки
     loading_manager: LoadingManager,
+    // Персонаж игрока
+    player: Option<crate::game::player::Player>,
+    // Менеджер создания персонажа
+    character_creation: crate::game::character_creation::CharacterCreationManager,
+    // Деформируемый ландшад (один экземпляр на всё время работы)
+    deformable_terrain: Option<crate::physics::DeformableTerrainComponent>,
+    // Флаг для запроса выхода из приложения
+    should_quit: bool,
 }
 
 impl Engine {
@@ -121,13 +136,14 @@ impl Engine {
         let ecs_manager = EcsManager::new();
         let physics_world = physics::PhysicsWorld::new();
         let hud_manager = HudManager::new();
-        let material_manager = MaterialManager::new(crate::graphics::material::TextureQuality::Medium);
+        let material_manager =
+            MaterialManager::new(crate::graphics::material::TextureQuality::Medium);
         let particle_system = ParticleSystem::new(1000);
         let debug_renderer = DebugRenderer::new();
-        let weather_system = WeatherSystem::new(42);  // seed для погоды
-        let day_night_cycle = DayNightCycle::new(55.0, 82.9);  // широта и долгота (Новосибирск)
-        let winch = Winch::new(0);  // индекс тела транспортного средства
-        // Проблема 8: Interaction system
+        let weather_system = WeatherSystem::new(42); // seed для погоды
+        let day_night_cycle = DayNightCycle::new(55.0, 82.9); // широта и долгота (Новосибирск)
+        let winch = Winch::new(0); // индекс тела транспортного средства
+                                   // Проблема 8: Interaction system
         let interaction_system = InteractionSystem::new();
         // Проблема 6: Debug menu
         let debug_menu = DebugMenu::new();
@@ -139,6 +155,10 @@ impl Engine {
         let save_system = SaveSystem::default();
         // Менеджер загрузки
         let mut loading_manager = LoadingManager::new("assets");
+        // Персонаж игрока (пока None)
+        let player: Option<crate::game::player::Player> = None;
+        // Менеджер создания персонажа
+        let character_creation = crate::game::character_creation::CharacterCreationManager::new();
 
         Ok(Self {
             graphics_context,
@@ -151,7 +171,7 @@ impl Engine {
             physics_timestep: PHYSICS_TIMESTEP,
             hud_manager,
             material_manager,
-            renderer: None,  // Будет инициализирован в resumed()
+            renderer: None, // Будет инициализирован в resumed()
             main_menu: MainMenu::new(),
             game_state: GameState::MainMenu,
             open_world: None,
@@ -177,6 +197,10 @@ impl Engine {
             vehicle: None,
             vehicle_health: 100.0,
             vehicle_fuel: 100.0,
+            tracked_vehicle: None,
+            tracked_vehicle_throttle: 0.0,
+            tracked_vehicle_brake: 0.0,
+            tracked_vehicle_turn: 0.0,
             save_timer: 0.0,
             mouse_x: 0.0,
             mouse_y: 0.0,
@@ -186,26 +210,210 @@ impl Engine {
             ui_manager,
             save_system,
             loading_manager,
+            player,
+            character_creation,
+            deformable_terrain: None, // Будет инициализирован при загрузке мира
+            should_quit: false,
         })
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        use winit::event_loop::ControlFlow;
-        
-        let event_loop = winit::event_loop::EventLoop::new()?;
+        use winit::application::ApplicationHandler;
+        use winit::event::WindowEvent;
+        use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+        use winit::window::{Window, WindowAttributes, WindowId};
+
+        // Объявляем структуру app
+        struct GameApp<'a> {
+            window: Option<Window>,
+            last_frame_time: std::time::Instant,
+            initialized: bool,
+            engine: &'a mut Engine,
+        }
+
+        impl<'a> GameApp<'a> {
+            fn process(&mut self) {
+                if !self.initialized {
+                    return;
+                }
+                let current_time = std::time::Instant::now();
+                let dt = current_time
+                    .duration_since(self.last_frame_time)
+                    .as_secs_f32();
+                self.last_frame_time = current_time;
+                let dt = dt.min(0.1);
+
+                if let Err(e) = self.engine.update(dt) {
+                    println!("[ERROR] Update error: {}", e);
+                }
+
+                if let Some(ref mut renderer) = self.engine.renderer {
+                    if let Err(e) = renderer.render() {
+                        println!("[ERROR] Render error: {}", e);
+                    }
+                }
+
+                // КРИТИЧЕСКИ ВАЖНО: swap buffers
+                if let Err(e) = self.engine.graphics_context.end_frame() {
+                    println!("[ERROR] end_frame error: {}", e);
+                }
+            }
+
+            fn init(&mut self, event_loop: &ActiveEventLoop) {
+                if self.initialized {
+                    return;
+                }
+
+                println!("[DEBUG] Init event detected!");
+
+                if self.window.is_none() {
+                    let window_attrs = WindowAttributes::default()
+                        .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0))
+                        .with_title("RTGC-0.8");
+
+                    // Создаём GL контекст через GlContext::new()
+                    match GlContext::new(event_loop, window_attrs) {
+                        Ok(mut gl_context) => {
+                            println!("[DEBUG] GL context created successfully");
+                            let window = gl_context.window.as_ref().unwrap();
+                            
+                            if let Some(ref gl) = gl_context.gl {
+                                match Renderer::new(gl.clone()) {
+                                    Ok(mut renderer) => {
+                                        renderer.width = gl_context.width;
+                                        renderer.height = gl_context.height;
+                                        renderer.menu_state = MenuState::MainMenu;
+                                        self.engine.renderer = Some(renderer);
+                                        println!("[DEBUG] Renderer initialized successfully");
+                                    }
+                                    Err(e) => {
+                                        println!("[ERROR] Failed to initialize Renderer: {}", e);
+                                    }
+                                }
+                            }
+
+                            // Перемещаем окно в app
+                            let window = gl_context.window.take().unwrap();
+                            
+                            self.engine.graphics_context = gl_context;
+                            self.engine.open_world = Some(OpenWorld::new(self.engine.world_seed));
+                            let _ = self.engine.load_initial_data();
+                            self.last_frame_time = std::time::Instant::now();
+                            self.initialized = true;
+                            self.window = Some(window);
+                            
+                            // Запрашиваем первую перерисовку
+                            if let Some(ref w) = self.window {
+                                w.request_redraw();
+                            }
+                            
+                            println!("[DEBUG] Initialization complete, entering game loop...");
+                        }
+                        Err(e) => {
+                            println!("[ERROR] Failed to create GL context: {}", e);
+                        }
+                    }
+                }
+            }
+        }
+
+        impl<'a> ApplicationHandler for GameApp<'a> {
+            fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+                self.init(event_loop);
+            }
+
+            fn window_event(
+                &mut self,
+                event_loop: &ActiveEventLoop,
+                window_id: WindowId,
+                window_event: WindowEvent,
+            ) {
+                match &window_event {
+                    WindowEvent::CloseRequested => {
+                        event_loop.exit();
+                    }
+                    WindowEvent::Resized(new_size) => {
+                        // Обновляем размер при ресайзе
+                        let width = new_size.width.max(1);
+                        let height = new_size.height.max(1);
+                        if let Err(e) = self.engine.graphics_context.resize(width, height) {
+                            println!("[ERROR] Resize error: {}", e);
+                        }
+                        if let Some(ref mut renderer) = self.engine.renderer {
+                            renderer.width = width;
+                            renderer.height = height;
+                        }
+                        // Запрашиваем перерисовку
+                        if let Some(ref window) = self.window {
+                            window.request_redraw();
+                        }
+                    }
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        // Передаём ввод в engine для обработки меню
+                        if let Some(ref mut renderer) = self.engine.renderer {
+                            renderer.handle_mouse_input(*state, *button);
+                        }
+                        // Запрашиваем перерисовку после клика
+                        if let Some(ref window) = self.window {
+                            window.request_redraw();
+                        }
+                    }
+                    WindowEvent::CursorMoved { position, .. } => {
+                        // Обновляем позицию мыши для hover эффектов
+                        self.engine.mouse_x = position.x as f32;
+                        self.engine.mouse_y = position.y as f32;
+                        if let Some(ref mut renderer) = self.engine.renderer {
+                            renderer.mouse_x = position.x as f32;
+                            renderer.mouse_y = position.y as f32;
+                        }
+                        // Запрашиваем перерисовку для hover эффектов
+                        if let Some(ref window) = self.window {
+                            window.request_redraw();
+                        }
+                    }
+                    WindowEvent::RedrawRequested => {
+                        // Рендерим кадр
+                        self.process();
+                    }
+                    WindowEvent::KeyboardInput { event, .. } => {
+                        // Передаём клавиатурный ввод в engine
+                        if let Err(e) = self.engine.handle_event(&window_event) {
+                            println!("[ERROR] Event handling error: {}", e);
+                        }
+                        // Запрашиваем перерисовку
+                        if let Some(ref window) = self.window {
+                            window.request_redraw();
+                        }
+                    }
+                    _ => {
+                        // Для остальных событий тоже рендерим
+                        self.process();
+                    }
+                }
+            }
+        }
+
+        let event_loop = EventLoop::new()?;
         event_loop.set_control_flow(ControlFlow::Poll);
-        
-        // Инициализация мира
-        self.open_world = Some(OpenWorld::new(self.world_seed));
-        
-        // Загрузка начальных данных будет вызвана в resumed()
-        
-        event_loop.run_app(self)?;
-        
+
+        let mut app = GameApp {
+            window: None,
+            last_frame_time: std::time::Instant::now(),
+            initialized: false,
+            engine: self,
+        };
+
+        event_loop.run_app(&mut app)?;
+
         Ok(())
     }
 
     pub fn update(&mut self, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
+        // Проверка флага выхода
+        if self.should_quit {
+            return Err("Application requested quit".into());
+        }
+        
         profiler::begin_frame();
         let _profile = profiler::ProfileScope::new("Engine::update");
 
@@ -216,6 +424,11 @@ impl Engine {
         if self.game_state == GameState::MainMenu {
             self.main_menu.update(dt);
             self.update_menu_hover();
+        }
+
+        // Обновление создания персонажа
+        if self.game_state == GameState::CharacterCreation {
+            self.update_character_creation_input();
         }
 
         // Физический шаг с фиксированным timestep
@@ -232,10 +445,40 @@ impl Engine {
         self.day_night_cycle.advance_time(dt);
         self.particle_system.update(dt);
 
+        // Обновление персонажа игрока
+        if let Some(ref mut player) = self.player {
+            if player.state == crate::game::player::PlayerState::OnFoot {
+                // Обновляем стамина
+                player.update_stamina(dt);
+
+                // Обрабатываем ввод для персонажа
+                if let Some(action_map) = self.input_manager.action_map() {
+                    player.process_input_with_physics(&action_map, &mut self.physics_world, dt);
+                }
+
+                // Синхронизируем позицию с физическим телом
+                if let Some(body_idx) = player.body_index {
+                    if let Some(body) = self.physics_world.get_body(body_idx) {
+                        player.position = body.position;
+                    }
+                }
+            }
+        }
+
         // Проблема 8: Обновление interaction system
         if self.game_state == GameState::Playing {
             // Получаем позицию игрока и направление камеры
-            let player_pos = if let Some(ref heli) = self.helicopter {
+            let player_pos = if let Some(ref player) = self.player {
+                if let Some(body_idx) = player.body_index {
+                    if let Some(body) = self.physics_world.get_body(body_idx) {
+                        body.position
+                    } else {
+                        Vector3::zeros()
+                    }
+                } else {
+                    Vector3::zeros()
+                }
+            } else if let Some(ref heli) = self.helicopter {
                 heli.position
             } else {
                 Vector3::zeros()
@@ -243,16 +486,20 @@ impl Engine {
             let player_forward = Vector3::z(); // Helicopter не имеет метода forward()
 
             // Обновляем interaction system
-            self.interaction_system.update(dt, player_pos, player_forward, 4.0);
+            self.interaction_system
+                .update(dt, player_pos, player_forward, 4.0);
 
             // Обработка взаимодействия по клавише F
-            if self.input_manager.state().is_key_held(winit::keyboard::KeyCode::KeyF) {
+            if self
+                .input_manager
+                .state()
+                .is_key_held(winit::keyboard::KeyCode::KeyF)
+            {
                 // Получаем состояние игрока из helicopter или vehicle
                 let mut player_state = crate::game::player::PlayerState::OnFoot;
                 if self.helicopter.is_some() {
                     player_state = crate::game::player::PlayerState::InVehicle {
-                        vehicle_index: 0,
-                        vehicle_id: 1,
+                        vehicle_index: 1,
                         seat_index: 0,
                     };
                 }
@@ -267,7 +514,8 @@ impl Engine {
 
         // Проблема 6: Обновление debug menu статистики
         if self.debug_mode {
-            self.debug_menu.update_fps(1.0 / dt.max(0.0001), dt * 1000.0);
+            self.debug_menu
+                .update_fps(1.0 / dt.max(0.0001), dt * 1000.0);
             // self.debug_menu.update_physics_stats(self.physics_world.stats()); // stats() не существует
 
             // Обновление chunk count - chunks не существует в OpenWorld
@@ -283,7 +531,7 @@ impl Engine {
         if let Some(ref vehicle) = self.vehicle {
             let hud_data = crate::ui::hud::VehicleHudData {
                 speed_kmh: vehicle.speed() * 3.6, // m/s to km/h
-                engine_rpm: 2000.0, // заглушка, пока нет метода get_engine_rpm
+                engine_rpm: 2000.0,               // заглушка, пока нет метода get_engine_rpm
                 fuel_level: self.vehicle_fuel / 100.0,
                 vehicle_health: self.vehicle_health / 100.0,
                 ..Default::default()
@@ -315,9 +563,10 @@ impl Engine {
                     0.0
                 }
             };
-            let surface_getter = |_x: f32, _z: f32| -> crate::world::terrain_generator::SurfaceType {
-                crate::world::terrain_generator::SurfaceType::Grass
-            };
+            let surface_getter =
+                |_x: f32, _z: f32| -> crate::world::terrain_generator::SurfaceType {
+                    crate::world::terrain_generator::SurfaceType::Grass
+                };
             vehicle.update(dt, terrain_getter, surface_getter);
         }
 
@@ -345,7 +594,7 @@ impl Engine {
             // Обновление позиции мыши для UI
             renderer.mouse_x = self.mouse_x;
             renderer.mouse_y = self.mouse_y;
-            
+
             // Обновление камеры в рендерере
             if let Some(ref heli) = self.helicopter {
                 let heli_pos = heli.position;
@@ -358,6 +607,7 @@ impl Engine {
                 GameState::Loading => MenuState::Loading,
                 GameState::Playing => MenuState::InGame,
                 GameState::Paused => MenuState::Paused,
+                GameState::CharacterCreation => MenuState::CharacterCreation,
             };
 
             // Передача debug_mode в renderer
@@ -365,23 +615,27 @@ impl Engine {
 
             // Один вызов render() — всё внутри, включая flush
             renderer.render()?;
-            
+
             // Завершение кадра (swap buffers)
             self.graphics_context.end_frame()?;
         } else if let Some(ref gl) = self.graphics_context.gl {
             // Фолбэк рендеринг если Renderer не инициализирован
             self.graphics_context.begin_frame()?;
-            
+
             let view_matrix = Matrix4::identity();
-            let proj_matrix = self.graphics_context.get_projection_matrix(std::f32::consts::PI / 4.0, 0.1, 1000.0);
+            let proj_matrix = self.graphics_context.get_projection_matrix(
+                std::f32::consts::PI / 4.0,
+                0.1,
+                1000.0,
+            );
             let view_proj = proj_matrix * view_matrix;
-            
+
             self.particle_system.render(gl, view_proj);
-            
+
             if self.debug_mode {
                 self.debug_renderer.flush_to_gl(gl, view_proj);
             }
-            
+
             self.graphics_context.end_frame()?;
         }
 
@@ -411,12 +665,14 @@ impl Engine {
                                 _ => {}
                             }
                         }
-                        
+
                         match key_code {
                             // Настройки: Открытие/закрытие настроек на Escape (если открыты настройки или инвентарь)
                             KeyCode::Escape => {
                                 // Если открыты настройки или инвентарь - закрываем их
-                                if self.hud_manager.is_settings_open() || self.hud_manager.is_inventory_open() {
+                                if self.hud_manager.is_settings_open()
+                                    || self.hud_manager.is_inventory_open()
+                                {
                                     self.hud_manager.set_settings_open(false);
                                     self.hud_manager.set_inventory_open(false);
                                 } else if self.game_state == GameState::Playing {
@@ -438,35 +694,63 @@ impl Engine {
                             // Ф1.6: Открытие инвентаря на Tab
                             KeyCode::Tab => {
                                 // Не открывать инвентарь если открыты настройки
-                                if !self.hud_manager.is_settings_open() && self.game_state == GameState::Playing {
+                                if !self.hud_manager.is_settings_open()
+                                    && self.game_state == GameState::Playing
+                                {
                                     self.hud_manager.toggle_inventory();
                                 }
                             }
                             // Настройки: Открытие настроек на F1
                             KeyCode::F1 => {
                                 // Не открывать настройки если открыт инвентарь
-                                if !self.hud_manager.is_inventory_open() && self.game_state == GameState::Playing {
+                                if !self.hud_manager.is_inventory_open()
+                                    && self.game_state == GameState::Playing
+                                {
                                     self.hud_manager.toggle_settings();
                                 }
                             }
-                            KeyCode::KeyW => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyW), true),
-                            KeyCode::KeyS => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyS), true),
-                            KeyCode::KeyA => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyA), true),
-                            KeyCode::KeyD => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyD), true),
-                            KeyCode::Space => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::Space), true),
-                            KeyCode::ShiftLeft => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::ShiftLeft), true),
+                            KeyCode::KeyW => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyW), true),
+                            KeyCode::KeyS => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyS), true),
+                            KeyCode::KeyA => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyA), true),
+                            KeyCode::KeyD => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyD), true),
+                            KeyCode::Space => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::Space), true),
+                            KeyCode::ShiftLeft => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::ShiftLeft), true),
                             _ => {}
                         }
                     }
                 } else if event.state == ElementState::Released {
                     if let PhysicalKey::Code(key_code) = event.physical_key {
                         match key_code {
-                            KeyCode::KeyW => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyW), false),
-                            KeyCode::KeyS => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyS), false),
-                            KeyCode::KeyA => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyA), false),
-                            KeyCode::KeyD => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyD), false),
-                            KeyCode::Space => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::Space), false),
-                            KeyCode::ShiftLeft => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::ShiftLeft), false),
+                            KeyCode::KeyW => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyW), false),
+                            KeyCode::KeyS => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyS), false),
+                            KeyCode::KeyA => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyA), false),
+                            KeyCode::KeyD => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::KeyD), false),
+                            KeyCode::Space => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::Space), false),
+                            KeyCode::ShiftLeft => self
+                                .input_manager
+                                .set_key_state(PhysicalKey::Code(KeyCode::ShiftLeft), false),
                             _ => {}
                         }
                     }
@@ -478,14 +762,20 @@ impl Engine {
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if *button == winit::event::MouseButton::Left {
-                    self.input_manager.set_mouse_button_state(MouseButton::Left.into(), *state == ElementState::Pressed);
-                    
+                    self.input_manager.set_mouse_button_state(
+                        MouseButton::Left.into(),
+                        *state == ElementState::Pressed,
+                    );
+
                     // DEBUG: Обработка клика по кнопкам меню
                     if *state == ElementState::Pressed && self.game_state == GameState::MainMenu {
                         self.handle_menu_click();
                     }
                 } else if *button == winit::event::MouseButton::Right {
-                    self.input_manager.set_mouse_button_state(MouseButton::Right.into(), *state == ElementState::Pressed);
+                    self.input_manager.set_mouse_button_state(
+                        MouseButton::Right.into(),
+                        *state == ElementState::Pressed,
+                    );
                 }
             }
             _ => {}
@@ -502,7 +792,7 @@ impl Engine {
                 0.0
             }
         };
-        
+
         // Surface getter для получения типа поверхности
         let surface_getter = |x: f32, z: f32| -> crate::world::SurfaceType {
             if let Some(ref open_world) = self.open_world {
@@ -511,15 +801,33 @@ impl Engine {
                 crate::world::SurfaceType::Grass
             }
         };
-        
-        // Deformable terrain - создаём компонент один раз при загрузке
-        // В реальном проекте это должно храниться в Engine и передаваться по ссылке
-        let mut deformable_terrain = crate::physics::DeformableTerrainComponent::new(0, 64, 64);
-        let deformable_terrain_ref: Option<&mut crate::physics::DeformableTerrainComponent> = Some(&mut deformable_terrain);
 
         // Обновление физики транспорта
         if let Some(ref mut vehicle) = self.vehicle {
-            vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, &surface_getter, deformable_terrain_ref);
+            vehicle.physics_update(
+                dt,
+                &mut self.physics_world,
+                &terrain_getter,
+                &surface_getter,
+                self.deformable_terrain.as_mut(),
+            );
+        }
+
+        // Обновление физики гусеничного транспорта
+        if let Some(ref mut tracked_vehicle) = self.tracked_vehicle {
+            let controls = crate::physics::tracked_vehicle::TrackedControls::from_input(
+                self.tracked_vehicle_throttle,
+                self.tracked_vehicle_turn,
+                self.tracked_vehicle_brake > 0.5,
+            );
+            tracked_vehicle.controls = controls;
+            tracked_vehicle.physics_update(
+                dt,
+                &mut self.physics_world,
+                &terrain_getter,
+                &surface_getter,
+                self.deformable_terrain.as_mut(),
+            );
         }
 
         // Обновление физики вертолета
@@ -532,7 +840,8 @@ impl Engine {
 
         // Обновление лебедки и груза
         if let Some(ref mut cargo) = self.cargo {
-            self.winch.physics_update(dt, cargo, &mut self.physics_world);
+            self.winch
+                .physics_update(dt, Some(cargo.body_index), &mut self.physics_world);
         }
 
         Ok(())
@@ -540,38 +849,50 @@ impl Engine {
 
     /// Обработка кликов по кнопкам главного меню
     fn handle_menu_click(&mut self) {
-        let w = self.renderer.as_ref().map(|r| r.width as f32).unwrap_or(800.0);
-        let h = self.renderer.as_ref().map(|r| r.height as f32).unwrap_or(600.0);
-        
+        let w = self
+            .renderer
+            .as_ref()
+            .map(|r| r.width as f32)
+            .unwrap_or(800.0);
+        let h = self
+            .renderer
+            .as_ref()
+            .map(|r| r.height as f32)
+            .unwrap_or(600.0);
+
         // Координаты кнопок меню (должны совпадать с renderer.rs)
         let button_width = 240.0;
         let button_height = 40.0;
         let center_x = w / 2.0;
-        
+
         // Позиции кнопок по Y
         let new_game_y = h / 2.0 - 80.0;
         let continue_y = h / 2.0 - 30.0;
         let settings_y = h / 2.0 + 20.0;
         let exit_y = h / 2.0 + 70.0;
-        
+
         // Проверка попадания клика по кнопкам
         let click_x = self.mouse_x;
         let click_y = h - self.mouse_y; // Инвертируем Y для OpenGL
-        
-        // "Новая игра"
-        if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
-            && click_y >= new_game_y && click_y <= new_game_y + button_height {
-            tracing::info!("Menu click - NEW GAME");
-            self.game_state = GameState::Playing;
-            if let Some(ref mut renderer) = self.renderer {
-                renderer.menu_state = crate::graphics::renderer::MenuState::InGame;
-            }
+
+        // "Новая игра" - переход к созданию персонажа
+        if click_x >= center_x - button_width / 2.0
+            && click_x <= center_x + button_width / 2.0
+            && click_y >= new_game_y
+            && click_y <= new_game_y + button_height
+        {
+            tracing::info!("Menu click - NEW GAME - Starting character creation");
+            self.game_state = GameState::CharacterCreation;
+            self.character_creation.is_active = true;
             return;
         }
-        
+
         // "Продолжить"
-        if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
-            && click_y >= continue_y && click_y <= continue_y + button_height {
+        if click_x >= center_x - button_width / 2.0
+            && click_x <= center_x + button_width / 2.0
+            && click_y >= continue_y
+            && click_y <= continue_y + button_height
+        {
             tracing::info!("Menu click - CONTINUE");
             // Загрузка последнего сохранения
             if let Some(save_path) = self.main_menu.continue_game() {
@@ -582,27 +903,40 @@ impl Engine {
             }
             return;
         }
-        
+
         // "Настройки"
-        if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
-            && click_y >= settings_y && click_y <= settings_y + button_height {
+        if click_x >= center_x - button_width / 2.0
+            && click_x <= center_x + button_width / 2.0
+            && click_y >= settings_y
+            && click_y <= settings_y + button_height
+        {
             tracing::info!("Menu click - SETTINGS (not implemented)");
             return;
         }
-        
+
         // "Выход"
-        if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
-            && click_y >= exit_y && click_y <= exit_y + button_height {
-            tracing::info!("Menu click - EXIT");
-            // Сигнал на выход из приложения
-            std::process::exit(0);
+        if click_x >= center_x - button_width / 2.0
+            && click_x <= center_x + button_width / 2.0
+            && click_y >= exit_y
+            && click_y <= exit_y + button_height
+        {
+            tracing::info!("Menu click - EXIT, scheduling graceful shutdown");
+            self.should_quit = true;
         }
     }
 
     /// Обновление hover-эффектов для кнопок меню
     fn update_menu_hover(&mut self) {
-        let w = self.renderer.as_ref().map(|r| r.width as f32).unwrap_or(800.0);
-        let h = self.renderer.as_ref().map(|r| r.height as f32).unwrap_or(600.0);
+        let w = self
+            .renderer
+            .as_ref()
+            .map(|r| r.width as f32)
+            .unwrap_or(800.0);
+        let h = self
+            .renderer
+            .as_ref()
+            .map(|r| r.height as f32)
+            .unwrap_or(600.0);
 
         let button_width = 240.0;
         let button_height = 40.0;
@@ -619,44 +953,244 @@ impl Engine {
         // Проверка наведения на кнопки и обновление main_menu
         if mouse_x >= center_x - button_width / 2.0 && mouse_x <= center_x + button_width / 2.0 {
             if mouse_y >= new_game_y && mouse_y <= new_game_y + button_height {
-                self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame);
+                self.main_menu
+                    .hover_button(crate::game::main_menu::MenuButton::NewGame);
             } else if mouse_y >= continue_y && mouse_y <= continue_y + button_height {
-                self.main_menu.hover_button(crate::game::main_menu::MenuButton::Continue);
+                self.main_menu
+                    .hover_button(crate::game::main_menu::MenuButton::Continue);
             } else if mouse_y >= settings_y && mouse_y <= settings_y + button_height {
-                self.main_menu.hover_button(crate::game::main_menu::MenuButton::Options);
+                self.main_menu
+                    .hover_button(crate::game::main_menu::MenuButton::Options);
             } else if mouse_y >= exit_y && mouse_y <= exit_y + button_height {
-                self.main_menu.hover_button(crate::game::main_menu::MenuButton::Exit);
+                self.main_menu
+                    .hover_button(crate::game::main_menu::MenuButton::Exit);
             } else {
-                self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
+                self.main_menu
+                    .hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
             }
         } else {
-            self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
+            self.main_menu
+                .hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
         }
+    }
+
+    /// Обработка ввода в режиме создания персонажа
+    fn update_character_creation_input(&mut self) {
+        use crate::game::character_creation::{CreationStep, Gender};
+        use winit::keyboard::KeyCode;
+
+        // Получаем состояние клавиш
+        let enter_pressed = self
+            .input_manager
+            .state()
+            .is_key_just_pressed(KeyCode::Enter);
+        let space_pressed = self
+            .input_manager
+            .state()
+            .is_key_just_pressed(KeyCode::Space);
+        let escape_pressed = self
+            .input_manager
+            .state()
+            .is_key_just_pressed(KeyCode::Escape);
+
+        // Переход к следующему шагу по Enter или Space
+        if enter_pressed || space_pressed {
+            self.character_creation.next_step();
+
+            // Если создание завершено - создаём игрока и начинаем игру
+            if self.character_creation.current_step == CreationStep::Complete {
+                self.finalize_character_creation();
+            }
+        }
+
+        // Возврат к предыдущему шагу по Escape (кроме первого шага)
+        if escape_pressed {
+            match self.character_creation.current_step {
+                CreationStep::Gender => {
+                    // На первом шаге Escape возвращает в главное меню
+                    self.game_state = GameState::MainMenu;
+                    self.character_creation.is_active = false;
+                }
+                _ => {
+                    self.character_creation.prev_step();
+                }
+            }
+        }
+
+        // Навигация по шагам создания персонажа
+        match self.character_creation.current_step {
+            CreationStep::Gender => {
+                // Переключение пола стрелками влево/вправо
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowLeft)
+                {
+                    self.character_creation.data.set_gender(Gender::Male);
+                }
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowRight)
+                {
+                    self.character_creation.data.set_gender(Gender::Female);
+                }
+            }
+            CreationStep::Height => {
+                // Изменение роста стрелками вверх/вниз
+                if self.input_manager.state().is_key_held(KeyCode::ArrowUp) {
+                    self.character_creation.data.adjust_height(0.01);
+                }
+                if self.input_manager.state().is_key_held(KeyCode::ArrowDown) {
+                    self.character_creation.data.adjust_height(-0.01);
+                }
+            }
+            CreationStep::SkinColor => {
+                // Выбор цвета кожи стрелками
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowLeft)
+                {
+                    self.character_creation.data.cycle_skin_tone(-1);
+                }
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowRight)
+                {
+                    self.character_creation.data.cycle_skin_tone(1);
+                }
+            }
+            CreationStep::Face => {
+                // Выбор лица стрелками
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowLeft)
+                {
+                    self.character_creation.data.cycle_face(-1);
+                }
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowRight)
+                {
+                    self.character_creation.data.cycle_face(1);
+                }
+            }
+            CreationStep::HairStyle => {
+                // Выбор причёски стрелками
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowLeft)
+                {
+                    self.character_creation.data.cycle_hair_style(-1);
+                }
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowRight)
+                {
+                    self.character_creation.data.cycle_hair_style(1);
+                }
+            }
+            CreationStep::HairColor => {
+                // Выбор цвета волос стрелками
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowLeft)
+                {
+                    self.character_creation.data.cycle_hair_color(-1);
+                }
+                if self
+                    .input_manager
+                    .state()
+                    .is_key_just_pressed(KeyCode::ArrowRight)
+                {
+                    self.character_creation.data.cycle_hair_color(1);
+                }
+            }
+            CreationStep::Education
+            | CreationStep::VehicleColor
+            | CreationStep::StartingLocation => {
+                // Упрощённая обработка для этих шагов
+            }
+            CreationStep::Summary => {
+                // Экран подтверждения - только Enter для завершения
+            }
+            CreationStep::Complete => {
+                // Завершено
+            }
+        }
+    }
+
+    /// Завершение создания персонажа и начало игры
+    fn finalize_character_creation(&mut self) {
+        tracing::info!("Finalizing character creation");
+
+        // Создаём игрока из данных создания персонажа
+        let mut player = self.character_creation.data.build_player();
+
+        // Создаём физическое тело игрока (капсула)
+        let start_pos = self.character_creation.data.start_location.position;
+        let body = player.create_physics_body(start_pos);
+        let body_idx = self.physics_world.add_body(body);
+        player.body_index = Some(body_idx);
+        player.position = start_pos;
+
+        self.player = Some(player);
+
+        // Создаём транспортные средства
+        if let Err(e) = self.create_player_vehicle() {
+            tracing::error!("Failed to create player vehicles: {}", e);
+        }
+
+        // Переходим в режим игры
+        self.game_state = GameState::Playing;
+        self.character_creation.is_active = false;
+
+        tracing::info!("Character creation complete - starting game");
     }
 
     /// Инициализация менеджера загрузки - регистрация всех ресурсов
     fn init_loading_manager(&mut self) {
         // Регистрация мешей
-        self.loading_manager.add_resource("meshes/truck.obj", ResourceType::Mesh, 1);
-        self.loading_manager.add_resource("meshes/terrain.obj", ResourceType::Mesh, 2);
-        self.loading_manager.add_resource("meshes/building_low.obj", ResourceType::Mesh, 3);
-        
+        self.loading_manager
+            .add_resource("meshes/truck.obj", ResourceType::Mesh, 1);
+        self.loading_manager
+            .add_resource("meshes/terrain.obj", ResourceType::Mesh, 2);
+        self.loading_manager
+            .add_resource("meshes/building_low.obj", ResourceType::Mesh, 3);
+
         // Регистрация текстур
-        self.loading_manager.add_resource("textures/ground.png", ResourceType::Texture, 1);
-        self.loading_manager.add_resource("textures/sky.png", ResourceType::Texture, 2);
-        self.loading_manager.add_resource("textures/building.png", ResourceType::Texture, 3);
-        self.loading_manager.add_resource("textures/ui/hud.png", ResourceType::Texture, 4);
-        
+        self.loading_manager
+            .add_resource("textures/ground.png", ResourceType::Texture, 1);
+        self.loading_manager
+            .add_resource("textures/sky.png", ResourceType::Texture, 2);
+        self.loading_manager
+            .add_resource("textures/building.png", ResourceType::Texture, 3);
+        self.loading_manager
+            .add_resource("textures/ui/hud.png", ResourceType::Texture, 4);
+
         // Регистрация шейдеров
-        self.loading_manager.add_resource("shaders/basic.vert", ResourceType::Shader, 1);
-        self.loading_manager.add_resource("shaders/basic.frag", ResourceType::Shader, 1);
-        self.loading_manager.add_resource("shaders/terrain.vert", ResourceType::Shader, 2);
-        self.loading_manager.add_resource("shaders/terrain.frag", ResourceType::Shader, 2);
-        
+        self.loading_manager
+            .add_resource("shaders/basic.vert", ResourceType::Shader, 1);
+        self.loading_manager
+            .add_resource("shaders/basic.frag", ResourceType::Shader, 1);
+        self.loading_manager
+            .add_resource("shaders/terrain.vert", ResourceType::Shader, 2);
+        self.loading_manager
+            .add_resource("shaders/terrain.frag", ResourceType::Shader, 2);
+
         // Регистрация конфигов
-        self.loading_manager.add_resource("config.json", ResourceType::Config, 0);
-        self.loading_manager.add_resource("settings.json", ResourceType::Config, 0);
-        
+        self.loading_manager
+            .add_resource("config.json", ResourceType::Config, 0);
+        self.loading_manager
+            .add_resource("settings.json", ResourceType::Config, 0);
+
         // Проверка файлов
         let progress = self.loading_manager.check_all_files();
         tracing::info!(
@@ -685,17 +1219,17 @@ impl Engine {
     fn load_initial_data(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Инициализация менеджера загрузки
         self.init_loading_manager();
-        
+
         // Загрузка начальных данных игры
         // Генерация мира и создание terrain mesh для рендерера
         if let Some(ref mut open_world) = self.open_world {
             // Генерируем первый чанк вокруг спавна
             let spawn_chunk_id = crate::world::ChunkId::new(0, 0);
             let chunk_data = open_world.generator.generate_chunk(spawn_chunk_id);
-            
+
             // Создаём меш территории из данных чанка
             let (vertices, indices) = crate::world::chunk::generate_chunk_mesh(&chunk_data, 0);
-            
+
             // Конвертируем TerrainVertex в формат для Mesh (flat array)
             let mut vertex_data: Vec<f32> = Vec::with_capacity(vertices.len() * 18);
             for v in &vertices {
@@ -706,10 +1240,10 @@ impl Engine {
                 vertex_data.extend_from_slice(&v.texcoord);
                 vertex_data.extend_from_slice(&v.splat_weights);
             }
-            
+
             // Создаём меш и передаём в рендерер
             if let Some(ref mut renderer) = self.renderer {
-                if let Ok(gl) = &self.graphics_context.gl {
+                if let Some(ref gl) = self.graphics_context.gl {
                     match crate::graphics::mesh::Mesh::new_terrain(gl, &vertex_data, &indices) {
                         Ok(terrain_mesh) => {
                             renderer.set_terrain_mesh(terrain_mesh);
@@ -731,14 +1265,21 @@ impl Engine {
         // Создание дорожной сети - используем правильный метод generate_from_settlements
         if !self.settlements.is_empty() {
             let seed = self.world_seed;
-            self.road_network = Some(RoadNetwork::generate_from_settlements(&self.settlements, seed));
+            self.road_network = Some(RoadNetwork::generate_from_settlements(
+                &self.settlements,
+                seed,
+            ));
         }
 
         // Создание генератора миссий
         if let Some(road_network) = &self.road_network {
             let settlements_clone = self.settlements.clone();
             let road_network_clone = road_network.clone();
-            self.mission_generator = Some(MissionGenerator::new(settlements_clone, road_network_clone, self.world_seed));
+            self.mission_generator = Some(MissionGenerator::new(
+                settlements_clone,
+                road_network_clone,
+                self.world_seed,
+            ));
         }
 
         // Создание начальной миссии
@@ -755,22 +1296,28 @@ impl Engine {
     fn generate_settlements_simple(open_world: &OpenWorld, count: usize) -> Vec<Settlement> {
         use rand::{Rng, SeedableRng};
         use rand_chacha::ChaCha8Rng;
-        
+
         let mut rng = ChaCha8Rng::seed_from_u64(open_world.seed);
         let mut settlements = Vec::new();
-        
+
         for i in 0..count {
             let grid_x = (rng.gen::<f32>() * 10.0) as i32;
             let grid_z = (rng.gen::<f32>() * 10.0) as i32;
             let center_x = grid_x as f32 * CHUNK_SIZE as f32;
             let center_z = grid_z as f32 * CHUNK_SIZE as f32;
-            
+
             // Используем правильный метод генерации поселений
-            if let Some(settlement) = Settlement::generate(open_world.seed + i as u64, grid_x, grid_z, center_x, center_z) {
+            if let Some(settlement) = Settlement::generate(
+                open_world.seed + i as u64,
+                grid_x,
+                grid_z,
+                center_x,
+                center_z,
+            ) {
                 settlements.push(settlement);
             }
         }
-        
+
         settlements
     }
 
@@ -780,11 +1327,10 @@ impl Engine {
 
         // 1. Создаем вертолет
         let mut helicopter = crate::physics::Helicopter::new(spawn_pos);
-        
+
         // Добавляем тело вертолета в физический мир
         let chassis_body = crate::physics::RigidBody::new_capsule(
-            spawn_pos,
-            1100.0, // масса вертолета
+            spawn_pos, 1100.0, // масса вертолета
             1.5,    // радиус
             4.0,    // высота
         );
@@ -797,34 +1343,54 @@ impl Engine {
         let tracked_spawn_pos = nalgebra::Vector3::new(10.0, 2.0, 0.0);
         let mut tracked_vehicle = crate::physics::TrackedVehicle::new(
             crate::physics::TrackedVehicleType::GTS_M,
-            tracked_spawn_pos
+            tracked_spawn_pos,
         );
-        
+
         // Добавляем тело гусеничного транспорта в физический мир
         let tracked_chassis_body = crate::physics::RigidBody::new_box(
             tracked_spawn_pos,
-            4500.0, // масса ГТ-СМ
+            4500.0,                                // масса ГТ-СМ
             nalgebra::Vector3::new(2.0, 1.5, 4.0), // размеры
         );
         let tracked_chassis_id = self.physics_world.add_body(tracked_chassis_body);
         tracked_vehicle.set_chassis_body_id(tracked_chassis_id);
-        
-        // Сохраняем ссылку на гусеничный транспорт (добавляем поле в Engine если нужно)
-        // Для пока просто не сохраняем, но можно добавить self.tracked_vehicle = Some(tracked_vehicle);
+
+        // Сохраняем ссылку на гусеничный транспорт в Engine
+        self.tracked_vehicle = Some(tracked_vehicle);
 
         // 3. Создаем автомобиль UAZ
         let vehicle_spawn_pos = nalgebra::Vector3::new(-10.0, 2.0, 0.0);
-        let mut vehicle = crate::physics::Vehicle::new(vehicle_spawn_pos);
-        
+        let uaz_config = crate::physics::VehicleConfig {
+            mass: 2000.0,
+            wheel_count: 4,
+            wheel_radius: 0.4,
+            suspension_stiffness: 30.0,
+            suspension_damping: 4.0,
+            suspension_rest_length: 0.3,
+            max_suspension_travel: 0.2,
+            engine_force: 6000.0,
+            brake_force: 3000.0,
+            max_steering_angle: 0.5,
+            lateral_friction: 1.5,
+            longitudinal_friction: 1.2,
+            drag_coefficient: 0.4,
+            downforce_coefficient: 0.5,
+            diff_front_locked: false,
+            diff_rear_locked: false,
+            low_range_enabled: false,
+            low_range_ratio: 2.5,
+        };
+        let mut vehicle = crate::physics::Vehicle::new(uaz_config);
+
         // Добавляем тело автомобиля в физический мир
         let vehicle_chassis_body = crate::physics::RigidBody::new_box(
             vehicle_spawn_pos,
-            2000.0, // масса UAZ
+            2000.0,                                // масса UAZ
             nalgebra::Vector3::new(2.0, 1.8, 4.5), // размеры
         );
         let vehicle_chassis_id = self.physics_world.add_body(vehicle_chassis_body);
         vehicle.set_chassis_body_id(vehicle_chassis_id);
-        
+
         self.vehicle = Some(vehicle);
         self.vehicle_chassis_id = Some(vehicle_chassis_id);
 
@@ -834,11 +1400,14 @@ impl Engine {
             match crate::assets::VehicleLoader::load_gltf("assets/models/uaz_patriot.glb") {
                 Ok(model) => {
                     renderer.load_model("uaz_patriot".to_string(), model);
-                    
+
                     // Ставим машину на сцену
                     renderer.set_vehicle_transform(
                         nalgebra::Vector3::new(0.0, 2.0, -15.0),
-                        nalgebra::UnitQuaternion::from_axis_angle(&nalgebra::Vector3::y_axis(), 0.0)
+                        nalgebra::UnitQuaternion::from_axis_angle(
+                            &nalgebra::Vector3::y_axis(),
+                            0.0,
+                        ),
                     );
                     tracing::info!("Loaded UAZ Patriot from GLB");
                 }
@@ -848,7 +1417,10 @@ impl Engine {
                     let _ = renderer.create_vehicle_box_mesh(nalgebra::Vector3::new(2.5, 1.8, 5.5));
                     renderer.set_vehicle_transform(
                         nalgebra::Vector3::new(0.0, 2.0, -10.0),
-                        nalgebra::UnitQuaternion::from_axis_angle(&nalgebra::Vector3::y_axis(), 0.0)
+                        nalgebra::UnitQuaternion::from_axis_angle(
+                            &nalgebra::Vector3::y_axis(),
+                            0.0,
+                        ),
                     );
                 }
             }
@@ -868,21 +1440,21 @@ impl Engine {
 
     fn save_game(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Проблема 9: Использование SaveSystem для сохранения
-        use crate::game::save::{SaveData, SaveMetadata, WorldStateData, PlayerData};
+        use crate::game::save::{PlayerData, SaveData, SaveMetadata, WorldStateData};
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         // Получаем позицию игрока
         let position = if let Some(ref heli) = self.helicopter {
             [heli.position.x, heli.position.y, heli.position.z]
         } else {
             [0.0, 0.0, 0.0]
         };
-        
+
         // Создаем метаданные сохранения
         let metadata = SaveMetadata {
             slot: 0,
@@ -891,10 +1463,10 @@ impl Engine {
             timestamp,
             location_name: "Open World".to_string(),
             position,
-            money_rub: 50000.0, // TODO: get from player
+            money_rub: 50000.0,  // TODO: get from player
             playtime_hours: 0.0, // TODO: track playtime
         };
-        
+
         // Создаем данные игрока
         let player_data = PlayerData {
             name: "Player".to_string(),
@@ -905,26 +1477,108 @@ impl Engine {
             hair_style: 0,
             hair_color: [0.25, 0.18, 0.12],
             skills: crate::game::save::PlayerSkillsData {
-                mechanics: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                electrics: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                welding: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                construction: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                road_building: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                driving: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                tracked: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                piloting: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                flying: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                crane: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                geology: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                drilling: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                logging: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                mining: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                business: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                logistics: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                trading: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                navigation: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                medicine: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
-                fitness: crate::game::save::SkillData { rank: 1, mastery: 0.0, total_hours: 0.0 },
+                strength: 1.0,
+                stamina: 1.0,
+                mechanics: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                electrics: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                welding: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                construction: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                road_building: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                driving: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                tracked: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                piloting: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                flying: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                crane: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                geology: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                drilling: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                logging: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                mining: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                business: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                logistics: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                trading: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                navigation: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                medicine: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
+                fitness: crate::game::save::SkillData {
+                    rank: 1,
+                    mastery: 0.0,
+                    total_hours: 0.0,
+                },
             },
             money: crate::game::save::PlayerMoneyData {
                 rub: 50000.0,
@@ -936,10 +1590,14 @@ impl Engine {
             position,
             rotation: [0.0, 0.0, 0.0, 1.0],
             state: crate::game::save::PlayerStateData::OnFoot,
-            camera_mode: crate::game::save::CameraModeData::ThirdPerson { distance: 4.0, yaw: 0.0, pitch: 0.3 },
+            camera_mode: crate::game::save::CameraModeData::ThirdPerson {
+                distance: 4.0,
+                yaw: 0.0,
+                pitch: 0.3,
+            },
             stamina: 1.0,
         };
-        
+
         // Создаем данные мира
         let world_state = WorldStateData {
             time_hours: self.day_night_cycle.get_hour(),
@@ -951,7 +1609,7 @@ impl Engine {
             active_missions: vec![],
             reputation: std::collections::HashMap::new(),
         };
-        
+
         // Создаем данные сохранения
         let save_data = SaveData {
             metadata,
@@ -959,161 +1617,13 @@ impl Engine {
             world_state,
             vehicles: vec![],
         };
-        
+
         // Сохраняем через SaveSystem
-        self.save_system.save_game(0, &save_data)
+        self.save_system
+            .save_game(0, &save_data)
             .map_err(|e| format!("Failed to save game: {}", e))?;
-        
+
         tracing::info!("Game saved successfully");
         Ok(())
-    }
-}
-
-impl ApplicationHandler for Engine {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Инициализация GL контекста при возобновлении
-        let window_attrs = winit::window::WindowAttributes::default()
-            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720))
-            .with_title("RTGC");
-
-        match GlContext::new(event_loop, window_attrs) {
-            Ok(ctx) => {
-                // Инициализация Renderer после создания контекста
-                if let Some(ref gl) = ctx.gl {
-                    match Renderer::new(gl.clone()) {
-                        Ok(renderer) => {
-                            // Настраиваем размеры и состояние меню
-                            let mut r = renderer;
-                            r.width = 1280;
-                            r.height = 720;
-                            r.menu_state = MenuState::MainMenu;
-                            
-                            // Добавляем LOD объекты для тестирования (лес, дороги, здания)
-                            use crate::graphics::lod_system::{LodObject, LodModel};
-                            
-                            // Тестовый объект - машина игрока
-                            let lod_obj = LodObject::new(
-                                nalgebra::Vector3::new(0.0, 2.0, -10.0),
-                                5.0, // radius
-                            );
-                            r.lod_manager.add_object(lod_obj);
-                            
-                            // Лес вдалеке
-                            for i in 0..5 {
-                                let lod_obj = LodObject::new(
-                                    nalgebra::Vector3::new(-50.0 + i as f32 * 20.0, 0.0, -50.0),
-                                    10.0,
-                                );
-                                r.lod_manager.add_object(lod_obj);
-                            }
-                            
-                            // Дорога/здания
-                            for i in 0..3 {
-                                let lod_obj = LodObject::new(
-                                    nalgebra::Vector3::new(50.0, 0.0, -30.0 + i as f32 * 30.0),
-                                    15.0,
-                                );
-                                r.lod_manager.add_object(lod_obj);
-                            }
-                            
-                            self.renderer = Some(r);
-                            tracing::info!("Renderer initialized successfully");
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to initialize Renderer: {}", e);
-                        }
-                    }
-                }
-                
-                self.graphics_context = ctx;
-
-                // Загрузка начальных данных
-                if let Err(e) = self.load_initial_data() {
-                    tracing::error!("Failed to load initial data: {}", e);
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to initialize window: {}", e);
-                event_loop.exit();
-            }
-        }
-    }
-
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WinitWindowEvent) {
-        match event {
-            WinitWindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            WinitWindowEvent::Destroyed => {
-                event_loop.exit();
-            }
-            WinitWindowEvent::KeyboardInput { event, .. } => {
-                if event.state == ElementState::Pressed {
-                    if let PhysicalKey::Code(key_code) = event.physical_key {
-                        match key_code {
-                            KeyCode::Escape => {
-                                event_loop.exit();
-                            }
-                            KeyCode::F3 => {
-                                self.debug_mode = !self.debug_mode;
-                            }
-                            KeyCode::KeyW => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyW), true),
-                            KeyCode::KeyS => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyS), true),
-                            KeyCode::KeyA => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyA), true),
-                            KeyCode::KeyD => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyD), true),
-                            KeyCode::Space => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::Space), true),
-                            KeyCode::ShiftLeft => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::ShiftLeft), true),
-                            _ => {}
-                        }
-                    }
-                } else if event.state == ElementState::Released {
-                    if let PhysicalKey::Code(key_code) = event.physical_key {
-                        match key_code {
-                            KeyCode::KeyW => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyW), false),
-                            KeyCode::KeyS => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyS), false),
-                            KeyCode::KeyA => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyA), false),
-                            KeyCode::KeyD => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::KeyD), false),
-                            KeyCode::Space => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::Space), false),
-                            KeyCode::ShiftLeft => self.input_manager.set_key_state(PhysicalKey::Code(KeyCode::ShiftLeft), false),
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            WinitWindowEvent::CursorMoved { position, .. } => {
-                self.mouse_x = position.x as f32;
-                self.mouse_y = position.y as f32;
-            }
-            WinitWindowEvent::MouseInput { state, button, .. } => {
-                if button == winit::event::MouseButton::Left {
-                    self.input_manager.set_mouse_button_state(MouseButton::Left.into(), state == ElementState::Pressed);
-                } else if button == winit::event::MouseButton::Right {
-                    self.input_manager.set_mouse_button_state(MouseButton::Right.into(), state == ElementState::Pressed);
-                }
-            }
-            WinitWindowEvent::Resized(new_size) => {
-                if let Err(e) = self.graphics_context.resize(new_size.width, new_size.height) {
-                    tracing::error!("Resize error: {}", e);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        let now = std::time::Instant::now();
-        let dt = (now - self.last_frame_time).as_secs_f32();
-        self.last_frame_time = now;
-
-        if let Err(e) = self.update(dt) {
-            tracing::error!("Update error: {}", e);
-        }
-
-        // Пропускаем рендеринг если контекст ещё не инициализирован
-        if self.graphics_context.is_initialized() {
-            if let Err(e) = self.render() {
-                tracing::error!("Render error: {}", e);
-            }
-        }
     }
 }

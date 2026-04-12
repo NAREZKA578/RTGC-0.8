@@ -1,13 +1,13 @@
 //! Asset Manager - Handles loading, caching, and reference counting of game assets
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::path::Path;
-use rayon::prelude::*;
-use tracing::{info, warn, debug};
 use crate::graphics::mesh::Mesh;
-use crate::graphics::texture::Texture;
 use crate::graphics::render_command::Handle;
+use crate::graphics::texture::Texture;
+use rayon::prelude::*;
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
 
 /// Reference counted handle wrapper
 #[derive(Debug, Clone)]
@@ -29,11 +29,14 @@ impl<T> RefCountedHandle<T> {
     }
 
     pub fn add_ref(&self) {
-        self.ref_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.ref_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn release(&self) -> usize {
-        self.ref_count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) - 1
+        self.ref_count
+            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst)
+            - 1
     }
 
     pub fn ref_count(&self) -> usize {
@@ -128,12 +131,15 @@ impl AssetManager {
         let ref_handle = RefCountedHandle::new(handle.clone());
 
         self.meshes.insert(path.to_string(), ref_handle);
-        self.metadata.insert(path.to_string(), AssetMetadata {
-            path: path.to_string(),
-            load_time_ms: load_time,
-            size_bytes: 0, // Would calculate from file
-            last_modified: 0, // Would get from filesystem
-        });
+        self.metadata.insert(
+            path.to_string(),
+            AssetMetadata {
+                path: path.to_string(),
+                load_time_ms: load_time,
+                size_bytes: 0,    // Would calculate from file
+                last_modified: 0, // Would get from filesystem
+            },
+        );
 
         self.stats.total_meshes += 1;
         self.stats.loads_this_frame += 1;
@@ -166,12 +172,15 @@ impl AssetManager {
         let ref_handle = RefCountedHandle::new(handle.clone());
 
         self.textures.insert(path.to_string(), ref_handle);
-        self.metadata.insert(path.to_string(), AssetMetadata {
-            path: path.to_string(),
-            load_time_ms: load_time,
-            size_bytes: 0,
-            last_modified: 0,
-        });
+        self.metadata.insert(
+            path.to_string(),
+            AssetMetadata {
+                path: path.to_string(),
+                load_time_ms: load_time,
+                size_bytes: 0,
+                last_modified: 0,
+            },
+        );
 
         self.stats.total_textures += 1;
         self.stats.loads_this_frame += 1;
@@ -216,14 +225,21 @@ impl AssetManager {
         for path in asset_paths {
             let start = std::time::Instant::now();
             // In real implementation, determine type from extension or manifest
-            let result = if path.ends_with(".png") || path.ends_with(".jpg") || path.ends_with(".dds") {
-                self.load_or_get_texture(path).map(|h| ("texture", h.id()))
-            } else {
-                self.load_or_get_mesh(path).map(|h| ("mesh", h.id()))
-            };
+            let result =
+                if path.ends_with(".png") || path.ends_with(".jpg") || path.ends_with(".dds") {
+                    self.load_or_get_texture(path).map(|h| ("texture", h.id()))
+                } else {
+                    self.load_or_get_mesh(path).map(|h| ("mesh", h.id()))
+                };
             match result {
                 Ok((asset_type, id)) => {
-                    debug!("Preloaded {} '{}' (id: {}, time: {:?})", asset_type, path, id, start.elapsed());
+                    debug!(
+                        "Preloaded {} '{}' (id: {}, time: {:?})",
+                        asset_type,
+                        path,
+                        id,
+                        start.elapsed()
+                    );
                 }
                 Err(e) => {
                     warn!("Failed to preload '{}': {}", path, e);
@@ -326,12 +342,12 @@ mod tests {
     #[test]
     fn test_asset_manager_cache() {
         let mut manager = AssetManager::new(AssetManagerConfig::default());
-        
+
         // First load should be a cache miss
         let handle1 = manager.load_or_get_mesh("test.obj");
         assert!(handle1.is_ok());
         assert_eq!(manager.stats().cache_misses, 1);
-        
+
         // Second load should be a cache hit
         let handle2 = manager.load_or_get_mesh("test.obj");
         assert!(handle2.is_ok());
@@ -341,15 +357,15 @@ mod tests {
     #[test]
     fn test_reference_counting() {
         let mut manager = AssetManager::new(AssetManagerConfig::default());
-        
+
         let handle = manager.load_or_get_mesh("test.obj").unwrap();
-        
+
         // Should have one reference
         assert!(manager.is_mesh_loaded("test.obj"));
-        
+
         // Release once
         manager.release_mesh("test.obj");
-        
+
         // After release with ref count 0, should be unloaded
         assert!(!manager.is_mesh_loaded("test.obj"));
     }

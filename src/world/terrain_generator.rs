@@ -166,12 +166,64 @@ impl PerlinNoise {
     
     /// 3D Perlin noise at given coordinates
     pub fn noise3d(&self, x: f32, y: f32, z: f32) -> f32 {
-        // Упрощенная заглушка для компиляции
-        let xi = (x.floor() as i32 & 255) as usize;
-        let yi = (y.floor() as i32 & 255) as usize;
-        let zi = (z.floor() as i32 & 255) as usize;
-        let hash = (xi + yi * 57 + zi * 131) % self.permutations.len();
-        (self.permutations[hash] as f32 / 255.0) - 0.5
+        // Находим координаты куба
+        let x_floor = x.floor() as i32;
+        let y_floor = y.floor() as i32;
+        let z_floor = z.floor() as i32;
+        
+        // Доли для интерполяции
+        let x_frac = x - x_floor as f32;
+        let y_frac = y - y_floor as f32;
+        let z_frac = z - z_floor as f32;
+        
+        // Применяем fade-функцию
+        let u = Self::fade(x_frac);
+        let v = Self::fade(y_frac);
+        let w = Self::fade(z_frac);
+        
+        // Хеш-координаты с учётом permutations
+        let aaa = self.hash(self.hash(self.hash(x_floor) as i32 + y_floor) as i32 + z_floor);
+        let aba = self.hash(self.hash(self.hash(x_floor) as i32 + y_floor + 1) as i32 + z_floor);
+        let aab = self.hash(self.hash(self.hash(x_floor) as i32 + y_floor) as i32 + z_floor + 1);
+        let abb = self.hash(self.hash(self.hash(x_floor) as i32 + y_floor + 1) as i32 + z_floor + 1);
+        let baa = self.hash(self.hash(self.hash(x_floor + 1) as i32 + y_floor) as i32 + z_floor);
+        let bba = self.hash(self.hash(self.hash(x_floor + 1) as i32 + y_floor + 1) as i32 + z_floor);
+        let bab = self.hash(self.hash(self.hash(x_floor + 1) as i32 + y_floor) as i32 + z_floor + 1);
+        let bbb = self.hash(self.hash(self.hash(x_floor + 1) as i32 + y_floor + 1) as i32 + z_floor + 1);
+        
+        // Градиенты для 8 углов куба
+        let x1 = Self::lerp(
+            Self::grad(aaa, x_frac, y_frac, z_frac),
+            Self::grad(baa, x_frac - 1.0, y_frac, z_frac),
+            u,
+        );
+        let x2 = Self::lerp(
+            Self::grad(aba, x_frac, y_frac - 1.0, z_frac),
+            Self::grad(bba, x_frac - 1.0, y_frac - 1.0, z_frac),
+            u,
+        );
+        let y1 = Self::lerp(x1, x2, v);
+        
+        let x3 = Self::lerp(
+            Self::grad(aab, x_frac, y_frac, z_frac - 1.0),
+            Self::grad(bab, x_frac - 1.0, y_frac, z_frac - 1.0),
+            u,
+        );
+        let x4 = Self::lerp(
+            Self::grad(abb, x_frac, y_frac - 1.0, z_frac - 1.0),
+            Self::grad(bbb, x_frac - 1.0, y_frac - 1.0, z_frac - 1.0),
+            u,
+        );
+        let y2 = Self::lerp(x3, x4, v);
+        
+        Self::lerp(y1, y2, w)
+    }
+    
+    /// Hash function для permutations
+    #[inline]
+    fn hash(&self, x: i32) -> u8 {
+        let mask = 255;
+        self.permutations[(x as usize & mask)]
     }
     
     /// Fractal Brownian Motion (multiple octaves of noise)
@@ -422,32 +474,13 @@ impl TerrainGenerator {
     /// Get surface normal at world coordinates
     /// Uses central difference method for smooth normals
     pub fn get_normal(&self, x: f32, z: f32) -> Vector3<f32> {
-        let sample_dist = 1.0; // Distance for finite difference
-        
-        // Get heights at neighboring points
-        let h_left = self.get_height(x - sample_dist, z);
-        let h_right = self.get_height(x + sample_dist, z);
-        let h_back = self.get_height(x, z - sample_dist);
-        let h_front = self.get_height(x, z + sample_dist);
-        
-        // Calculate tangent vectors using central differences
-        let tangent_x = Vector3::new(2.0 * sample_dist, h_right - h_left, 0.0);
-        let tangent_z = Vector3::new(0.0, h_front - h_back, 2.0 * sample_dist);
-        
-        // Cross product gives the normal
-        let mut normal = tangent_x.cross(&tangent_z);
-        
-        // Normalize
-        let len = normal.magnitude();
-        if len > 0.0001 {
-            normal /= len;
-        } else {
-            normal = Vector3::y(); // Default to up if flat
-        }
-        
-        normal
+        let sample_dist = 1.0;
+        crate::utils::compute_terrain_normal(
+            |sx, sz| self.get_height(sx, sz),
+            x, z, sample_dist
+        )
     }
-    
+
     /// Generate splatmap weights for texturing
     fn generate_splatmap(&self, data: &mut super::chunk::ChunkData, idx: usize, biome: &Biome, slope: f32, moisture: f32) {
         // Simple splatmap: R=dirt, G=grass, B=rock, A=snow

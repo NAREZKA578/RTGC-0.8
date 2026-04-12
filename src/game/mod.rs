@@ -1,56 +1,94 @@
 //! Game Module for RTGC-0.8
 //! Contains gameplay systems: missions, cargo, weather, day/night cycle
 
-pub mod mission_save;
-pub mod weather;
-pub mod cargo;
-pub mod winch;
-pub mod mission_generator;
-pub mod player;
-pub mod skills;
-pub mod events;
-pub mod debug_menu;
-pub mod character_creation;
-pub mod save;
-pub mod main_menu;
-pub mod interaction;
-pub mod ui;
-pub mod inventory;
-pub mod vehicle_parts;
-pub mod economy;
-pub mod first_mission;
-pub mod storage;
+pub mod asset_manager;
 pub mod base_builder;
-pub mod settings;
+pub mod cargo;
+pub mod character_creation;
+pub mod debug_menu;
+pub mod economy;
+pub mod events;
+pub mod first_mission;
+pub mod interaction;
+pub mod inventory;
+pub mod loading_manager;
+pub mod main_menu;
 pub mod map_system;
+pub mod mission_generator;
+pub mod mission_save;
+pub mod player;
+pub mod save;
 pub mod scene;
 pub mod scenes;
-pub mod asset_manager;
-pub mod loading_manager;
+pub mod settings;
+pub mod skills;
+pub mod storage;
+pub mod ui;
+pub mod vehicle_parts;
+pub mod weather;
+pub mod winch;
 
-pub use mission_save::{SaveGame, MissionSaveManager};
-pub use weather::{WeatherSystem, WeatherState, DayNightCycle, PrecipitationType};
+pub use crate::network::protocol::PlayerInput;
+pub use crate::physics::LAYER_PLAYER;
+pub use asset_manager::{
+    AssetManager, AssetManagerConfig, AssetManagerStats, AssetMetadata, RefCountedHandle,
+};
+pub use base_builder::{
+    BaseBuildingSystem, BaseCapability, BaseType, BuiltStructure, PlayerBase, ResourceRequirements,
+    StructureType, GRID_CELL_SIZE, MAX_BASES_PER_PLAYER, MAX_STRUCTURES_PER_BASE,
+    MIN_BASE_DISTANCE,
+};
 pub use cargo::Cargo;
-pub use winch::Winch;
-pub use mission_generator::{MissionGenerator, Mission, CargoType};
-pub use player::{Player, PlayerState, CameraMode, PlayerInput, LAYER_PLAYER};
-pub use skills::{Skill, PlayerSkills, SkillType};
-pub use events::{GameEvent, EventSubscriber, EventManager, publish_event, poll_events, init_events};
+pub use character_creation::{
+    CharacterCreationData, CharacterCreationManager, CreationStep, EducationOption, Gender,
+    StartLocation, HAIR_COLORS, SKIN_TONES, START_LOCATIONS, UAZ_COLORS,
+};
 pub use debug_menu::DebugMenu;
-pub use character_creation::{CharacterCreationManager, CharacterCreationData, CreationStep, Gender, EducationOption, StartLocation, UAZ_COLORS, START_LOCATIONS, SKIN_TONES, HAIR_COLORS};
-pub use save::{SaveSystem, SaveData, SaveMetadata, SaveLocationType, MAX_SAVE_SLOTS};
-pub use main_menu::{MainMenu, MenuState, MenuButton, MenuAction, MenuRenderData};
-pub use interaction::{InteractionSystem, InteractableType, InteractionResult, MAX_INTERACTION_DISTANCE};
-pub use ui::{UIManager, HUDData, UIVisibility, Notification, NotificationType, MinimapData, Waypoint, WaypointType};
-pub use inventory::{Inventory, InventoryItem, InventorySlot, ItemType, MAX_INVENTORY_WEIGHT, MAX_INVENTORY_SLOTS};
-pub use vehicle_parts::{VehiclePartsSystem, VehiclePart, PartCategory, PartDiagnostic, MAX_INTEGRITY, MIN_FUNCTIONAL_INTEGRITY};
-pub use economy::{EconomySystem, PlayerWallet, MarketPrice, Shop, ShopType, ShopItem, BuyOrder, JobBoard, ContractJob, calculate_wage, get_base_salary, BASE_SALARIES};
+pub use economy::{
+    calculate_wage, get_base_salary, BuyOrder, ContractJob, EconomySystem, JobBoard, MarketPrice,
+    PlayerWallet, Shop, ShopItem, ShopType, BASE_SALARIES,
+};
+pub use events::{
+    init_events, poll_events, publish_event, EventManager, EventSubscriber, GameEvent,
+};
 pub use first_mission::{FirstMission, FirstMissionManager, FirstMissionState, PhoneNotification};
-pub use storage::{StorageSystem, StorageContainer, StoredItem, ContainerType, ItemDimensions, StorageSlot, MAX_STORAGE_WIDTH, MAX_STORAGE_HEIGHT, MAX_STORAGE_SLOTS};
-pub use base_builder::{BaseBuildingSystem, PlayerBase, BuiltStructure, BaseType, StructureType, BaseCapability, ResourceRequirements, MAX_STRUCTURES_PER_BASE, MAX_BASES_PER_PLAYER, GRID_CELL_SIZE, MIN_BASE_DISTANCE};
-pub use settings::{SettingsManager, GameSettings, DisplaySettings, GraphicsSettings, AudioSettings, ControlsSettings, GameplaySettings, HudSettings, NetworkSettings, PerformanceSettings, DebugSettings};
-pub use map_system::{MapSystem, MapMarker, MarkerType};
-pub use scene::{Scene, SceneType, SceneId, SceneState, SceneManager, SceneManagerConfig, TransitionEffect};
-pub use scenes::{MainMenuScene, OpenWorldScene, LoadingScene, PauseScene};
-pub use asset_manager::{AssetManager, AssetManagerConfig, AssetManagerStats, RefCountedHandle, AssetMetadata};
-pub use loading_manager::{LoadingManager, LoadingState, LoadingProgress, LoadingStats, LoadableResource, ResourceType, LoadStatus};
+pub use interaction::{
+    InteractableType, InteractionResult, InteractionSystem, MAX_INTERACTION_DISTANCE,
+};
+pub use inventory::{
+    Inventory, InventoryItem, InventorySlot, ItemType, MAX_INVENTORY_SLOTS, MAX_INVENTORY_WEIGHT,
+};
+pub use loading_manager::{
+    LoadStatus, LoadableResource, LoadingManager, LoadingProgress, LoadingState, LoadingStats,
+    ResourceType,
+};
+pub use main_menu::{MainMenu, MenuAction, MenuButton, MenuRenderData, MenuState};
+pub use map_system::{MapMarker, MapSystem, MarkerType};
+pub use mission_generator::{CargoType, Mission, MissionGenerator};
+pub use mission_save::{MissionSaveManager, SaveGame};
+pub use player::{CameraMode, Player, PlayerState};
+pub use save::{SaveData, SaveLocationType, SaveMetadata, SaveSystem, MAX_SAVE_SLOTS};
+pub use scene::{
+    Scene, SceneId, SceneManager, SceneManagerConfig, SceneState, SceneType, TransitionEffect,
+};
+pub use scenes::{LoadingScene, MainMenuScene, OpenWorldScene, PauseScene};
+pub use settings::{
+    AudioSettings, ControlsSettings, DebugSettings, DisplaySettings, GameSettings,
+    GameplaySettings, GraphicsSettings, HudSettings, NetworkSettings, PerformanceSettings,
+    SettingsManager,
+};
+pub use skills::{PlayerSkills, Skill, SkillType};
+pub use storage::{
+    ContainerType, ItemDimensions, StorageContainer, StorageSlot, StorageSystem, StoredItem,
+    MAX_STORAGE_HEIGHT, MAX_STORAGE_SLOTS, MAX_STORAGE_WIDTH,
+};
+pub use ui::{
+    HUDData, MinimapData, Notification, NotificationType, UIManager, UIVisibility, Waypoint,
+    WaypointType,
+};
+pub use vehicle_parts::{
+    PartCategory, PartDiagnostic, VehiclePart, VehiclePartsSystem, MAX_INTEGRITY,
+    MIN_FUNCTIONAL_INTEGRITY,
+};
+pub use weather::{DayNightCycle, PrecipitationType, WeatherState, WeatherSystem};
+pub use winch::Winch;

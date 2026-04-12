@@ -2,7 +2,7 @@
 //! Implements publish-subscribe pattern for game events
 //! Исправлено: убран unsafe, используется Arc<Mutex<>> для потокобезопасности
 
-use crossbeam_channel::{bounded, Sender, Receiver, TrySendError};
+use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 use nalgebra::Vector3;
 use once_cell::sync::Lazy;
 use std::sync::{Arc, Mutex};
@@ -26,14 +26,13 @@ impl EventChannelStorage {
 }
 
 /// Global event channel (lazy-initialized, thread-safe)
-static EVENT_STORAGE: Lazy<Arc<EventChannelStorage>> = Lazy::new(|| {
-    Arc::new(EventChannelStorage::new())
-});
+static EVENT_STORAGE: Lazy<Arc<EventChannelStorage>> =
+    Lazy::new(|| Arc::new(EventChannelStorage::new()));
 
 /// Initialize the event system (call once at startup)
 pub fn init_events() {
     let (tx, rx) = bounded(EVENT_CHANNEL_CAPACITY);
-    
+
     if let Ok(mut sender_guard) = EVENT_STORAGE.sender.lock() {
         *sender_guard = Some(tx);
     }
@@ -44,20 +43,29 @@ pub fn init_events() {
 
 /// Get the global event sender (thread-safe clone)
 pub fn get_event_sender() -> Option<Sender<GameEvent>> {
-    EVENT_STORAGE.sender.lock().ok().and_then(|guard| guard.clone())
+    EVENT_STORAGE
+        .sender
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
 }
 
 /// Get the global event receiver (for main thread polling)
 pub fn get_event_receiver() -> Option<Receiver<GameEvent>> {
-    EVENT_STORAGE.receiver.lock().ok().and_then(|guard| guard.clone())
+    EVENT_STORAGE
+        .receiver
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
 }
 
 /// Publish an event to all subscribers (thread-safe)
 pub fn publish_event(event: GameEvent) -> Result<(), TrySendError<GameEvent>> {
-    let sender_guard = EVENT_STORAGE.sender.lock().map_err(|_| {
-        TrySendError::Disconnected(event.clone())
-    })?;
-    
+    let sender_guard = EVENT_STORAGE
+        .sender
+        .lock()
+        .map_err(|_| TrySendError::Disconnected(event.clone()))?;
+
     if let Some(ref sender) = *sender_guard {
         sender.try_send(event)?;
     }
@@ -67,7 +75,7 @@ pub fn publish_event(event: GameEvent) -> Result<(), TrySendError<GameEvent>> {
 /// Poll for events (non-blocking, main thread only)
 pub fn poll_events() -> Vec<GameEvent> {
     let mut events = Vec::new();
-    
+
     if let Ok(receiver_guard) = EVENT_STORAGE.receiver.lock() {
         if let Some(ref receiver) = *receiver_guard {
             while let Ok(event) = receiver.try_recv() {
@@ -157,20 +165,13 @@ pub enum GameEvent {
     FirstMissionDeliveryStarted,
 
     /// First mission completed
-    FirstMissionCompleted {
-        reward: f64,
-        time_taken_hours: f32,
-    },
+    FirstMissionCompleted { reward: f64, time_taken_hours: f32 },
 
     /// First mission failed
-    FirstMissionFailed {
-        reason: String,
-    },
+    FirstMissionFailed { reason: String },
 
     /// Contacts unlocked
-    ContactsUnlocked {
-        count: usize,
-    },
+    ContactsUnlocked { count: usize },
 
     /// Money changed
     MoneyChanged {
@@ -186,10 +187,7 @@ pub enum GameEvent {
     },
 
     /// Time of day changed
-    TimeOfDayChanged {
-        hour: f32,
-        is_night: bool,
-    },
+    TimeOfDayChanged { hour: f32, is_night: bool },
 
     /// Player saved game
     GameSaved {
@@ -211,9 +209,7 @@ pub enum GameEvent {
     },
 
     /// NPC despawned
-    NpcDespawned {
-        npc_id: u64,
-    },
+    NpcDespawned { npc_id: u64 },
 
     /// Building constructed
     BuildingConstructed {
@@ -323,15 +319,15 @@ mod tests {
     #[test]
     fn test_event_system_thread_safe() {
         init_events();
-        
+
         // Test publish from "another thread"
         let event = GameEvent::WeatherChanged {
             weather_type: "Rain".to_string(),
             intensity: 0.5,
         };
-        
+
         assert!(publish_event(event).is_ok());
-        
+
         // Test poll events
         let events = poll_events();
         assert!(!events.is_empty());
