@@ -135,6 +135,23 @@ impl GlContext {
         let gl_arc = Arc::new(gl);
         let rhi_device = Arc::new(GlDevice::new(gl_arc.clone()));
 
+        // Включаем DEPTH_TEST
+        unsafe {
+            gl.enable(glow::DEPTH_TEST);
+            gl.depth_func(glow::LEQUAL);
+        }
+
+        // Устанавливаем viewport при инициализации
+        unsafe {
+            use glow::HasContext;
+            gl.viewport(
+                0,
+                0,
+                nz_width.get() as i32,
+                nz_height.get() as i32,
+            );
+        }
+
         Ok(Self {
             gl: Some(gl_arc),
             window: Some(window),
@@ -198,13 +215,8 @@ impl GlContext {
 
     /// Begin frame - подготовка к рендерингу
     pub fn begin_frame(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(ref gl) = self.gl {
-            unsafe {
-                use glow::HasContext;
-                gl.clear_color(0.1, 0.2, 0.3, 1.0);
-                gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-            }
-        }
+        // Очистка экрана теперь выполняется через RenderCommand::Clear в renderer
+        // Эта функция может использоваться для дополнительных подготовительных операций
         Ok(())
     }
 

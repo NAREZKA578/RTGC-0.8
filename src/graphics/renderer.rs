@@ -407,7 +407,7 @@ impl Renderer {
             45.0,
             800.0 / 600.0,
             0.1,
-            100.0,
+            1000.0,
         );
 
         // Задача 3: Создать VAO для неба
@@ -436,6 +436,8 @@ impl Renderer {
                     gl.enable_vertex_attrib_array(1);
                     gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 20, 8);
                 }
+                gl.bind_vertex_array(None);
+                gl.bind_buffer(glow::ARRAY_BUFFER, None);
             }
             (vao, vbo)
         };
@@ -1086,25 +1088,10 @@ impl Renderer {
     }
 
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Очистка экрана голубым цветом (один раз за кадр)
         unsafe {
-            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-            self.gl.clear_color(0.4, 0.6, 0.9, 1.0);           // ваш старый синий горизонт
+            self.gl.clear_color(0.4, 0.6, 0.9, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-        }
-
-        // Потом ваш существующий код с render_queue и т.д.
-        self.render_queue.submit(RenderCommand::Clear {
-            color: Some([0.4, 0.6, 0.9, 1.0]),
-            depth: true,
-            stencil: false,
-        });
-
-        self.render_queue.flush()?;
-
-        // Задача 3: Рендерить небо перед сценой
-        if self.menu_state == MenuState::InGame {
-            self.render_sky()?;
         }
 
         // Update LOD system based on camera position
@@ -1121,7 +1108,15 @@ impl Renderer {
             MenuState::Loading => self.render_loading_screen()?,
             MenuState::MainMenu => self.render_main_menu()?,
             MenuState::CitySelection => self.render_city_selection()?,
-            MenuState::InGame | MenuState::Paused => self.render_game()?,
+            MenuState::InGame => {
+                self.render_game()?;
+                self.render_sky()?; // Рендерим небо только в игровом режиме
+            }
+            MenuState::Paused => {
+                self.render_game()?;
+                self.render_sky()?;
+                self.render_pause_overlay()?;
+            }
             MenuState::WorldCreation => self.render_world_creation()?,
             MenuState::Settings => self.render_settings()?,
             MenuState::CharacterCreation => self.render_character_creation()?,
@@ -1234,8 +1229,6 @@ impl Renderer {
     fn render_main_menu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         unsafe {
             self.gl.disable(glow::DEPTH_TEST);
-            self.gl.clear_color(0.05, 0.05, 0.1, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             // Включаем blending для прозрачности UI элементов
             self.gl.enable(glow::BLEND);
@@ -1255,9 +1248,9 @@ impl Renderer {
             );
 
             // Получаем позицию мыши для hover-эффектов
-            // Инвертируем Y для координат OpenGL (Y=0 снизу)
+            // Y=0 вверху в обоих winit и ортографической проекции - инверсия не нужна
             let mouse_x = self.mouse_x;
-            let mouse_y = self.height as f32 - self.mouse_y; // Инверсия Y
+            let mouse_y = self.mouse_y;
 
             let button_width = 240.0;
             let button_height = 40.0;
@@ -1491,9 +1484,6 @@ impl Renderer {
 
     fn render_game(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Render the actual game scene with proper OpenGL rendering
-
-        // Сначала рендерим небо
-        self.render_sky()?;
 
         // Обновляем цвета неба после рендера
         self.update_sky_colors(self.sky_color_top, self.sky_color_horizon);
@@ -1744,10 +1734,7 @@ impl Renderer {
         // HUD рисуется после основной сцены, без depth test
         self.render_hud()?;
 
-        // Ввод-2: Рендерить оверлей паузы если в режиме Paused
-        if self.menu_state == MenuState::Paused {
-            self.render_pause_overlay()?;
-        }
+        // Примечание: оверлей паузы теперь рендерится в render() для MenuState::Paused
 
         Ok(())
     }

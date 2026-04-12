@@ -105,7 +105,7 @@ impl RendererRhi {
             45.0,
             width as f32 / height as f32,
             0.1,
-            100.0,
+            1000.0,
         );
 
         // Create bitmap font texture

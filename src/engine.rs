@@ -257,6 +257,11 @@ impl Engine {
                 if let Err(e) = self.engine.graphics_context.end_frame() {
                     println!("[ERROR] end_frame error: {}", e);
                 }
+
+                // Запрашиваем перерисовку для следующего кадра
+                if let Some(ref window) = self.window {
+                    window.request_redraw();
+                }
             }
 
             fn init(&mut self, event_loop: &ActiveEventLoop) {
@@ -277,6 +282,11 @@ impl Engine {
                             println!("[DEBUG] GL context created successfully");
                             let window = gl_context.window.as_ref().unwrap();
                             
+                            // Проверяем что GL контекст инициализирован
+                            if !gl_context.is_initialized() {
+                                panic!("Graphics context not initialized after creation");
+                            }
+                            
                             if let Some(ref gl) = gl_context.gl {
                                 match Renderer::new(gl.clone()) {
                                     Ok(mut renderer) => {
@@ -287,9 +297,11 @@ impl Engine {
                                         println!("[DEBUG] Renderer initialized successfully");
                                     }
                                     Err(e) => {
-                                        println!("[ERROR] Failed to initialize Renderer: {}", e);
+                                        panic!("Renderer init failed: {:?}", e);
                                     }
                                 }
+                            } else {
+                                panic!("GL context is None after successful creation");
                             }
 
                             // Перемещаем окно в app
@@ -310,7 +322,7 @@ impl Engine {
                             println!("[DEBUG] Initialization complete, entering game loop...");
                         }
                         Err(e) => {
-                            println!("[ERROR] Failed to create GL context: {}", e);
+                            panic!("Failed to create GL context: {}", e);
                         }
                     }
                 }
@@ -386,8 +398,7 @@ impl Engine {
                         }
                     }
                     _ => {
-                        // Для остальных событий тоже рендерим
-                        self.process();
+                        // Ждём RedrawRequested для рендера, не рендерим здесь
                     }
                 }
             }
@@ -612,6 +623,9 @@ impl Engine {
 
             // Передача debug_mode в renderer
             renderer.debug_mode = self.debug_mode;
+
+            // begin_frame() теперь пустой (очистка через RenderCommand::Clear)
+            self.graphics_context.begin_frame()?;
 
             // Один вызов render() — всё внутри, включая flush
             renderer.render()?;
@@ -873,7 +887,7 @@ impl Engine {
 
         // Проверка попадания клика по кнопкам
         let click_x = self.mouse_x;
-        let click_y = h - self.mouse_y; // Инвертируем Y для OpenGL
+        let click_y = self.mouse_y; // Y=0 вверху в обоих winit и ортографической проекции
 
         // "Новая игра" - переход к созданию персонажа
         if click_x >= center_x - button_width / 2.0
@@ -948,7 +962,7 @@ impl Engine {
         let exit_y = h / 2.0 + 70.0;
 
         let mouse_x = self.mouse_x;
-        let mouse_y = h - self.mouse_y;
+        let mouse_y = self.mouse_y; // Y=0 вверху в обоих winit и ортографической проекции
 
         // Проверка наведения на кнопки и обновление main_menu
         if mouse_x >= center_x - button_width / 2.0 && mouse_x <= center_x + button_width / 2.0 {
