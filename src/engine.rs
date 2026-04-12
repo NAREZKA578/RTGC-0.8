@@ -39,6 +39,7 @@ use winit::event::WindowEvent as WinitWindowEvent;
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameState {
     MainMenu,
+    CharacterCreation,
     Loading,
     Playing,
     Paused,
@@ -87,6 +88,10 @@ pub struct Engine {
     vehicle: Option<Vehicle>,
     vehicle_health: f32,
     vehicle_fuel: f32,
+    tracked_vehicle: Option<crate::physics::TrackedVehicle>,
+    tracked_vehicle_throttle: f32,
+    tracked_vehicle_brake: f32,
+    tracked_vehicle_turn: f32,
     save_timer: f32,
     mouse_x: f32,
     mouse_y: f32,
@@ -102,6 +107,10 @@ pub struct Engine {
     save_system: SaveSystem,
     // Менеджер загрузки
     loading_manager: LoadingManager,
+    // Персонаж игрока
+    player: Option<crate::game::player::Player>,
+    // Менеджер создания персонажа
+    character_creation: crate::game::character_creation::CharacterCreationManager,
 }
 
 impl Engine {
@@ -139,6 +148,10 @@ impl Engine {
         let save_system = SaveSystem::default();
         // Менеджер загрузки
         let mut loading_manager = LoadingManager::new("assets");
+        // Персонаж игрока (пока None)
+        let player: Option<crate::game::player::Player> = None;
+        // Менеджер создания персонажа
+        let character_creation = crate::game::character_creation::CharacterCreationManager::new();
 
         Ok(Self {
             graphics_context,
@@ -177,6 +190,10 @@ impl Engine {
             vehicle: None,
             vehicle_health: 100.0,
             vehicle_fuel: 100.0,
+            tracked_vehicle: None,
+            tracked_vehicle_throttle: 0.0,
+            tracked_vehicle_brake: 0.0,
+            tracked_vehicle_turn: 0.0,
             save_timer: 0.0,
             mouse_x: 0.0,
             mouse_y: 0.0,
@@ -186,6 +203,8 @@ impl Engine {
             ui_manager,
             save_system,
             loading_manager,
+            player,
+            character_creation,
         })
     }
 
@@ -218,6 +237,11 @@ impl Engine {
             self.update_menu_hover();
         }
 
+        // Обновление создания персонажа
+        if self.game_state == GameState::CharacterCreation {
+            self.update_character_creation_input();
+        }
+
         // Физический шаг с фиксированным timestep
         self.physics_accumulator += dt;
         while self.physics_accumulator >= self.physics_timestep {
@@ -232,10 +256,40 @@ impl Engine {
         self.day_night_cycle.advance_time(dt);
         self.particle_system.update(dt);
 
+        // Обновление персонажа игрока
+        if let Some(ref mut player) = self.player {
+            if player.state == crate::game::player::PlayerState::OnFoot {
+                // Обновляем стамина
+                player.update_stamina(dt);
+                
+                // Обрабатываем ввод для персонажа
+                if let Some(action_map) = &self.input_manager.action_map() {
+                    player.process_input(action_map, &mut self.physics_world, dt);
+                }
+                
+                // Синхронизируем позицию с физическим телом
+                if let Some(body_idx) = player.body_index {
+                    if let Some(body) = self.physics_world.get_body(body_idx) {
+                        player.position = body.position;
+                    }
+                }
+            }
+        }
+
         // Проблема 8: Обновление interaction system
         if self.game_state == GameState::Playing {
             // Получаем позицию игрока и направление камеры
-            let player_pos = if let Some(ref heli) = self.helicopter {
+            let player_pos = if let Some(ref player) = self.player {
+                if let Some(body_idx) = player.body_index {
+                    if let Some(body) = self.physics_world.get_body(body_idx) {
+                        body.position
+                    } else {
+                        Vector3::zeros()
+                    }
+                } else {
+                    Vector3::zeros()
+                }
+            } else if let Some(ref heli) = self.helicopter {
                 heli.position
             } else {
                 Vector3::zeros()
@@ -522,6 +576,17 @@ impl Engine {
             vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, &surface_getter, deformable_terrain_ref);
         }
 
+        // Обновление физики гусеничного транспорта
+        if let Some(ref mut tracked_vehicle) = self.tracked_vehicle {
+            let controls = crate::physics::tracked_vehicle::TrackedControls::from_input(
+                self.tracked_vehicle_throttle,
+                self.tracked_vehicle_turn,
+                self.tracked_vehicle_brake > 0.5,
+            );
+            tracked_vehicle.controls = controls;
+            tracked_vehicle.physics_update(dt, &mut self.physics_world, &terrain_getter, &surface_getter, deformable_terrain_ref);
+        }
+
         // Обновление физики вертолета
         if let Some(ref mut heli) = self.helicopter {
             heli.physics_update(dt, &mut self.physics_world);
@@ -558,14 +623,12 @@ impl Engine {
         let click_x = self.mouse_x;
         let click_y = h - self.mouse_y; // Инвертируем Y для OpenGL
         
-        // "Новая игра"
+        // "Новая игра" - переход к созданию персонажа
         if click_x >= center_x - button_width / 2.0 && click_x <= center_x + button_width / 2.0
             && click_y >= new_game_y && click_y <= new_game_y + button_height {
-            tracing::info!("Menu click - NEW GAME");
-            self.game_state = GameState::Playing;
-            if let Some(ref mut renderer) = self.renderer {
-                renderer.menu_state = crate::graphics::renderer::MenuState::InGame;
-            }
+            tracing::info!("Menu click - NEW GAME - Starting character creation");
+            self.game_state = GameState::CharacterCreation;
+            self.character_creation.is_active = true;
             return;
         }
         
@@ -632,6 +695,178 @@ impl Engine {
         } else {
             self.main_menu.hover_button(crate::game::main_menu::MenuButton::NewGame); // Сброс
         }
+    }
+
+    /// Обработка ввода в режиме создания персонажа
+    fn update_character_creation_input(&mut self) {
+        use crate::game::character_creation::{CreationStep, Gender};
+        use winit::keyboard::KeyCode;
+
+        // Получаем состояние клавиш
+        let input_state = self.input_manager.state();
+        
+        // Переход к следующему шагу по Enter или Space
+        if input_state.is_key_just_pressed(KeyCode::Enter) || input_state.is_key_just_pressed(KeyCode::Space) {
+            self.character_creation.next_step();
+            
+            // Если создание завершено - создаём игрока и начинаем игру
+            if self.character_creation.current_step == CreationStep::Complete {
+                self.finalize_character_creation();
+            }
+        }
+        
+        // Возврат к предыдущему шагу по Escape (кроме первого шага)
+        if input_state.is_key_just_pressed(KeyCode::Escape) {
+            match self.character_creation.current_step {
+                CreationStep::Gender => {
+                    // На первом шаге Escape возвращает в главное меню
+                    self.game_state = GameState::MainMenu;
+                    self.character_creation.is_active = false;
+                }
+                _ => {
+                    self.character_creation.prev_step();
+                }
+            }
+        }
+        
+        // Навигация по шагам создания персонажа
+        match self.character_creation.current_step {
+            CreationStep::Gender => {
+                // Переключение пола стрелками влево/вправо
+                if input_state.is_key_just_pressed(KeyCode::ArrowLeft) {
+                    self.character_creation.data.set_gender(Gender::Male);
+                }
+                if input_state.is_key_just_pressed(KeyCode::ArrowRight) {
+                    self.character_creation.data.set_gender(Gender::Female);
+                }
+            }
+            CreationStep::Height => {
+                // Изменение роста стрелками вверх/вниз
+                if input_state.is_key_held(KeyCode::ArrowUp) {
+                    self.character_creation.data.adjust_height(0.01);
+                }
+                if input_state.is_key_held(KeyCode::ArrowDown) {
+                    self.character_creation.data.adjust_height(-0.01);
+                }
+            }
+            CreationStep::SkinColor => {
+                // Выбор цвета кожи стрелками
+                if input_state.is_key_just_pressed(KeyCode::ArrowLeft) {
+                    self.character_creation.data.cycle_skin_tone(-1);
+                }
+                if input_state.is_key_just_pressed(KeyCode::ArrowRight) {
+                    self.character_creation.data.cycle_skin_tone(1);
+                }
+            }
+            CreationStep::Face => {
+                // Выбор лица стрелками
+                if input_state.is_key_just_pressed(KeyCode::ArrowLeft) {
+                    self.character_creation.data.cycle_face(-1);
+                }
+                if input_state.is_key_just_pressed(KeyCode::ArrowRight) {
+                    self.character_creation.data.cycle_face(1);
+                }
+            }
+            CreationStep::HairStyle => {
+                // Выбор причёски стрелками
+                if input_state.is_key_just_pressed(KeyCode::ArrowLeft) {
+                    self.character_creation.data.cycle_hair_style(-1);
+                }
+                if input_state.is_key_just_pressed(KeyCode::ArrowRight) {
+                    self.character_creation.data.cycle_hair_style(1);
+                }
+            }
+            CreationStep::HairColor => {
+                // Выбор цвета волос стрелками
+                if input_state.is_key_just_pressed(KeyCode::ArrowLeft) {
+                    self.character_creation.data.cycle_hair_color(-1);
+                }
+                if input_state.is_key_just_pressed(KeyCode::ArrowRight) {
+                    self.character_creation.data.cycle_hair_color(1);
+                }
+            }
+            CreationStep::Education | CreationStep::VehicleColor | CreationStep::StartingLocation => {
+                // Упрощённая обработка для этих шагов
+            }
+            CreationStep::Summary => {
+                // Экран подтверждения - только Enter для завершения
+            }
+            CreationStep::Complete => {
+                // Завершено
+            }
+        }
+    }
+
+    /// Завершение создания персонажа и начало игры
+    fn finalize_character_creation(&mut self) {
+        tracing::info!("Finalizing character creation");
+        
+        // Создаём игрока из данных создания персонажа
+        let mut player = self.character_creation.data.build_player();
+        
+        // Создаём физическое тело игрока (капсула)
+        let start_pos = self.character_creation.data.start_location.position;
+        let body = player.create_physics_body(start_pos);
+        let body_idx = self.physics_world.add_body(body);
+        player.body_index = Some(body_idx);
+        player.position = start_pos;
+        
+        self.player = Some(player);
+        
+        // Создаём транспортные средства
+        if let Err(e) = self.create_player_vehicles() {
+            tracing::error!("Failed to create player vehicles: {}", e);
+        }
+        
+        // Переходим в режим игры
+        self.game_state = GameState::Playing;
+        self.character_creation.is_active = false;
+        
+        tracing::info!("Character creation complete - starting game");
+    }
+
+    /// Создание транспортных средств игрока (обновлённая версия create_player_vehicle)
+    fn create_player_vehicles(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Создаём вертолёт
+        let mut heli = crate::physics::Helicopter::new(
+            nalgebra::Vector3::new(0.0, 10.0, 0.0),
+            0.0,
+        );
+        heli.body_index = Some(self.physics_world.add_body(heli.create_physics_body()));
+        self.helicopter = Some(heli);
+
+        // Создаём гусеничную технику (GTS-M)
+        let tracked_chassis = crate::physics::RigidBody::new_box(
+            nalgebra::Vector3::new(5.0, 2.0, 0.0),
+            100.0,
+            nalgebra::Vector3::new(4.0, 1.5, 2.5),
+        );
+        let tracked_chassis_id = self.physics_world.add_body(tracked_chassis);
+        
+        let mut tracked_vehicle = crate::physics::TrackedVehicle::new(
+            nalgebra::Vector3::new(5.0, 2.0, 0.0),
+            0.0,
+        );
+        tracked_vehicle.set_chassis_body_id(tracked_chassis_id);
+        self.tracked_vehicle = Some(tracked_vehicle);
+
+        // Создаём автомобиль (UAZ)
+        let uaz_chassis = crate::physics::RigidBody::new_box(
+            nalgebra::Vector3::new(-5.0, 2.0, 0.0),
+            80.0,
+            nalgebra::Vector3::new(3.5, 1.2, 1.8),
+        );
+        let uaz_chassis_id = self.physics_world.add_body(uaz_chassis);
+        
+        let mut vehicle = crate::physics::Vehicle::new(
+            nalgebra::Vector3::new(-5.0, 2.0, 0.0),
+            0.0,
+        );
+        vehicle.set_chassis_body_id(uaz_chassis_id);
+        self.vehicle = Some(vehicle);
+
+        tracing::info!("Created player vehicles: Helicopter, GTS-M (tracked), UAZ (vehicle)");
+        Ok(())
     }
 
     /// Инициализация менеджера загрузки - регистрация всех ресурсов
@@ -809,8 +1044,8 @@ impl Engine {
         let tracked_chassis_id = self.physics_world.add_body(tracked_chassis_body);
         tracked_vehicle.set_chassis_body_id(tracked_chassis_id);
         
-        // Сохраняем ссылку на гусеничный транспорт (добавляем поле в Engine если нужно)
-        // Для пока просто не сохраняем, но можно добавить self.tracked_vehicle = Some(tracked_vehicle);
+        // Сохраняем ссылку на гусеничный транспорт в Engine
+        self.tracked_vehicle = Some(tracked_vehicle);
 
         // 3. Создаем автомобиль UAZ
         let vehicle_spawn_pos = nalgebra::Vector3::new(-10.0, 2.0, 0.0);
