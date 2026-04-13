@@ -15,6 +15,7 @@ pub mod game;
 pub mod network;
 pub mod utils;
 pub mod weather;
+pub mod core;
 
 // Core engine types re-export
 pub use nalgebra;
@@ -36,3 +37,6 @@ pub use engine::state::{
     LoadingResourceType,
     PauseReason,
 };
+
+// Re-export core module
+pub use core::{CoreResult, run as run_engine, create_engine};
