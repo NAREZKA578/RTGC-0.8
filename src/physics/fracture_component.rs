@@ -26,6 +26,38 @@ pub struct FractureComponent {
 }
 
 impl FractureComponent {
+    /// Validate that all fracture state is finite and safe
+    pub fn validate_state(&self) -> bool {
+        // Check strength threshold is valid
+        if !self.strength_threshold.is_finite() || self.strength_threshold <= 0.0 {
+            return false;
+        }
+
+        // Check structural integrity is valid
+        if !self.structural_integrity.is_finite()
+            || self.structural_integrity < 0.0
+            || self.structural_integrity > 1.0
+        {
+            return false;
+        }
+
+        // Check material properties
+        if !self.material_properties.density.is_finite()
+            || !self.material_properties.young_modulus.is_finite()
+        {
+            return false;
+        }
+
+        true
+    }
+
+    /// Reset fracture component to a safe state
+    pub fn reset_to_safe_state(&mut self) {
+        tracing::warn!(target: "physics", "Resetting fracture component to safe state");
+        self.structural_integrity = 1.0;
+        self.fragments.clear();
+    }
+
     pub fn new(strength_threshold: f32) -> Self {
         Self {
             can_fracture: true,
@@ -38,11 +70,21 @@ impl FractureComponent {
 
     /// Check if the object should fracture based on applied force
     pub fn should_fracture(&self, impact_force: f32) -> bool {
+        // Validate impact force to prevent NaN/Inf
+        if !impact_force.is_finite() {
+            tracing::warn!(target: "physics", "Invalid impact force in fracture check: {}, returning false", impact_force);
+            return false;
+        }
         impact_force > self.strength_threshold * self.structural_integrity
     }
 
     /// Apply damage to the component
     pub fn apply_damage(&mut self, damage: f32) {
+        // Validate damage to prevent NaN/Inf propagation
+        if !damage.is_finite() || damage < 0.0 {
+            tracing::warn!(target: "physics", "Invalid damage value: {}, skipping damage application", damage);
+            return;
+        }
         // Reduce structural integrity based on damage
         let damage_factor = damage / self.strength_threshold;
         self.structural_integrity = (self.structural_integrity - damage_factor).max(0.0);
@@ -50,6 +92,12 @@ impl FractureComponent {
 
     /// Generate fragments when fracturing occurs
     pub fn generate_fragments(&self, original_body: &RigidBody) -> Vec<RigidBody> {
+        // Validate structural integrity before generating fragments
+        if !self.structural_integrity.is_finite() {
+            tracing::warn!(target: "physics", "Invalid structural integrity: {}, cannot generate fragments", self.structural_integrity);
+            return vec![];
+        }
+
         if !self.can_fracture || self.fragments.is_empty() {
             return vec![];
         }

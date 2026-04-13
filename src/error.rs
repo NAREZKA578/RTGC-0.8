@@ -43,6 +43,40 @@ pub enum EngineError {
     Unknown(String),
 }
 
+/// Configuration-specific errors for better error handling
+#[derive(Error, Debug)]
+pub enum ConfigError {
+    #[error("Invalid configuration value: {0}")]
+    InvalidValue(String),
+    
+    #[error("Invalid FPS value: {0}. Must be between 1 and 1000.")]
+    InvalidFps(u32),
+    
+    #[error("Memory budget exceeded: {0} MB. Maximum allowed is 4096 MB.")]
+    MemoryBudgetExceeded(u32),
+    
+    #[error("Path traversal attempt detected")]
+    PathTraversal,
+    
+    #[error("Forbidden path: {0}")]
+    ForbiddenPath(String),
+    
+    #[error("Invalid graphics backend: {0}. Valid backends are: vulkan, dx12, opengl")]
+    InvalidBackend(String),
+    
+    #[error("File read error: {0}")]
+    FileReadError(String),
+    
+    #[error("File write error: {0}")]
+    FileWriteError(String),
+    
+    #[error("Parse error: {0}")]
+    ParseError(String),
+    
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+}
+
 /// Graphics-related errors
 #[derive(Error, Debug)]
 pub enum GraphicsError {
@@ -206,6 +240,7 @@ pub fn install_panic_hook() {
         };
         
         tracing::error!("Panic at {}: {}", location, message);
+        // eprintln! оставлен для случаев, когда tracing ещё не инициализирован (early panic)
         eprintln!("Panic at {}: {}", location, message);
     }));
 }

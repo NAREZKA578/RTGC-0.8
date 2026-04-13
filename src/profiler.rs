@@ -46,9 +46,14 @@ pub struct Profiler {
     frame_cpu_time_ms: f64,
     /// Total GPU time this frame (if available)
     frame_gpu_time_ms: Option<f64>,
+    /// Maximum number of measurements to keep per timer (circular buffer)
+    max_measurements: usize,
 }
 
 impl Profiler {
+    /// Maximum number of measurements to store per timer to prevent memory leaks
+    pub const MAX_MEASUREMENTS: usize = 1000;
+
     pub fn new() -> Self {
         Self {
             timers: HashMap::new(),
@@ -58,6 +63,7 @@ impl Profiler {
             frame_count: 0,
             frame_cpu_time_ms: 0.0,
             frame_gpu_time_ms: None,
+            max_measurements: Self::MAX_MEASUREMENTS,
         }
     }
 
@@ -68,12 +74,21 @@ impl Profiler {
     pub fn stop_timer(&mut self, name: &str) -> Option<f64> {
         if let Some(start_time) = self.timers.remove(name) {
             let elapsed = start_time.elapsed().as_secs_f64() * 1000.0; // Convert to milliseconds
-            self.measurements.entry(name.to_string())
-                .or_insert_with(Vec::new)
-                .push(elapsed);
+            
+            let measurements = self.measurements.entry(name.to_string())
+                .or_insert_with(Vec::new);
+            
+            // Circular buffer: remove oldest measurement if we're at capacity
+            if measurements.len() >= self.max_measurements {
+                measurements.remove(0);
+                tracing::warn!(target: "profiler", "Measurement buffer for '{}' full, dropping oldest", name);
+            }
+            
+            measurements.push(elapsed);
             self.frame_cpu_time_ms += elapsed;
             Some(elapsed)
         } else {
+            tracing::warn!(target: "profiler", "Timer '{}' not found", name);
             None
         }
     }
@@ -183,21 +198,20 @@ impl Profiler {
     }
 
     pub fn print_profile_report(&self) {
-        println!("=== Performance Profile Report ===");
-        println!("Frame: {}", self.frame_count);
-        println!("CPU Time: {:.3}ms", self.frame_cpu_time_ms);
+        tracing::info!(target: "profiler", "=== Performance Profile Report ===");
+        tracing::info!(target: "profiler", "Frame: {}", self.frame_count);
+        tracing::info!(target: "profiler", "CPU Time: {:.3}ms", self.frame_cpu_time_ms);
         if let Some(gpu_time) = self.frame_gpu_time_ms {
-            println!("GPU Time: {:.3}ms", gpu_time);
+            tracing::info!(target: "profiler", "GPU Time: {:.3}ms", gpu_time);
         }
-        println!();
-        println!("--- CPU Timings ---");
+        tracing::info!(target: "profiler", "--- CPU Timings ---");
         for (name, times) in &self.measurements {
             if !times.is_empty() {
                 let avg_time = times.iter().sum::<f64>() / times.len() as f64;
                 let min_time = times.iter().fold(f64::INFINITY, |a, &b| a.min(b));
                 let max_time = times.iter().fold(0.0_f64, |a, &b| a.max(b));
 
-                println!(
+                tracing::info!(target: "profiler", 
                     "{}: avg={:.3}ms, min={:.3}ms, max={:.3}ms, calls={}",
                     name,
                     avg_time,
@@ -207,24 +221,22 @@ impl Profiler {
                 );
             }
         }
-        println!();
-        println!("--- Memory Statistics ---");
-        println!("Current Usage: {} bytes ({:.2} MB)", 
+        tracing::info!(target: "profiler", "--- Memory Statistics ---");
+        tracing::info!(target: "profiler", "Current Usage: {} bytes ({:.2} MB)", 
             self.memory_stats.current_usage,
             self.memory_stats.current_usage as f64 / 1024.0 / 1024.0);
-        println!("Peak Usage: {} bytes ({:.2} MB)",
+        tracing::info!(target: "profiler", "Peak Usage: {} bytes ({:.2} MB)",
             self.memory_stats.peak_usage,
             self.memory_stats.peak_usage as f64 / 1024.0 / 1024.0);
-        println!("Total Allocated: {} bytes", self.memory_stats.total_allocated);
-        println!("Total Freed: {} bytes", self.memory_stats.total_freed);
-        println!("Allocation Count: {}", self.memory_stats.allocation_count);
-        println!("Deallocation Count: {}", self.memory_stats.deallocation_count);
-        println!();
-        println!("--- Allocations by Tag ---");
+        tracing::info!(target: "profiler", "Total Allocated: {} bytes", self.memory_stats.total_allocated);
+        tracing::info!(target: "profiler", "Total Freed: {} bytes", self.memory_stats.total_freed);
+        tracing::info!(target: "profiler", "Allocation Count: {}", self.memory_stats.allocation_count);
+        tracing::info!(target: "profiler", "Deallocation Count: {}", self.memory_stats.deallocation_count);
+        tracing::info!(target: "profiler", "--- Allocations by Tag ---");
         for (tag, size) in &self.memory_stats.allocations_by_tag {
-            println!("{}: {} bytes ({:.2} MB)", tag, size, *size as f64 / 1024.0 / 1024.0);
+            tracing::info!(target: "profiler", "{}: {} bytes ({:.2} MB)", tag, size, *size as f64 / 1024.0 / 1024.0);
         }
-        println!("===================================");
+        tracing::info!(target: "profiler", "===================================");
     }
 
     pub fn reset(&mut self) {
@@ -264,7 +276,7 @@ impl<'a> ProfileGuard<'a> {
         if let Ok(mut profiler) = get_profiler().lock() {
             profiler.start_timer(name);
         } else {
-            eprintln!("[Profiler] Failed to acquire lock for start_timer: {}", name);
+            tracing::error!(target: "profiler", "Failed to acquire profiler lock for start_timer: {}", name);
         }
         Self { name }
     }
@@ -272,10 +284,15 @@ impl<'a> ProfileGuard<'a> {
 
 impl<'a> Drop for ProfileGuard<'a> {
     fn drop(&mut self) {
-        if let Ok(mut profiler) = get_profiler().lock() {
-            profiler.stop_timer(self.name);
+        match get_profiler().lock() {
+            Ok(mut profiler) => {
+                profiler.stop_timer(self.name);
+            }
+            Err(e) => {
+                // Log error instead of silent fail - important for debugging deadlocks
+                tracing::error!(target: "profiler", "Failed to acquire profiler lock in Drop for '{}': {}. Profiling data may be lost.", self.name, e);
+            }
         }
-        // Silent fail on drop to avoid panics during unwinding
     }
 }
 

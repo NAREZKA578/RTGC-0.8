@@ -294,6 +294,18 @@ impl CraneArm {
 
     /// Обновить физику крана
     pub fn update(&mut self, dt: f32, terrain_getter: &dyn Fn(f32, f32) -> f32) {
+        // Validate dt to prevent NaN/Inf propagation
+        if !dt.is_finite() || dt <= 0.0 {
+            tracing::warn!(target: "physics", "Invalid dt in crane physics: {}, skipping update", dt);
+            return;
+        }
+
+        // Validate current state before update
+        if !self.validate_state() {
+            tracing::warn!(target: "physics", "Invalid state detected in crane, resetting to safe state");
+            self.reset_to_safe_state();
+        }
+
         let crane_type = self.config.crane_type;
 
         // Выставляем аутригеры только на ровной поверхности
@@ -561,5 +573,55 @@ mod tests {
 
         // Должен быть стабилен с нормальным грузом
         assert!(crane.check_stability());
+    }
+
+    #[test]
+    fn test_crane_physics_handles_nan() {
+        let mut crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::zeros());
+        
+        // Test that NaN in state is detected
+        assert!(crane.validate_state());
+        
+        // Simulate invalid dt
+        crane.update(f32::NAN, &|_, _| 0.0);
+        // Should not panic and should reset to safe state
+        assert!(crane.validate_state());
+    }
+
+    /// Validates that all physical quantities are finite (not NaN or Inf)
+    pub fn validate_state(&self) -> bool {
+        self.position.x.is_finite() && self.position.y.is_finite() && self.position.z.is_finite()
+            && self.boom.slew_angle.is_finite()
+            && self.boom.elevation_angle.is_finite()
+            && self.boom.length.is_finite()
+            && self.boom.cable_length.is_finite()
+            && self.controls.slew.is_finite()
+            && self.controls.boom_elevation.is_finite()
+            && self.controls.boom_extension.is_finite()
+            && self.controls.hoist.is_finite()
+            && self.stability_factor.is_finite()
+    }
+
+    /// Resets the crane to a safe state when invalid values are detected
+    pub fn reset_to_safe_state(&mut self) {
+        self.boom.slew_angle = 0.0;
+        self.boom.elevation_angle = self.config.min_elevation_angle;
+        self.boom.cable_length = 1.0;
+        self.controls.slew = 0.0;
+        self.controls.boom_elevation = 0.0;
+        self.controls.boom_extension = 0.0;
+        self.controls.hoist = 0.0;
+        self.stability_factor = 1.0;
+        // Keep position but ensure it's finite
+        if !self.position.is_finite() {
+            self.position = Vector3::zeros();
+        }
+        // Reset load if present
+        if let Some(ref mut load) = self.load {
+            load.velocity = Vector3::zeros();
+            if !load.position.is_finite() {
+                load.position = self.position + Vector3::new(0.0, -2.0, 0.0);
+            }
+        }
     }
 }

@@ -2,8 +2,10 @@
 //! Provides centralized configuration for all engine subsystems
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf, Component};
 use tracing::{warn, info};
+use crate::error::{ConfigError, Result};
+use crate::utils::sanitize_path as utils_sanitize_path;
 
 /// Main configuration structure containing all subsystem configs
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,19 +30,40 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Load configuration from a JSON file
-    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
-        let content = std::fs::read_to_string(path)?;
-        let config: Config = serde_json::from_str(&content)?;
-        info!("Configuration loaded successfully");
+    /// Load configuration from a JSON file with validation
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let content = std::fs::read_to_string(path.as_ref())
+            .map_err(|e| ConfigError::FileReadError(format!("Failed to read config file: {}", e)))?;
+        let config: Config = serde_json::from_str(&content)
+            .map_err(|e| ConfigError::ParseError(format!("Invalid JSON format: {}", e)))?;
+        
+        // Validate all sections
+        config.validate()?;
+        
+        info!("Configuration loaded and validated successfully");
         Ok(config)
     }
 
+    /// Validate all configuration sections
+    pub fn validate(&self) -> Result<()> {
+        self.graphics.validate()?;
+        self.physics.validate()?;
+        self.world.validate()?;
+        self.input.validate()?;
+        self.audio.validate()?;
+        Ok(())
+    }
+
     /// Save configuration to a JSON file
-    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
-        let content = serde_json::to_string_pretty(self)?;
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        // Validate before saving
+        self.validate()?;
+        
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| ConfigError::SerializationError(format!("Failed to serialize config: {}", e)))?;
         let path_ref = path.as_ref();
-        std::fs::write(path_ref, content)?;
+        std::fs::write(path_ref, content)
+            .map_err(|e| ConfigError::FileWriteError(format!("Failed to write config file: {}", e)))?;
         info!("Configuration saved to {:?}", path_ref);
         Ok(())
     }
@@ -61,6 +84,70 @@ pub struct GraphicsConfig {
     pub texture_streaming_budget_mb: u32,
     pub backend: String, // "vulkan", "dx12", "opengl"
     pub enable_validation: bool,
+}
+
+impl GraphicsConfig {
+    /// Validate graphics configuration values
+    pub fn validate(&self) -> Result<()> {
+        // Validate window dimensions
+        if self.window_width == 0 || self.window_width > 7680 {
+            return Err(ConfigError::InvalidValue(format!(
+                "window_width must be between 1 and 7680, got {}",
+                self.window_width
+            )));
+        }
+        if self.window_height == 0 || self.window_height > 4320 {
+            return Err(ConfigError::InvalidValue(format!(
+                "window_height must be between 1 and 4320, got {}",
+                self.window_height
+            )));
+        }
+
+        // Validate FPS
+        if let Some(fps) = self.max_fps {
+            if fps == 0 || fps > 1000 {
+                return Err(ConfigError::InvalidFps(fps));
+            }
+        }
+
+        // Validate MSAA
+        if self.msaa_samples != 0 && self.msaa_samples != 1 && self.msaa_samples != 2 
+            && self.msaa_samples != 4 && self.msaa_samples != 8 {
+            return Err(ConfigError::InvalidValue(format!(
+                "msaa_samples must be 0, 1, 2, 4, or 8, got {}",
+                self.msaa_samples
+            )));
+        }
+
+        // Validate shadow resolution
+        if self.shadow_resolution < 256 || self.shadow_resolution > 8192 {
+            return Err(ConfigError::InvalidValue(format!(
+                "shadow_resolution must be between 256 and 8192, got {}",
+                self.shadow_resolution
+            )));
+        }
+
+        // Validate anisotropy
+        if self.max_anisotropy < 1.0 || self.max_anisotropy > 16.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "max_anisotropy must be between 1.0 and 16.0, got {}",
+                self.max_anisotropy
+            )));
+        }
+
+        // Validate texture streaming budget (max 4GB)
+        if self.texture_streaming_budget_mb > 4096 {
+            return Err(ConfigError::MemoryBudgetExceeded(self.texture_streaming_budget_mb));
+        }
+
+        // Validate backend
+        let valid_backends = ["vulkan", "dx12", "opengl"];
+        if !valid_backends.contains(&self.backend.to_lowercase().as_str()) {
+            return Err(ConfigError::InvalidBackend(self.backend.clone()));
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for GraphicsConfig {
@@ -96,6 +183,61 @@ pub struct PhysicsConfig {
     pub async_physics: bool,
 }
 
+impl PhysicsConfig {
+    /// Validate physics configuration values
+    pub fn validate(&self) -> Result<()> {
+        // Validate substeps (must be >= 1 to avoid division by zero)
+        if self.substeps == 0 || self.substeps > 64 {
+            return Err(ConfigError::InvalidValue(format!(
+                "substeps must be between 1 and 64, got {}",
+                self.substeps
+            )));
+        }
+
+        // Validate solver iterations
+        if self.solver_iterations == 0 || self.solver_iterations > 256 {
+            return Err(ConfigError::InvalidValue(format!(
+                "solver_iterations must be between 1 and 256, got {}",
+                self.solver_iterations
+            )));
+        }
+
+        // Validate contact offset
+        if self.contact_offset <= 0.0 || self.contact_offset > 1.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "contact_offset must be between 0.0 and 1.0, got {}",
+                self.contact_offset
+            )));
+        }
+
+        // Validate rest offset
+        if self.rest_offset < 0.0 || self.rest_offset > 1.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "rest_offset must be between 0.0 and 1.0, got {}",
+                self.rest_offset
+            )));
+        }
+
+        // Validate max depenetration velocity
+        if self.max_depenetration_velocity <= 0.0 || self.max_depenetration_velocity > 10000.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "max_depenetration_velocity must be between 0.0 and 10000.0, got {}",
+                self.max_depenetration_velocity
+            )));
+        }
+
+        // Validate thread count
+        if self.thread_count == 0 || self.thread_count > 64 {
+            return Err(ConfigError::InvalidValue(format!(
+                "thread_count must be between 1 and 64, got {}",
+                self.thread_count
+            )));
+        }
+
+        Ok(())
+    }
+}
+
 impl Default for PhysicsConfig {
     fn default() -> Self {
         // Use std::thread::available_parallelism() instead of num_cpus::get()
@@ -128,6 +270,51 @@ pub struct WorldConfig {
     pub save_directory: String,
 }
 
+impl WorldConfig {
+    /// Validate world configuration values and sanitize paths
+    pub fn validate(&self) -> Result<()> {
+        // Validate chunk size
+        if self.chunk_size < 8 || self.chunk_size > 512 {
+            return Err(ConfigError::InvalidValue(format!(
+                "chunk_size must be between 8 and 512, got {}",
+                self.chunk_size
+            )));
+        }
+
+        // Validate render distance
+        if self.render_distance == 0 || self.render_distance > 100 {
+            return Err(ConfigError::InvalidValue(format!(
+                "render_distance must be between 1 and 100, got {}",
+                self.render_distance
+            )));
+        }
+
+        // Validate LOD distances
+        for (i, &dist) in self.terrainlod_distances.iter().enumerate() {
+            if dist <= 0.0 || dist > 10000.0 {
+                return Err(ConfigError::InvalidValue(format!(
+                    "terrainlod_distances[{}] must be between 0.0 and 10000.0, got {}",
+                    i, dist
+                )));
+            }
+        }
+
+        // Validate max entities
+        if self.max_entities == 0 || self.max_entities > 1000000 {
+            return Err(ConfigError::InvalidValue(format!(
+                "max_entities must be between 1 and 1000000, got {}",
+                self.max_entities
+            )));
+        }
+
+        // Sanitize and validate save directory path using centralized utility
+        utils_sanitize_path(&self.save_directory)
+            .map_err(|e| ConfigError::PathTraversal(format!("Invalid save directory: {}", e)))?;
+
+        Ok(())
+    }
+}
+
 impl Default for WorldConfig {
     fn default() -> Self {
         Self {
@@ -151,15 +338,26 @@ pub struct InputConfig {
     pub vibration_strength: f32,
 }
 
-impl Default for InputConfig {
-    fn default() -> Self {
-        Self {
-            mouse_sensitivity: 0.1,
-            invert_y: false,
-            gamepad_enabled: true,
-            vibration_enabled: true,
-            vibration_strength: 0.5,
+impl InputConfig {
+    /// Validate input configuration values
+    pub fn validate(&self) -> Result<()> {
+        // Validate mouse sensitivity
+        if self.mouse_sensitivity < 0.0 || self.mouse_sensitivity > 10.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "mouse_sensitivity must be between 0.0 and 10.0, got {}",
+                self.mouse_sensitivity
+            )));
         }
+
+        // Validate vibration strength
+        if self.vibration_strength < 0.0 || self.vibration_strength > 1.0 {
+            return Err(ConfigError::InvalidValue(format!(
+                "vibration_strength must be between 0.0 and 1.0, got {}",
+                self.vibration_strength
+            )));
+        }
+
+        Ok(())
     }
 }
 
@@ -175,19 +373,40 @@ pub struct AudioConfig {
     pub max_audio_sources: u32,
 }
 
-impl Default for AudioConfig {
-    fn default() -> Self {
-        Self {
-            master_volume: 1.0,
-            music_volume: 0.7,
-            sfx_volume: 0.8,
-            voice_volume: 0.9,
-            environmental_audio: true,
-            doppler_effect: true,
-            max_audio_sources: 64,
+impl AudioConfig {
+    /// Validate audio configuration values
+    pub fn validate(&self) -> Result<()> {
+        // Validate volume levels (0.0 to 1.0, but allow slightly above for headroom)
+        let volumes = [
+            ("master_volume", self.master_volume),
+            ("music_volume", self.music_volume),
+            ("sfx_volume", self.sfx_volume),
+            ("voice_volume", self.voice_volume),
+        ];
+
+        for (name, value) in volumes.iter() {
+            if *value < 0.0 || *value > 2.0 {
+                return Err(ConfigError::InvalidValue(format!(
+                    "{} must be between 0.0 and 2.0, got {}",
+                    name, value
+                )));
+            }
         }
+
+        // Validate max audio sources
+        if self.max_audio_sources == 0 || self.max_audio_sources > 512 {
+            return Err(ConfigError::InvalidValue(format!(
+                "max_audio_sources must be between 1 and 512, got {}",
+                self.max_audio_sources
+            )));
+        }
+
+        Ok(())
     }
 }
+
+// Примечание: функция sanitize_path удалена, теперь используется централизованная
+// версия из crate::utils::sanitize_path для единообразия во всём проекте
 
 #[cfg(test)]
 mod tests {

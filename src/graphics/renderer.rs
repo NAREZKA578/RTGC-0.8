@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{warn, info};
 
 /// Renderer trait for backend abstraction
 /// Примечание: не требуем Send так как glow::Context не реализует Send/Sync
@@ -1157,18 +1157,18 @@ impl Renderer {
                 if button == MouseButton::Left {
                     let new_game_y = self.height as f32 / 2.0 - 80.0;
                     if is_hovered(mouse_x, mouse_y, new_game_y) {
-                        println!("[MENU] New Game clicked");
+                        info!(target: "ui", "New Game clicked");
                         self.menu_state = MenuState::CharacterCreation;
                     }
 
                     let continue_y = self.height as f32 / 2.0 - 30.0;
                     if is_hovered(mouse_x, mouse_y, continue_y) {
-                        println!("[MENU] Continue clicked");
+                        info!(target: "ui", "Continue clicked");
                     }
 
                     let exit_y = self.height as f32 / 2.0 + 20.0;
                     if is_hovered(mouse_x, mouse_y, exit_y) {
-                        println!("[MENU] Exit clicked");
+                        info!(target: "ui", "Exit clicked");
                         std::process::exit(0);
                     }
                 }

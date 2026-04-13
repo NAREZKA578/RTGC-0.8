@@ -1,3 +1,12 @@
+//! Advanced Vehicle Physics for RTGC-0.8
+//!
+//! Реализация продвинутой физики транспортных средств:
+//! - Нелинейная подвеска с раздельным сжатием/отбоем
+//! - Симуляция давления и температуры шин
+//! - Износ шин и влияние на сцепление
+//! - Аэродинамическое сопротивление
+//! - Защита от NaN/Inf во всех вычислениях
+
 use nalgebra::{Matrix3, UnitQuaternion, Vector3};
 use std::f32::consts::PI;
 
@@ -28,6 +37,60 @@ pub struct AdvancedSuspension {
 }
 
 impl AdvancedSuspension {
+    /// Validates that all physical quantities are finite (not NaN or Inf)
+    pub fn validate_state(&self) -> bool {
+        self.spring_stiffness.is_finite()
+            && self.compression_damping.is_finite()
+            && self.rebound_damping.is_finite()
+            && self.rest_length.is_finite()
+            && self.current_length.is_finite()
+            && self.tire_pressure.is_finite()
+            && self.tire_temperature.is_finite()
+            && self.ambient_temperature.is_finite()
+            && self.tire_wear.is_finite()
+            && self.friction_coefficient.is_finite()
+            && self.slip_ratio.is_finite()
+            && self.slip_angle.is_finite()
+            && self.camber_angle.is_finite()
+    }
+
+    /// Resets suspension to a safe state when invalid values are detected
+    pub fn reset_to_safe_state(&mut self) {
+        if !self.spring_stiffness.is_finite() || self.spring_stiffness <= 0.0 {
+            self.spring_stiffness = 20000.0;
+        }
+        if !self.compression_damping.is_finite() || self.compression_damping < 0.0 {
+            self.compression_damping = 1500.0;
+        }
+        if !self.rebound_damping.is_finite() || self.rebound_damping < 0.0 {
+            self.rebound_damping = 2000.0;
+        }
+        if !self.rest_length.is_finite() || self.rest_length <= 0.0 {
+            self.rest_length = 0.5;
+        }
+        if !self.current_length.is_finite() {
+            self.current_length = self.rest_length;
+        }
+        if !self.tire_pressure.is_finite() || self.tire_pressure <= 0.0 {
+            self.tire_pressure = 32.0;
+        }
+        if !self.tire_temperature.is_finite() {
+            self.tire_temperature = self.ambient_temperature;
+        }
+        if !self.ambient_temperature.is_finite() {
+            self.ambient_temperature = 20.0;
+        }
+        if !self.tire_wear.is_finite() || self.tire_wear < 0.0 || self.tire_wear > 1.0 {
+            self.tire_wear = 0.0;
+        }
+        if !self.friction_coefficient.is_finite() || self.friction_coefficient <= 0.0 {
+            self.friction_coefficient = 0.8;
+        }
+        self.slip_ratio = 0.0;
+        self.slip_angle = 0.0;
+        self.camber_angle = 0.0;
+    }
+
     pub fn new(
         spring_stiffness: f32,
         compression_damping: f32,
@@ -415,6 +478,18 @@ impl AdvancedWheel {
         contact_normal: Vector3<f32>,
         dt: f32,
     ) -> (Vector3<f32>, f32) {
+        // Validate dt to prevent NaN/Inf propagation
+        if !dt.is_finite() || dt <= 0.0 {
+            tracing::warn!(target: "physics", "Invalid dt in advanced vehicle physics: {}, skipping update", dt);
+            return (Vector3::zeros(), 0.0);
+        }
+
+        // Validate suspension state before update
+        if !self.suspension.validate_state() {
+            tracing::warn!(target: "physics", "Invalid suspension state detected, resetting to safe state");
+            self.suspension.reset_to_safe_state();
+        }
+
         // Calculate forces from suspension model
         let (force, normal_force) = self.suspension.update_suspension(
             wheel_linear_velocity,
@@ -526,6 +601,12 @@ impl AdvancedVehicle {
         chassis_body: &mut crate::physics::RigidBody,
         dt: f32,
     ) {
+        // Validate dt to prevent NaN/Inf propagation
+        if !dt.is_finite() || dt <= 0.0 {
+            tracing::warn!(target: "physics", "Invalid dt in advanced vehicle physics: {}, skipping update", dt);
+            return;
+        }
+
         // Get chassis state
         let chassis_velocity = chassis_body.velocity;
         let chassis_angular_velocity = chassis_body.angular_velocity;
@@ -605,6 +686,13 @@ impl AdvancedVehicle {
     }
 
     pub fn apply_throttle(&mut self, throttle: f32) {
+        // Validate throttle input
+        if !throttle.is_finite() {
+            tracing::warn!(target: "physics", "Invalid throttle input: {}, clamping to 0.0", throttle);
+            self.engine_torque = 0.0;
+            return;
+        }
+
         // Calculate engine torque based on throttle input and engine characteristics
         // Simplified engine curve
         let normalized_rpm = self.engine_rpm / self.max_engine_rpm;
@@ -613,14 +701,82 @@ impl AdvancedVehicle {
     }
 
     pub fn apply_brakes(&mut self, brake_intensity: f32) {
+        // Validate brake input
+        if !brake_intensity.is_finite() {
+            tracing::warn!(target: "physics", "Invalid brake intensity: {}, clamping to 0.0", brake_intensity);
+            self.brake_torque = 0.0;
+            return;
+        }
         self.brake_torque = brake_intensity * 2000.0; // Max 2000 N*m per wheel
     }
 
     pub fn set_steering(&mut self, steering_input: f32) {
+        // Validate steering input
+        if !steering_input.is_finite() {
+            tracing::warn!(target: "physics", "Invalid steering input: {}, clamping to 0.0", steering_input);
+            self.steering_angle = 0.0;
+            return;
+        }
         self.steering_angle = steering_input * self.max_steering_angle;
     }
 
     pub fn shift_gear(&mut self, gear_ratio: f32) {
+        // Validate gear ratio
+        if !gear_ratio.is_finite() || gear_ratio <= 0.0 {
+            tracing::warn!(target: "physics", "Invalid gear ratio: {}, using default 1.0", gear_ratio);
+            self.gear_ratio = 1.0;
+            return;
+        }
         self.gear_ratio = gear_ratio;
+    }
+
+    /// Validates that all physical quantities in the vehicle are finite
+    pub fn validate_state(&self) -> bool {
+        self.engine_rpm.is_finite()
+            && self.gear_ratio.is_finite()
+            && self.final_drive_ratio.is_finite()
+            && self.steering_angle.is_finite()
+            && self.engine_torque.is_finite()
+            && self.brake_torque.is_finite()
+            && self.air_density.is_finite()
+            && self.aero_drag_coefficient.is_finite()
+            && self.frontal_area.is_finite()
+            && self.center_of_gravity.x.is_finite()
+            && self.center_of_gravity.y.is_finite()
+            && self.center_of_gravity.z.is_finite()
+            && self.wheels.iter().all(|w| {
+                w.rotation_angle.is_finite()
+                    && w.steering_angle.is_finite()
+                    && w.angular_velocity.is_finite()
+                    && w.drive_torque.is_finite()
+                    && w.brake_torque.is_finite()
+                    && w.suspension.validate_state()
+            })
+    }
+
+    /// Resets the vehicle to a safe state when invalid values are detected
+    pub fn reset_to_safe_state(&mut self) {
+        if !self.engine_rpm.is_finite() || self.engine_rpm < 0.0 {
+            self.engine_rpm = 0.0;
+        }
+        if !self.gear_ratio.is_finite() || self.gear_ratio <= 0.0 {
+            self.gear_ratio = 1.0;
+        }
+        if !self.final_drive_ratio.is_finite() || self.final_drive_ratio <= 0.0 {
+            self.final_drive_ratio = 3.5;
+        }
+        self.steering_angle = 0.0;
+        self.engine_torque = 0.0;
+        self.brake_torque = 0.0;
+
+        // Reset all wheels
+        for wheel in &mut self.wheels {
+            wheel.rotation_angle = 0.0;
+            wheel.steering_angle = 0.0;
+            wheel.angular_velocity = 0.0;
+            wheel.drive_torque = 0.0;
+            wheel.brake_torque = 0.0;
+            wheel.suspension.reset_to_safe_state();
+        }
     }
 }
