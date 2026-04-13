@@ -60,6 +60,12 @@ impl SpatialHash {
     /// Inserts an object at the given position into the spatial hash
     /// For AABB objects, use insert_aabb instead
     pub fn insert(&mut self, body_index: usize, position: &Vector3<f32>) {
+        // Validate position to prevent NaN from breaking spatial hashing
+        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
+            tracing::warn!(target: "physics", "NaN position in SpatialHash::insert, skipping");
+            return;
+        }
+        
         let cell_coords = self.world_to_cell(position);
         let hashed_coords = self.hash_coords(cell_coords);
 
@@ -72,6 +78,16 @@ impl SpatialHash {
     /// Inserts an AABB-defined object into all overlapping cells
     /// This ensures objects spanning multiple cells are found in all relevant cells
     pub fn insert_aabb(&mut self, body_index: usize, min: &Vector3<f32>, max: &Vector3<f32>) {
+        // Validate AABB bounds
+        if !min.x.is_finite() || !min.y.is_finite() || !min.z.is_finite() {
+            tracing::warn!(target: "physics", "NaN in AABB min, skipping insert_aabb");
+            return;
+        }
+        if !max.x.is_finite() || !max.y.is_finite() || !max.z.is_finite() {
+            tracing::warn!(target: "physics", "NaN in AABB max, skipping insert_aabb");
+            return;
+        }
+        
         let min_cell = self.world_to_cell(min);
         let max_cell = self.world_to_cell(max);
 
@@ -92,6 +108,12 @@ impl SpatialHash {
     /// Gets all potential collision candidates for a point query
     /// Returns indices of objects in the same and neighboring cells
     pub fn get_potential_collisions(&self, position: &Vector3<f32>) -> Vec<usize> {
+        // Validate position
+        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
+            tracing::warn!(target: "physics", "NaN position in get_potential_collisions, returning empty");
+            return Vec::new();
+        }
+        
         let mut candidates = Vec::new();
         let cell_coords = self.world_to_cell(position);
 

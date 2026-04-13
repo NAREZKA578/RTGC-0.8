@@ -881,8 +881,21 @@ impl Helicopter {
         }
     }
 
-    /// Основной шаг симуляции физики
+    /// Основной шаг симуляции физики с защитой от NaN/Inf
     pub fn update(&mut self, dt: f32) {
+        // Защита от некорректного dt
+        if !dt.is_finite() || dt <= 0.0 {
+            tracing::warn!(target: "physics", "Invalid dt in helicopter physics: {}, using default", dt);
+            return;
+        }
+
+        // Проверка текущего состояния на NaN/Inf перед началом обновления
+        if !self.validate_state() {
+            tracing::warn!(target: "physics", "Invalid state detected in helicopter, resetting to safe state");
+            self.reset_to_safe_state();
+            return;
+        }
+
         // 1. Обновляем состояние двигателя
         self.engine.update(
             dt,
@@ -920,6 +933,33 @@ impl Helicopter {
 
         // 7. Обновляем хвостовой ротор
         self.tail_rotor.current_rpm = self.main_rotor.current_rpm * 3.0; // Передаточное отношение
+
+        // Финальная проверка состояния после обновления
+        if !self.validate_state() {
+            tracing::error!(target: "physics", "State became invalid after helicopter update, resetting");
+            self.reset_to_safe_state();
+        }
+    }
+
+    /// Validate that all physics state values are finite (not NaN or Inf)
+    pub fn validate_state(&self) -> bool {
+        self.position.x.is_finite() && self.position.y.is_finite() && self.position.z.is_finite()
+            && self.velocity.x.is_finite() && self.velocity.y.is_finite() && self.velocity.z.is_finite()
+            && self.angular_velocity.x.is_finite() && self.angular_velocity.y.is_finite() && self.angular_velocity.z.is_finite()
+            && self.rotation.is_finite()
+            && self.main_rotor.current_rpm.is_finite()
+            && self.tail_rotor.current_rpm.is_finite()
+    }
+
+    /// Reset helicopter to a safe state when invalid values are detected
+    pub fn reset_to_safe_state(&mut self) {
+        tracing::info!(target: "physics", "Resetting helicopter to safe state");
+        self.velocity = nalgebra::Vector3::zeros();
+        self.angular_velocity = nalgebra::Vector3::zeros();
+        self.position.y = self.position.y.max(1.0); // Ensure we're above ground
+        self.main_rotor.current_rpm = self.main_rotor.idle_rpm;
+        self.tail_rotor.current_rpm = self.tail_rotor.target_rpm;
+        self.controls = HelicopterControls::new();
     }
 
     /// Обновление физики с интеграцией в PhysicsWorld

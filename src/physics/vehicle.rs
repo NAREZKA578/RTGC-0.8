@@ -209,13 +209,26 @@ impl Vehicle {
         &self.controls
     }
 
-    /// Updates the vehicle physics with surface type information
+    /// Updates the vehicle physics with surface type information and NaN/Inf protection
     pub fn update(
         &mut self,
         dt: f32,
         ground_height: impl Fn(f32, f32) -> f32,
         surface_getter: impl Fn(f32, f32) -> SurfaceType,
     ) {
+        // Validate dt
+        if !dt.is_finite() || dt <= 0.0 {
+            tracing::warn!(target: "physics", "Invalid dt in vehicle physics: {}, skipping update", dt);
+            return;
+        }
+
+        // Validate current state
+        if !self.validate_state() {
+            tracing::warn!(target: "physics", "Invalid state detected in vehicle, resetting to safe state");
+            self.reset_to_safe_state();
+            return;
+        }
+
         // Apply steering to front wheels
         let target_steering = self.controls.steering * self.config.max_steering_angle;
 
@@ -247,6 +260,35 @@ impl Vehicle {
 
         // Integrate rigid body motion
         self.body.update(dt);
+
+        // Final validation
+        if !self.validate_state() {
+            tracing::error!(target: "physics", "Vehicle state became invalid after update, resetting");
+            self.reset_to_safe_state();
+        }
+    }
+
+    /// Validate that all vehicle physics state values are finite
+    pub fn validate_state(&self) -> bool {
+        self.body.position.x.is_finite() && self.body.position.y.is_finite() && self.body.position.z.is_finite()
+            && self.body.velocity.x.is_finite() && self.body.velocity.y.is_finite() && self.body.velocity.z.is_finite()
+            && self.body.angular_velocity.x.is_finite() && self.body.angular_velocity.y.is_finite() && self.body.angular_velocity.z.is_finite()
+            && self.body.rotation.is_finite()
+    }
+
+    /// Reset vehicle to a safe state when invalid values are detected
+    pub fn reset_to_safe_state(&mut self) {
+        tracing::info!(target: "physics", "Resetting vehicle to safe state");
+        self.body.velocity = nalgebra::Vector3::zeros();
+        self.body.angular_velocity = nalgebra::Vector3::zeros();
+        self.body.position.y = self.body.position.y.max(0.5); // Ensure we're above ground
+        for wheel in &mut self.wheels {
+            wheel.angular_velocity = 0.0;
+            wheel.suspension_velocity = 0.0;
+        }
+        self.controls.throttle = 0.0;
+        self.controls.brake = 0.0;
+        self.controls.steering = 0.0;
     }
 
     /// Updates a single wheel's physics (simplified version to avoid borrow issues)

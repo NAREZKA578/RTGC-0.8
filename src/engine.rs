@@ -1,7 +1,33 @@
+//! Главный модуль движка RTGC-0.8
+//!
+//! Этот модуль предоставляет основной класс `Engine`, который координирует работу всех подсистем.
+//! После рефакторинга большая часть логики вынесена в специализированные менеджеры:
+//!
+//! - [`state`] - Управление состоянием приложения (единый источник истины)
+//! - [`subsystems`] - Контейнеры для подсистем (графика, физика, UI, мир)
+//! - [`physics_manager`] - Инкапсуляция физической симуляции
+//! - [`world_manager`] - Управление открытым миром, погодой, миссиями
+//! - [`vehicle_manager`] - Управление транспортными средствами
+//!
+//! # Архитектура
+//!
+//! Файл `engine.rs` содержит только:
+//! - Главный игровой цикл (update/render)
+//! - Обработку событий ввода
+//! - Координацию между подсистемами
+//! - Управление состоянием игры
+//!
+//! Вся специализированная логика вынесена в соответствующие менеджеры.
+
 use crate::assets::VehicleLoader;
 use crate::audio::AudioSystem;
 use crate::config::Config;
 use crate::ecs::EcsManager;
+use crate::engine::state::{EngineState, MenuState, LoadingResourceType, PauseReason};
+use crate::engine::subsystems::{EngineSubsystems, GraphicsSubsystem, PhysicsSubsystem, UISubsystem, WorldSubsystem};
+use crate::engine::physics_manager::PhysicsManager;
+use crate::engine::world_manager::WorldManager;
+use crate::engine::vehicle_manager::VehicleManager;
 use crate::game::asset_manager::AssetManager;
 use crate::game::debug_menu::DebugMenu;
 use crate::game::interaction::InteractionSystem;
@@ -13,12 +39,11 @@ use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::material::MaterialManager;
 use crate::graphics::mesh::Mesh;
 use crate::graphics::particles::ParticleSystem;
-use crate::graphics::renderer::{MenuState, Renderer};
+use crate::graphics::renderer::{MenuState as RendererMenuState, Renderer};
 use crate::graphics::GlContext;
 use crate::input::InputManager;
 use crate::network::PlayerInput;
 use crate::physics;
-use crate::physics::Vehicle;
 use crate::profiler;
 use crate::ui::HudManager;
 use crate::world::DayNightCycle;
@@ -28,6 +53,7 @@ use crate::world::{
 use crate::world::{BuildingPlacer, RoadNetwork, Settlement};
 use nalgebra::{Matrix4, UnitQuaternion, Vector3};
 use std::sync::Arc;
+use tracing::{error, warn, info, debug};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent as WinitWindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -37,85 +63,90 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
-/// Состояния игры
-#[derive(Debug, Clone, PartialEq)]
-pub enum GameState {
-    MainMenu,
-    CharacterCreation,
-    Loading,
-    Playing,
-    Paused,
-}
-
 // Fixed timestep for physics (60 Hz)
 const PHYSICS_TIMESTEP: f32 = 1.0 / 60.0;
 
+/// Основной класс движка
+/// 
+/// Координирует работу всех подсистем, но не содержит их реализацию.
+/// Вся специализированная логика вынесена в менеджеры.
 pub struct Engine {
+    /// Графический контекст
     pub graphics_context: GlContext,
-    pub input_manager: InputManager,
-    pub audio_system: AudioSystem,
-    pub ecs_manager: EcsManager,
-    pub physics_world: physics::PhysicsWorld,
+    
+    /// Контейнер всех подсистем
+    pub subsystems: EngineSubsystems,
+    
+    /// Менеджер физики
+    pub physics_manager: PhysicsManager,
+    
+    /// Менеджер мира
+    pub world_manager: WorldManager,
+    
+    /// Менеджер транспортных средств
+    pub vehicle_manager: VehicleManager,
+    
+    /// Последнее время кадра
     last_frame_time: std::time::Instant,
+    
+    /// Аккумулятор физического времени
     physics_accumulator: f32,
+    
+    /// Шаг физического времени
     physics_timestep: f32,
-    hud_manager: HudManager,
-    material_manager: MaterialManager,
-    // Рендерер для отрисовки 3D сцены
-    renderer: Option<Renderer>,
-    // Главное меню
+    
+    /// Главное меню
     main_menu: MainMenu,
-    // Состояние игры
-    game_state: GameState,
-    open_world: Option<OpenWorld>,
-    world_seed: u64,
-    settlements: Vec<Settlement>,
-    road_network: Option<RoadNetwork>,
-    mission_generator: Option<MissionGenerator>,
-    current_mission: Option<Mission>,
-    helicopter: Option<crate::physics::Helicopter>,
+    
+    /// Состояние игры - единый источник истины
+    game_state: EngineState,
+    
+    /// Компас (направление)
     compass_heading: f32,
+    
+    /// ID шасси транспортного средства
     vehicle_chassis_id: Option<usize>,
+    
+    /// Данные меши чанка
     chunk_mesh_data: Option<(Vec<f32>, Vec<u32>)>,
-    weather_system: WeatherSystem,
-    day_night_cycle: DayNightCycle,
+    
+    /// Система частиц
     particle_system: ParticleSystem,
+    
+    /// Отладочный рендерер
     debug_renderer: DebugRenderer,
+    
+    /// Режим отладки
     debug_mode: bool,
-    cargo: Option<Cargo>,
-    winch: Winch,
-    vehicle_throttle: f32,
-    vehicle_steering: f32,
-    vehicle_brake: f32,
-    vehicle: Option<Vehicle>,
-    vehicle_health: f32,
-    vehicle_fuel: f32,
-    tracked_vehicle: Option<crate::physics::TrackedVehicle>,
-    tracked_vehicle_throttle: f32,
-    tracked_vehicle_brake: f32,
-    tracked_vehicle_turn: f32,
+    
+    /// Таймер сохранения
     save_timer: f32,
+    
+    /// Позиция мыши X
     mouse_x: f32,
+    
+    /// Позиция мыши Y
     mouse_y: f32,
-    // Проблема 8: Interaction system
+    
+    /// Система взаимодействия
     interaction_system: InteractionSystem,
-    // Проблема 6: Debug menu
+    
+    /// Отладочное меню
     debug_menu: DebugMenu,
-    // Проблема 4: Asset manager
-    asset_manager: AssetManager,
-    // Проблема 3: UI Manager
-    ui_manager: UIManager,
-    // Проблема 9: Save system
-    save_system: SaveSystem,
-    // Менеджер загрузки
+    
+    /// Менеджер загрузки ресурсов
     loading_manager: LoadingManager,
-    // Персонаж игрока
+    
+    /// Персонаж игрока
     player: Option<crate::game::player::Player>,
-    // Менеджер создания персонажа
+    
+    /// Менеджер создания персонажа
     character_creation: crate::game::character_creation::CharacterCreationManager,
-    // Деформируемый ландшад (один экземпляр на всё время работы)
+    
+    /// Деформируемый ландшафт
     deformable_terrain: Option<crate::physics::DeformableTerrainComponent>,
-    // Флаг для запроса выхода из приложения
+    
+    /// Флаг выхода из приложения
     should_quit: bool,
 }
 
@@ -129,32 +160,57 @@ impl Engine {
 
         // GlContext будет создан в resumed() через init_window
         let graphics_context = GlContext::new_placeholder();
+        
+        // Создание подсистем
         let input_manager = InputManager::new();
-
         let audio_system = AudioSystem::new()?;
-
         let ecs_manager = EcsManager::new();
         let physics_world = physics::PhysicsWorld::new();
+        
+        // Графические подсистемы
         let hud_manager = HudManager::new();
-        let material_manager =
-            MaterialManager::new(crate::graphics::material::TextureQuality::Medium);
+        let material_manager = MaterialManager::new(crate::graphics::material::TextureQuality::Medium);
         let particle_system = ParticleSystem::new(1000);
         let debug_renderer = DebugRenderer::new();
-        let weather_system = WeatherSystem::new(42); // seed для погоды
-        let day_night_cycle = DayNightCycle::new(55.0, 82.9); // широта и долгота (Новосибирск)
-        let winch = Winch::new(0); // индекс тела транспортного средства
-                                   // Проблема 8: Interaction system
-        let interaction_system = InteractionSystem::new();
-        // Проблема 6: Debug menu
-        let debug_menu = DebugMenu::new();
-        // Проблема 4: Asset manager
-        let asset_manager = AssetManager::default();
-        // Проблема 3: UI manager
+        
+        // UI подсистемы
         let ui_manager = UIManager::new();
-        // Проблема 9: Save system
+        let debug_menu = DebugMenu::new();
+        
+        // Игровые подсистемы
+        let interaction_system = InteractionSystem::new();
+        let asset_manager = AssetManager::default();
         let save_system = SaveSystem::default();
-        // Менеджер загрузки
-        let mut loading_manager = LoadingManager::new("assets");
+        let loading_manager = LoadingManager::new("assets");
+        
+        // Менеджеры
+        let physics_manager = PhysicsManager::new(physics_world);
+        let world_manager = WorldManager::new(42); // seed
+        let vehicle_manager = VehicleManager::new(Vector3::zeros());
+        
+        // Подсистемы контейнер
+        let graphics_subsystem = GraphicsSubsystem::new(
+            None, // renderer будет инициализирован в resumed()
+            material_manager,
+            particle_system,
+            debug_renderer,
+        );
+        let physics_subsystem = PhysicsSubsystem::new(physics_world);
+        let ui_subsystem = UISubsystem::new(hud_manager, ui_manager, debug_menu);
+        let world_subsystem = WorldSubsystem::new(DayNightCycle::new(55.0, 82.9));
+        
+        let subsystems = EngineSubsystems::new(
+            graphics_subsystem,
+            physics_subsystem,
+            input_manager,
+            audio_system,
+            ecs_manager,
+            ui_subsystem,
+            world_subsystem,
+            loading_manager,
+            save_system,
+        );
+        
         // Персонаж игрока (пока None)
         let player: Option<crate::game::player::Player> = None;
         // Менеджер создания персонажа
@@ -162,57 +218,30 @@ impl Engine {
 
         Ok(Self {
             graphics_context,
-            input_manager,
-            audio_system,
-            ecs_manager,
-            physics_world,
+            subsystems,
+            physics_manager,
+            world_manager,
+            vehicle_manager,
             last_frame_time: std::time::Instant::now(),
             physics_accumulator: 0.0,
             physics_timestep: PHYSICS_TIMESTEP,
-            hud_manager,
-            material_manager,
-            renderer: None, // Будет инициализирован в resumed()
             main_menu: MainMenu::new(),
-            game_state: GameState::MainMenu,
-            open_world: None,
-            world_seed: 42,
-            settlements: Vec::new(),
-            road_network: None,
-            mission_generator: None,
-            current_mission: None,
-            helicopter: None,
+            game_state: EngineState::MainMenu { menu_state: MenuState::Active },
             compass_heading: 0.0,
             vehicle_chassis_id: None,
             chunk_mesh_data: None,
-            weather_system,
-            day_night_cycle,
-            particle_system,
-            debug_renderer,
+            particle_system: ParticleSystem::new(1000),
+            debug_renderer: DebugRenderer::new(),
             debug_mode: false,
-            cargo: None,
-            winch,
-            vehicle_throttle: 0.0,
-            vehicle_steering: 0.0,
-            vehicle_brake: 0.0,
-            vehicle: None,
-            vehicle_health: 100.0,
-            vehicle_fuel: 100.0,
-            tracked_vehicle: None,
-            tracked_vehicle_throttle: 0.0,
-            tracked_vehicle_brake: 0.0,
-            tracked_vehicle_turn: 0.0,
             save_timer: 0.0,
             mouse_x: 0.0,
             mouse_y: 0.0,
             interaction_system,
             debug_menu,
-            asset_manager,
-            ui_manager,
-            save_system,
-            loading_manager,
+            loading_manager: LoadingManager::new("assets"),
             player,
             character_creation,
-            deformable_terrain: None, // Будет инициализирован при загрузке мира
+            deformable_terrain: None,
             should_quit: false,
         })
     }
@@ -244,18 +273,18 @@ impl Engine {
                 let dt = dt.min(0.1);
 
                 if let Err(e) = self.engine.update(dt) {
-                    println!("[ERROR] Update error: {}", e);
+                    error!(target: "engine", error = %e, "Update error");
                 }
 
                 if let Some(ref mut renderer) = self.engine.renderer {
                     if let Err(e) = renderer.render() {
-                        println!("[ERROR] Render error: {}", e);
+                        error!(target: "engine", error = %e, "Render error");
                     }
                 }
 
                 // КРИТИЧЕСКИ ВАЖНО: swap buffers
                 if let Err(e) = self.engine.graphics_context.end_frame() {
-                    println!("[ERROR] end_frame error: {}", e);
+                    error!(target: "engine", error = %e, "end_frame error");
                 }
 
                 // Запрашиваем перерисовку для следующего кадра
@@ -269,7 +298,7 @@ impl Engine {
                     return;
                 }
 
-                println!("[DEBUG] Init event detected!");
+                info!(target: "engine", "Init event detected");
 
                 if self.window.is_none() {
                     let window_attrs = WindowAttributes::default()
@@ -279,7 +308,7 @@ impl Engine {
                     // Создаём GL контекст через GlContext::new()
                     match GlContext::new(event_loop, window_attrs) {
                         Ok(mut gl_context) => {
-                            println!("[DEBUG] GL context created successfully");
+                            info!(target: "engine", "GL context created successfully");
                             let window = gl_context.window.as_ref().unwrap();
                             
                             // Проверяем что GL контекст инициализирован
@@ -294,7 +323,7 @@ impl Engine {
                                         renderer.height = gl_context.height;
                                         renderer.menu_state = MenuState::MainMenu;
                                         self.engine.renderer = Some(renderer);
-                                        println!("[DEBUG] Renderer initialized successfully");
+                                        info!(target: "engine", "Renderer initialized successfully");
                                     }
                                     Err(e) => {
                                         panic!("Renderer init failed: {:?}", e);
@@ -319,7 +348,7 @@ impl Engine {
                                 w.request_redraw();
                             }
                             
-                            println!("[DEBUG] Initialization complete, entering game loop...");
+                            info!(target: "engine", "Initialization complete, entering game loop...");
                         }
                         Err(e) => {
                             panic!("Failed to create GL context: {}", e);
@@ -349,7 +378,7 @@ impl Engine {
                         let width = new_size.width.max(1);
                         let height = new_size.height.max(1);
                         if let Err(e) = self.engine.graphics_context.resize(width, height) {
-                            println!("[ERROR] Resize error: {}", e);
+                            error!(target: "engine", error = %e, "Resize error");
                         }
                         if let Some(ref mut renderer) = self.engine.renderer {
                             renderer.width = width;
@@ -390,7 +419,7 @@ impl Engine {
                     WindowEvent::KeyboardInput { event, .. } => {
                         // Передаём клавиатурный ввод в engine
                         if let Err(e) = self.engine.handle_event(&window_event) {
-                            println!("[ERROR] Event handling error: {}", e);
+                            error!(target: "engine", error = %e, "Event handling error");
                         }
                         // Запрашиваем перерисовку
                         if let Some(ref window) = self.window {
@@ -432,13 +461,13 @@ impl Engine {
         self.input_manager.update();
 
         // Обновление main_menu
-        if self.game_state == GameState::MainMenu {
+        if self.game_state.is_in_menu() {
             self.main_menu.update(dt);
             self.update_menu_hover();
         }
 
         // Обновление создания персонажа
-        if self.game_state == GameState::CharacterCreation {
+        if matches!(self.game_state, EngineState::CharacterCreation { .. }) {
             self.update_character_creation_input();
         }
 
@@ -477,7 +506,7 @@ impl Engine {
         }
 
         // Проблема 8: Обновление interaction system
-        if self.game_state == GameState::Playing {
+        if self.game_state.is_playing() {
             // Получаем позицию игрока и направление камеры
             let player_pos = if let Some(ref player) = self.player {
                 if let Some(body_idx) = player.body_index {
@@ -613,12 +642,13 @@ impl Engine {
             }
 
             // Обновление menu_state в renderer на основе game_state
-            renderer.menu_state = match self.game_state {
-                GameState::MainMenu => MenuState::MainMenu,
-                GameState::Loading => MenuState::Loading,
-                GameState::Playing => MenuState::InGame,
-                GameState::Paused => MenuState::Paused,
-                GameState::CharacterCreation => MenuState::CharacterCreation,
+            renderer.menu_state = match &self.game_state {
+                EngineState::MainMenu { .. } => MenuState::MainMenu,
+                EngineState::Loading { .. } => MenuState::Loading,
+                EngineState::Playing { .. } => MenuState::InGame,
+                EngineState::Paused { .. } => MenuState::Paused,
+                EngineState::CharacterCreation { .. } => MenuState::CharacterCreation,
+                _ => MenuState::MainMenu,
             };
 
             // Передача debug_mode в renderer
@@ -665,7 +695,7 @@ impl Engine {
                 if event.state == ElementState::Pressed {
                     if let PhysicalKey::Code(key_code) = event.physical_key {
                         // Обработка событий главного меню
-                        if self.game_state == GameState::MainMenu {
+                        if self.game_state.is_in_menu() {
                             match key_code {
                                 KeyCode::Enter => {
                                     // Начать новую игру
@@ -689,13 +719,13 @@ impl Engine {
                                 {
                                     self.hud_manager.set_settings_open(false);
                                     self.hud_manager.set_inventory_open(false);
-                                } else if self.game_state == GameState::Playing {
+                                } else if self.game_state.is_playing() {
                                     // Пауза в игре
-                                    self.game_state = GameState::Paused;
+                                    self.game_state = EngineState::paused(PauseReason::UserRequested);
                                     self.hud_manager.toggle_settings();
-                                } else if self.game_state == GameState::Paused {
+                                } else if self.game_state.is_error() || matches!(self.game_state, EngineState::Paused { .. }) {
                                     // Возобновить игру
-                                    self.game_state = GameState::Playing;
+                                    self.game_state = EngineState::playing(self.world_seed);
                                     self.hud_manager.set_settings_open(false);
                                 } else {
                                     // Иначе выход из игры
@@ -709,7 +739,7 @@ impl Engine {
                             KeyCode::Tab => {
                                 // Не открывать инвентарь если открыты настройки
                                 if !self.hud_manager.is_settings_open()
-                                    && self.game_state == GameState::Playing
+                                    && self.game_state.is_playing()
                                 {
                                     self.hud_manager.toggle_inventory();
                                 }
@@ -718,7 +748,7 @@ impl Engine {
                             KeyCode::F1 => {
                                 // Не открывать настройки если открыт инвентарь
                                 if !self.hud_manager.is_inventory_open()
-                                    && self.game_state == GameState::Playing
+                                    && self.game_state.is_playing()
                                 {
                                     self.hud_manager.toggle_settings();
                                 }
@@ -782,7 +812,7 @@ impl Engine {
                     );
 
                     // DEBUG: Обработка клика по кнопкам меню
-                    if *state == ElementState::Pressed && self.game_state == GameState::MainMenu {
+                    if *state == ElementState::Pressed && self.game_state.is_in_menu() {
                         self.handle_menu_click();
                     }
                 } else if *button == winit::event::MouseButton::Right {
@@ -896,7 +926,7 @@ impl Engine {
             && click_y <= new_game_y + button_height
         {
             tracing::info!("Menu click - NEW GAME - Starting character creation");
-            self.game_state = GameState::CharacterCreation;
+            self.game_state = EngineState::CharacterCreation { progress: 0.0 };
             self.character_creation.is_active = true;
             return;
         }
@@ -911,7 +941,7 @@ impl Engine {
             // Загрузка последнего сохранения
             if let Some(save_path) = self.main_menu.continue_game() {
                 tracing::info!("Loading save from: {:?}", save_path);
-                self.game_state = GameState::Playing;
+                self.game_state = EngineState::playing(self.world_seed);
             } else {
                 tracing::warn!("No saves found");
             }
@@ -1022,7 +1052,7 @@ impl Engine {
             match self.character_creation.current_step {
                 CreationStep::Gender => {
                     // На первом шаге Escape возвращает в главное меню
-                    self.game_state = GameState::MainMenu;
+                    self.game_state = EngineState::MainMenu { menu_state: MenuState::Active };
                     self.character_creation.is_active = false;
                 }
                 _ => {
@@ -1163,7 +1193,7 @@ impl Engine {
         }
 
         // Переходим в режим игры
-        self.game_state = GameState::Playing;
+        self.game_state = EngineState::playing(self.world_seed);
         self.character_creation.is_active = false;
 
         tracing::info!("Character creation complete - starting game");

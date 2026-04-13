@@ -633,7 +633,7 @@ impl ICommandList for GlCommandList {
         // Создаем или используем framebuffer
         let framebuffer = unsafe { self.context.create_framebuffer() }
             .unwrap_or_else(|_| {
-                eprintln!("[RHI] Failed to create framebuffer, using default");
+                tracing::error!(target: "rhi", "Failed to create framebuffer, using default");
                 glow::NativeFramebuffer(NonZeroU32::new(1).unwrap())
             });
 

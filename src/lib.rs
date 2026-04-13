@@ -14,7 +14,25 @@ pub mod world;
 pub mod game;
 pub mod network;
 pub mod utils;
+pub mod weather;
 
 // Core engine types re-export
 pub use nalgebra;
 pub use winit;
+
+// Re-export engine subsystems for easier access
+pub use engine::subsystems::{
+    EngineSubsystems,
+    GraphicsSubsystem,
+    PhysicsSubsystem,
+    UISubsystem,
+    WorldSubsystem,
+};
+
+// Re-export engine state types
+pub use engine::state::{
+    EngineState,
+    MenuState,
+    LoadingResourceType,
+    PauseReason,
+};

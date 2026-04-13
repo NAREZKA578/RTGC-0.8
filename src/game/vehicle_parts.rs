@@ -584,10 +584,7 @@ impl VehiclePartsSystem {
 
         // В реальной реализации применить деформацию к мешу
         // Здесь заглушка для демонстрации интеграции
-        eprintln!(
-            "DEBUG: Applying {} deformations to mesh",
-            deformations.len()
-        );
+        tracing::debug!(target: "vehicle", "Applying {} deformations to mesh", deformations.len());
     }
 
     /// Get total repair cost for all damaged parts

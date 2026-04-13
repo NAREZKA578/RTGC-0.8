@@ -574,8 +574,26 @@ impl TrackedVehicle {
         surface_getter: &dyn Fn(f32, f32) -> crate::world::SurfaceType,
         deformable_terrain: Option<&mut crate::physics::DeformableTerrainComponent>,
     ) {
+        // Validate dt to prevent NaN/Inf propagation
+        if !dt.is_finite() || dt <= 0.0 {
+            tracing::warn!(target: "physics", "Invalid dt in tracked vehicle physics: {}, skipping update", dt);
+            return;
+        }
+
+        // Validate current state before update
+        if !self.validate_state() {
+            tracing::warn!(target: "physics", "Invalid state detected in tracked vehicle, resetting to safe state");
+            self.reset_to_safe_state();
+        }
+
         // Вызываем основной метод update с terrain и surface
         self.update_with_surface(dt, terrain_getter, surface_getter, deformable_terrain);
+
+        // Validate state after update
+        if !self.validate_state() {
+            tracing::warn!(target: "physics", "State became invalid after update in tracked vehicle, resetting");
+            self.reset_to_safe_state();
+        }
 
         // Синхронизируем состояние тела шасси с PhysicsWorld если есть
         if let Some(chassis_id) = self.chassis_body_id {
@@ -586,6 +604,39 @@ impl TrackedVehicle {
                 body.velocity = self.linear_velocity;
                 body.angular_velocity = self.angular_velocity;
             }
+        }
+    }
+
+    /// Validates that all physical quantities are finite (not NaN or Inf)
+    pub fn validate_state(&self) -> bool {
+        self.position.x.is_finite() && self.position.y.is_finite() && self.position.z.is_finite()
+            && self.linear_velocity.x.is_finite() && self.linear_velocity.y.is_finite() && self.linear_velocity.z.is_finite()
+            && self.angular_velocity.x.is_finite() && self.angular_velocity.y.is_finite() && self.angular_velocity.z.is_finite()
+            && self.orientation.coords.w.is_finite() && self.orientation.coords.x.is_finite()
+            && self.orientation.coords.y.is_finite() && self.orientation.coords.z.is_finite()
+            && self.left_track_slip.is_finite() && self.right_track_slip.is_finite()
+            && self.fuel.is_finite() && self.engine_temperature.is_finite()
+    }
+
+    /// Resets the vehicle to a safe state when invalid values are detected
+    pub fn reset_to_safe_state(&mut self) {
+        self.linear_velocity = Vector3::zeros();
+        self.angular_velocity = Vector3::zeros();
+        self.left_track_slip = 0.0;
+        self.right_track_slip = 0.0;
+        // Keep position and orientation, but ensure they are finite
+        if !self.position.is_finite() {
+            self.position = Vector3::zeros();
+        }
+        if !self.orientation.is_finite() {
+            self.orientation = UnitQuaternion::identity();
+        }
+        // Reset engine parameters to safe values
+        if !self.engine_temperature.is_finite() {
+            self.engine_temperature = 60.0;
+        }
+        if !self.fuel.is_finite() {
+            self.fuel = self.max_fuel_capacity * 0.5;
         }
     }
 }

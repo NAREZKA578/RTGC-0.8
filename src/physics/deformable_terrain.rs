@@ -46,6 +46,46 @@ pub struct DeformableTerrainComponent {
     pub deformation_history: Vec<DeformationEvent>,
 }
 
+impl DeformableTerrainComponent {
+    /// Validate that all terrain state is finite and safe
+    pub fn validate_state(&self) -> bool {
+        // Check resolution is valid
+        if self.resolution.0 == 0 || self.resolution.1 == 0 {
+            return false;
+        }
+
+        // Check heightmap dimensions match resolution
+        if self.current_heightmap.len() != self.resolution.1 {
+            return false;
+        }
+
+        // Check all height values are finite
+        for row in &self.current_heightmap {
+            for &height in row {
+                if !height.is_finite() {
+                    return false;
+                }
+            }
+        }
+
+        // Check deformation properties
+        if !self.deformation_properties.max_depth.is_finite()
+            || !self.deformation_properties.max_depth.is_finite()
+        {
+            return false;
+        }
+
+        true
+    }
+
+    /// Reset terrain to a safe state
+    pub fn reset_to_safe_state(&mut self) {
+        tracing::warn!(target: "physics", "Resetting deformable terrain to safe state");
+        self.current_heightmap = self.original_heightmap.clone();
+        self.deformation_history.clear();
+    }
+}
+
 impl DeformableTerrainInterface for DeformableTerrainComponent {
     fn apply_deformation(
         &mut self,
@@ -95,6 +135,12 @@ impl DeformableTerrainComponent {
         position: Vector3<f32>,
         deformation_type: DeformationType,
     ) -> bool {
+        // Validate position to prevent NaN/Inf propagation
+        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
+            tracing::warn!(target: "physics", "Invalid position in terrain deformation: {:?}, skipping", position);
+            return false;
+        }
+
         let (grid_x, grid_z) = self.world_to_grid(position);
 
         if grid_x < 0
@@ -111,17 +157,25 @@ impl DeformableTerrainComponent {
         // Apply the deformation based on type
         match deformation_type {
             DeformationType::Dig(depth) => {
-                self.current_heightmap[grid_z][grid_x] -= depth;
+                if depth.is_finite() && depth > 0.0 {
+                    self.current_heightmap[grid_z][grid_x] -= depth;
+                }
             }
             DeformationType::Build(height) => {
-                self.current_heightmap[grid_z][grid_x] += height;
+                if height.is_finite() && height > 0.0 {
+                    self.current_heightmap[grid_z][grid_x] += height;
+                }
             }
             DeformationType::Press(force) => {
-                // Apply pressure that creates a depression with surrounding uplift
-                self.apply_pressure_deformation(grid_x, grid_z, force);
+                if force.is_finite() && force > 0.0 {
+                    // Apply pressure that creates a depression with surrounding uplift
+                    self.apply_pressure_deformation(grid_x, grid_z, force);
+                }
             }
             DeformationType::Smooth(factor) => {
-                self.smooth_around_point(grid_x, grid_z, factor);
+                if factor.is_finite() && factor > 0.0 && factor <= 1.0 {
+                    self.smooth_around_point(grid_x, grid_z, factor);
+                }
             }
         }
 

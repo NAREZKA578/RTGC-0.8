@@ -513,12 +513,28 @@ impl RigidBody {
 
     pub fn apply_force(&mut self, force: Vector3<f32>) {
         if !self.is_static {
-            self.forces += force;
+            // Validate force to prevent NaN propagation
+            if force.x.is_finite() && force.y.is_finite() && force.z.is_finite() {
+                self.forces += force;
+            } else {
+                tracing::warn!(target: "physics", "NaN force applied to rigid body, ignoring");
+            }
         }
     }
 
     pub fn apply_force_at_point(&mut self, force: Vector3<f32>, point: Vector3<f32>) {
         if !self.is_static {
+            // Validate inputs
+            if !force.x.is_finite() || !force.y.is_finite() || !force.z.is_finite() {
+                tracing::warn!(target: "physics", "NaN force in apply_force_at_point, ignoring");
+                return;
+            }
+            if !point.x.is_finite() || !point.y.is_finite() || !point.z.is_finite() {
+                tracing::warn!(target: "physics", "NaN point in apply_force_at_point, using position");
+                self.forces += force;
+                return;
+            }
+            
             self.forces += force;
             let r = point - self.position - self.center_of_mass;
             let torque = r.cross(&force);
@@ -528,28 +544,52 @@ impl RigidBody {
 
     pub fn apply_impulse(&mut self, impulse: Vector3<f32>) {
         if !self.is_static {
-            self.velocity += impulse * self.inverse_mass;
+            // Validate impulse
+            if impulse.x.is_finite() && impulse.y.is_finite() && impulse.z.is_finite() {
+                self.velocity += impulse * self.inverse_mass;
+            } else {
+                tracing::warn!(target: "physics", "NaN impulse applied, ignoring");
+            }
         }
     }
 
     pub fn apply_impulse_at_point(&mut self, impulse: Vector3<f32>, point: Vector3<f32>) {
         if !self.is_static {
+            // Validate inputs
+            if !impulse.x.is_finite() || !impulse.y.is_finite() || !impulse.z.is_finite() {
+                tracing::warn!(target: "physics", "NaN impulse in apply_impulse_at_point, ignoring");
+                return;
+            }
+            
             self.velocity += impulse * self.inverse_mass;
-            let r = point - self.position - self.center_of_mass;
-            let angular_impulse = r.cross(&impulse);
-            self.angular_velocity += self.inverse_inertia_tensor * angular_impulse;
+            
+            if point.x.is_finite() && point.y.is_finite() && point.z.is_finite() {
+                let r = point - self.position - self.center_of_mass;
+                let angular_impulse = r.cross(&impulse);
+                self.angular_velocity += self.inverse_inertia_tensor * angular_impulse;
+            }
         }
     }
 
     pub fn apply_torque(&mut self, torque: Vector3<f32>) {
         if !self.is_static {
-            self.torques += torque;
+            // Validate torque
+            if torque.x.is_finite() && torque.y.is_finite() && torque.z.is_finite() {
+                self.torques += torque;
+            } else {
+                tracing::warn!(target: "physics", "NaN torque applied, ignoring");
+            }
         }
     }
 
     pub fn apply_angular_impulse(&mut self, impulse: Vector3<f32>) {
         if !self.is_static {
-            self.angular_velocity += self.inverse_inertia_tensor * impulse;
+            // Validate impulse
+            if impulse.x.is_finite() && impulse.y.is_finite() && impulse.z.is_finite() {
+                self.angular_velocity += self.inverse_inertia_tensor * impulse;
+            } else {
+                tracing::warn!(target: "physics", "NaN angular impulse applied, ignoring");
+            }
         }
     }
 
