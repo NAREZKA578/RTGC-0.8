@@ -37,9 +37,8 @@ pub struct WorldManager {
 
 impl WorldManager {
     /// Создаёт новый менеджер мира
-    pub fn new(world_seed: u64) -> Self {
+    pub fn new(world_seed: u64, day_night_cycle: DayNightCycle) -> Self {
         let weather_system = WeatherSystem::new(world_seed);
-        let day_night_cycle = DayNightCycle::new(55.0, 82.9); // Новосибирск
         
         Self {
             open_world: None,
@@ -59,14 +58,39 @@ impl WorldManager {
         
         self.open_world = Some(OpenWorld::new(self.world_seed));
         
-        // TODO: Инициализация поселений и дорожной сети
-        // self.settlements = generate_settlements(self.world_seed);
-        // self.road_network = Some(RoadNetwork::generate(&self.settlements));
+        // Initialize settlements and road network
+        self.settlements = self.generate_settlements();
+        self.road_network = Some(RoadNetwork::generate(&self.settlements, self.world_seed));
         
-        // TODO: Инициализация генератора миссий
-        // self.mission_generator = Some(MissionGenerator::new(self.world_seed));
+        // Initialize mission generator
+        self.mission_generator = Some(MissionGenerator::new(self.world_seed));
         
         Ok(())
+    }
+    
+    /// Генерирует поселения на основе seed
+    fn generate_settlements(&self) -> Vec<Settlement> {
+        use rand::{Rng, SeedableRng};
+        use rand_chacha::ChaCha8Rng;
+        
+        let mut rng = ChaCha8Rng::seed_from_u64(self.world_seed);
+        let mut settlements = Vec::new();
+        
+        // Generate 5-10 settlements around the player start position
+        let num_settlements = rng.gen_range(5..=10);
+        
+        for i in 0..num_settlements {
+            let grid_x = rng.gen_range(-3..=3);
+            let grid_z = rng.gen_range(-3..=3);
+            let center_x = grid_x as f32 * 1000.0;
+            let center_z = grid_z as f32 * 1000.0;
+            
+            if let Some(settlement) = Settlement::generate(self.world_seed + i as u64, grid_x, grid_z, center_x, center_z) {
+                settlements.push(settlement);
+            }
+        }
+        
+        settlements
     }
     
     /// Обновляет все системы мира
@@ -134,8 +158,8 @@ impl WorldManager {
     }
     
     /// Генерирует новую миссию (если доступен генератор)
-    pub fn generate_mission(&mut self) -> Option<Mission> {
-        self.mission_generator.as_mut()?.generate()
+    pub fn generate_mission(&mut self, player_pos: Vector3<f32>) -> Option<Mission> {
+        self.mission_generator.as_mut()?.generate_mission(player_pos)
     }
     
     /// Сбрасывает мир

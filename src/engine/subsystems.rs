@@ -85,7 +85,8 @@ impl EngineSubsystems {
         self.physics.update(dt);
         self.ui.update(dt);
         self.world.update(dt);
-        // input, audio, ecs, loading, save обновляются по мере необходимости
+        self.ecs.update(dt);
+        // input, audio, loading, save обновляются по мере необходимости
     }
 }
 

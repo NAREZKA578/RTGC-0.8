@@ -321,7 +321,8 @@ impl Vehicle {
                 // Calculate suspension force
                 let spring_force = wheel.suspension_compression * self.config.suspension_stiffness;
                 let damping_force = wheel.suspension_velocity * self.config.suspension_damping;
-                let suspension_force = (spring_force + damping_force).max(0.0);
+                // Don't clamp to zero - damping can be negative (rebound)
+                let suspension_force = spring_force + damping_force;
 
                 // Apply suspension force to vehicle body
                 let force_dir = self.body.rotation * Vector3::new(0.0, 1.0, 0.0);
@@ -333,9 +334,13 @@ impl Vehicle {
                 let wheel_contact = wheel.is_in_contact;
                 let wheel_angular_vel = wheel.angular_velocity;
 
-                // Update wheel rotation based on vehicle speed
+                // Update wheel rotation based on vehicle speed with slip consideration
                 let linear_speed = self.body.velocity.norm();
-                wheel.angular_velocity = linear_speed / self.config.wheel_radius;
+                // Calculate wheel slip: difference between linear speed and rotational speed
+                let expected_angular_vel = linear_speed / self.config.wheel_radius;
+                // Apply some slip based on acceleration/braking (simplified)
+                let slip_factor = 1.0 + (drive_force * 0.01).clamp(-0.3, 0.3);
+                wheel.angular_velocity = expected_angular_vel * slip_factor;
 
                 (wheel_contact, wheel_angular_vel, wheel_contact)
             } else {
@@ -406,7 +411,8 @@ impl Vehicle {
             // Calculate suspension force
             let spring_force = wheel.suspension_compression * self.config.suspension_stiffness;
             let damping_force = wheel.suspension_velocity * self.config.suspension_damping;
-            let suspension_force = (spring_force + damping_force).max(0.0);
+            // Don't clamp to zero - damping can be negative (rebound)
+            let suspension_force = spring_force + damping_force;
 
             // Apply suspension force to vehicle body
             let force_dir = self.body.rotation * Vector3::new(0.0, 1.0, 0.0);
@@ -417,9 +423,12 @@ impl Vehicle {
             // Calculate tire forces based on slip and surface type
             self.apply_tire_forces(wheel, wheel_index, dt, ground_y, surface_type);
 
-            // Update wheel rotation based on vehicle speed
+            // Update wheel rotation based on vehicle speed with slip consideration
             let linear_speed = self.body.velocity.norm();
-            wheel.angular_velocity = linear_speed / self.config.wheel_radius;
+            let drive_force = self.controls.throttle * self.config.engine_power;
+            let expected_angular_vel = linear_speed / self.config.wheel_radius;
+            let slip_factor = 1.0 + (drive_force * 0.01).clamp(-0.3, 0.3);
+            wheel.angular_velocity = expected_angular_vel * slip_factor;
         } else {
             wheel.suspension_compression = 0.0;
             wheel.suspension_velocity = 0.0;
@@ -555,21 +564,24 @@ impl Vehicle {
             throttle_force / 4.0
         } else if is_front_wheel {
             // Front wheels
+            let slip_ratio = wheel.slip_ratio.abs().min(1.0);
             if self.controls.diff_front_lock || self.config.diff_front_locked {
                 // Locked diff: equal torque to both front wheels
-                throttle_force / 2.0
+                throttle_force * 0.5
             } else {
-                // Open diff: torque follows path of least resistance (simplified)
-                throttle_force / 2.0
+                // Open diff: torque follows path of least resistance
+                // More grip (less slip) = more torque
+                throttle_force * (1.0 - slip_ratio) * 0.5
             }
         } else {
             // Rear wheels
+            let slip_ratio = wheel.slip_ratio.abs().min(1.0);
             if self.controls.diff_rear_lock || self.config.diff_rear_locked {
                 // Locked diff: equal torque to both rear wheels
-                throttle_force / 2.0
+                throttle_force * 0.5
             } else {
-                // Open diff
-                throttle_force / 2.0
+                // Open diff: torque follows path of least resistance
+                throttle_force * (1.0 - slip_ratio) * 0.5
             }
         };
 

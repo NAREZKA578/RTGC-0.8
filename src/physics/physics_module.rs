@@ -21,7 +21,7 @@ pub const LAYER_WORLD: u32 = 0b0001;
 pub const LAYER_VEHICLE: u32 = 0b0010;
 pub const LAYER_CARGO: u32 = 0b0100;
 pub const LAYER_TRIGGER: u32 = 0b1000;
-pub const LAYER_PLAYER: u32 = 0b0010;
+pub const LAYER_PLAYER: u32 = 0b10000;
 
 /// Contact event for sound and effects (B6)
 #[derive(Debug, Clone)]
@@ -2625,46 +2625,105 @@ impl PhysicsWorld {
         height_map: &[Vec<f32>],
         scale: &Vector3<f32>,
     ) -> Option<RaycastHit> {
-        // Simplified terrain raycast
-        // For a real implementation, we'd use a heightfield-specific algorithm
-
-        // Just check if the ray hits the Y=0 plane (for a flat ground case)
-        if ray.direction.y >= 0.0 && ray.origin.y <= 0.0 {
-            return None; // Ray going up from below ground
+        // Реализация raycast для terrain с использованием height map
+        // Используем bilinear interpolation для определения высоты в точке
+        
+        if height_map.is_empty() || height_map[0].is_empty() {
+            return None;
         }
-
+        
+        let rows = height_map.len();
+        let cols = height_map[0].len();
+        
+        // Вычисляем размеры terrain
+        let half_size_x = (cols as f32 * scale.x) / 2.0;
+        let half_size_z = (rows as f32 * scale.z) / 2.0;
+        
+        // Находим пересечение луча с Y=0 плоскостью как начальное приближение
         if ray.direction.y == 0.0 {
-            return None; // Ray parallel to ground
+            return None; // Луч параллелен земле
         }
-
-        let t = -ray.origin.y / ray.direction.y;
-
+        
+        let t_flat = -ray.origin.y / ray.direction.y;
+        if t_flat < 0.0 {
+            return None; // Пересечение позади луча
+        }
+        
+        let hit_pos_flat = ray.origin + ray.direction * t_flat;
+        
+        // Проверяем, находится ли точка внутри bounds terrain
+        if hit_pos_flat.x < -half_size_x || hit_pos_flat.x > half_size_x 
+            || hit_pos_flat.z < -half_size_z || hit_pos_flat.z > half_size_z {
+            return None;
+        }
+        
+        // Преобразуем мировые координаты в UV координаты height map
+        let u = ((hit_pos_flat.x + half_size_x) / (half_size_x * 2.0)).clamp(0.0, 1.0);
+        let v = ((hit_pos_flat.z + half_size_z) / (half_size_z * 2.0)).clamp(0.0, 1.0);
+        
+        // Находим индексы ячеек
+        let col_f = u * (cols - 1) as f32;
+        let row_f = v * (rows - 1) as f32;
+        
+        let col0 = col_f.floor() as usize;
+        let row0 = row_f.floor() as usize;
+        let col1 = (col0 + 1).min(cols - 1);
+        let row1 = (row0 + 1).min(rows - 1);
+        
+        // Bilinear interpolation высоты
+        let h00 = height_map[row0][col0] * scale.y;
+        let h01 = height_map[row0][col1] * scale.y;
+        let h10 = height_map[row1][col0] * scale.y;
+        let h11 = height_map[row1][col1] * scale.y;
+        
+        let du = col_f - col0 as f32;
+        let dv = row_f - row0 as f32;
+        
+        let height = (1.0 - du) * (1.0 - dv) * h00 
+                   + du * (1.0 - dv) * h01 
+                   + (1.0 - du) * dv * h10 
+                   + du * dv * h11;
+        
+        // Теперь проверяем реальное пересечение с поверхностью на этой высоте
+        let t = (height - ray.origin.y) / ray.direction.y;
+        
         if t < 0.0 {
-            return None; // Intersection behind ray origin
+            return None;
         }
-
+        
         let hit_pos = ray.origin + ray.direction * t;
-
-        // Check if the hit position is within the terrain bounds
-        let half_size_x = scale.x / 2.0;
-        let half_size_z = scale.z / 2.0;
-
-        if hit_pos.x >= -half_size_x
-            && hit_pos.x <= half_size_x
-            && hit_pos.z >= -half_size_z
-            && hit_pos.z <= half_size_z
-        {
-            Some(RaycastHit {
-                point: hit_pos,
-                normal: Vector3::new(0.0, 1.0, 0.0),
-                distance: t,
-                body_index: 0, // Will be set by raycast_single_body caller
-                layer: 0,
-                object_id: 0,
-            })
-        } else {
-            None
+        
+        // Проверяем bounds ещё раз с учётом реальной высоты
+        if hit_pos.x < -half_size_x || hit_pos.x > half_size_x 
+            || hit_pos.z < -half_size_z || hit_pos.z > half_size_z {
+            return None;
         }
+        
+        // Вычисляем нормаль через конечные разности
+        let eps = scale.x / cols as f32;
+        let u_eps = ((hit_pos.x + eps + half_size_x) / (half_size_x * 2.0)).clamp(0.0, 1.0);
+        let v_eps = ((hit_pos.z + eps + half_size_z) / (half_size_z * 2.0)).clamp(0.0, 1.0);
+        
+        let col_eps = (u_eps * (cols - 1) as f32).floor() as usize;
+        let row_eps = (v_eps * (rows - 1) as f32).floor() as usize;
+        
+        let h_right = height_map[row0.min(rows-1)][col_eps.min(cols-1)] * scale.y;
+        let h_up = height_map[row_eps.min(rows-1)][col0.min(cols-1)] * scale.y;
+        
+        let dx = (h_right - height) / eps;
+        let dz = (h_up - height) / eps;
+        
+        let mut normal = Vector3::new(-dx, 1.0, -dz);
+        normal.normalize_mut();
+        
+        Some(RaycastHit {
+            point: hit_pos,
+            normal,
+            distance: t,
+            body_index: 0,
+            layer: LAYER_WORLD,
+            object_id: 0,
+        })
     }
 
     fn raycast_mesh(
@@ -2905,16 +2964,37 @@ impl PhysicsWorld {
     }
 }
 
+/// Global physics world reference for raycast queries
+static mut GLOBAL_PHYSICS_WORLD: Option<*const PhysicsWorld> = None;
+
+/// Set the global physics world pointer for raycast queries
+pub fn set_global_physics_world(world: &PhysicsWorld) {
+    unsafe {
+        GLOBAL_PHYSICS_WORLD = Some(world as *const PhysicsWorld);
+    }
+}
+
 /// Global raycast function for interaction system
-/// This is a placeholder that returns None - should be connected to actual physics world
 pub fn raycast_world(
     origin: nalgebra::Vector3<f32>,
     direction: nalgebra::Vector3<f32>,
     max_distance: f32,
 ) -> Option<RaycastHit> {
-    // Placeholder - in actual usage, this should call physics_world.raycast()
-    // For now, return None to allow compilation
-    None
+    unsafe {
+        if let Some(world_ptr) = GLOBAL_PHYSICS_WORLD {
+            let world = &*world_ptr;
+            let ray = Ray { origin, direction };
+            world.raycast(&ray).and_then(|hit| {
+                if hit.distance <= max_distance {
+                    Some(hit)
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

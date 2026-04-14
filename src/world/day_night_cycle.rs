@@ -135,7 +135,7 @@ impl DayNightCycle {
     pub fn new(latitude: f32, longitude: f32) -> Self {
         let mut cycle = Self {
             current_time: 12.0 * 3600.0, // Start at noon
-            day_duration: 86400.0, // 24 hours
+            day_duration: 14400.0, // 4 real hours = 1 game day (per GDD)
             year_day: 172, // Summer solstice (approx)
             latitude,
             longitude,

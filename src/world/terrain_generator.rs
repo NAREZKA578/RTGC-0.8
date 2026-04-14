@@ -14,9 +14,10 @@ use tracing::{info, warn};
 use crate::world::chunk::ChunkData;
 
 /// Surface types affecting vehicle physics
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SurfaceType {
     /// Good asphalt: friction 0.85, low rolling resistance
+    #[default]
     AsphaltGood,
     /// Bad asphalt (potholes): friction 0.75, vibration
     AsphaltBad,

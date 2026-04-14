@@ -88,6 +88,31 @@ pub struct LoadingProgress {
     pub eta_seconds: Option<f32>,
 }
 
+/// Этап загрузки для детального прогресс-бара
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoadingStage {
+    InitWorld,
+    GeneratingSettlements,
+    LoadingTerrain { chunks_done: u32, chunks_total: u32 },
+    LoadingVehicle(String),
+    GeneratingMissions,
+    LoadingAudio,
+    BuildingLOD,
+    SpawningPhysics,
+    UploadingGPU,
+    Finalizing,
+    Done,
+}
+
+/// Состояние загрузки с поддержкой этапов
+#[derive(Debug, Clone)]
+pub struct LoadingStateDetailed {
+    pub stage: LoadingStage,
+    pub progress: f32,         // 0.0 .. 1.0
+    pub status_text: String,   // "Загрузка Новосибирска..."
+    pub error: Option<String>, // если что-то упало
+}
+
 /// Менеджер загрузки - проверяет и отслеживает все ресурсы
 pub struct LoadingManager {
     /// Список всех ресурсов
@@ -96,6 +121,8 @@ pub struct LoadingManager {
     load_queue: Vec<String>,
     /// Текущее состояние
     state: LoadingState,
+    /// Детальное состояние загрузки
+    detailed_state: LoadingStateDetailed,
     /// Время начала загрузки
     start_time: Option<Instant>,
     /// Время завершения загрузки
@@ -138,6 +165,12 @@ impl LoadingManager {
             resources: HashMap::new(),
             load_queue: Vec::new(),
             state: LoadingState::Idle,
+            detailed_state: LoadingStateDetailed {
+                stage: LoadingStage::InitWorld,
+                progress: 0.0,
+                status_text: "Инициализация...".to_string(),
+                error: None,
+            },
             start_time: None,
             end_time: None,
             asset_root: PathBuf::from(asset_root),
@@ -181,6 +214,35 @@ impl LoadingManager {
             "Added resource: {} (type: {:?}, priority: {})",
             path, resource_type, priority
         );
+    }
+
+    /// Получить детализированное состояние загрузки
+    pub fn get_detailed_state(&self) -> &LoadingStateDetailed {
+        &self.detailed_state
+    }
+
+    /// Установить текущий этап загрузки
+    pub fn set_stage(&mut self, stage: LoadingStage, progress: f32, status_text: String) {
+        self.detailed_state.stage = stage;
+        self.detailed_state.progress = progress;
+        self.detailed_state.status_text = status_text;
+        
+        // Вызываем callback если есть
+        if let Some(ref callback) = self.progress_callback {
+            let loading_progress = self.get_progress();
+            callback(loading_progress);
+        }
+    }
+
+    /// Обновить прогресс текущего этапа
+    pub fn update_stage_progress(&mut self, progress: f32) {
+        self.detailed_state.progress = progress.clamp(0.0, 1.0);
+    }
+
+    /// Установить ошибку загрузки
+    pub fn set_error(&mut self, error: String) {
+        self.detailed_state.error = Some(error);
+        self.state = LoadingState::Failed;
     }
 
     /// Проверить наличие всех файлов

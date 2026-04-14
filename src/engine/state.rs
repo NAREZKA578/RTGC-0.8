@@ -178,6 +178,32 @@ impl EngineState {
         matches!(self, EngineState::Error { .. })
     }
     
+    /// Проверяет, находится ли движок на паузе
+    pub fn is_paused(&self) -> bool {
+        matches!(self, EngineState::Paused { .. })
+    }
+    
+    /// Переключает состояние паузы (Paused <-> Playing)
+    pub fn toggle_pause(&mut self) {
+        *self = match self {
+            EngineState::Playing { world_id, player_count } => {
+                EngineState::Paused {
+                    reason: PauseReason::User,
+                    overlay_visible: true,
+                }
+            }
+            EngineState::Paused { reason: _, overlay_visible: _ } => {
+                // Возвращаемся в Playing с дефолтными значениями
+                // В реальной игре нужно сохранить world_id и player_count
+                EngineState::Playing {
+                    world_id: 0,
+                    player_count: 1,
+                }
+            }
+            _ => return, // Не переключаем в других состояниях
+        };
+    }
+    
     /// Возвращает прогресс загрузки, если применимо
     pub fn loading_progress(&self) -> Option<f32> {
         match self {
