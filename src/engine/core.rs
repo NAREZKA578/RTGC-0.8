@@ -20,7 +20,8 @@ use crate::graphics::debug_renderer::DebugRenderer;
 use crate::ui::HudManager;
 use crate::game::interaction::InteractionSystem;
 use crate::game::debug_menu::DebugMenu;
-use crate::game::loading_manager::LoadingManager;
+use crate::game::loading_manager::{LoadingManager, LoadingStage, LoadingStateDetailed};
+use crate::physics::set_global_physics_world;
 use nalgebra::Vector3;
 use std::time::Instant;
 use tracing::{info, error, warn};
@@ -111,17 +112,21 @@ impl Engine {
         
         // Создание менеджеров
         let physics_manager = PhysicsManager::new(subsystems.physics.physics_world.clone());
-        let world_manager = WorldManager::new(42); // seed
+        
+        // Set global physics world pointer for raycast queries
+        set_global_physics_world(&subsystems.physics.physics_world);
+        
+        let world_manager = WorldManager::new(42, subsystems.world.day_night_cycle.clone());
         let vehicle_manager = VehicleManager::new(Vector3::zeros());
         let input_manager = InputManagerWrapper::new();
         
-        // Создание менеджера игрового цикла
+        // Создание менеджера игрового цикла - используем те же экземпляры из subsystems для избежания дублирования
         let game_loop_manager = GameLoopManager::new(
             InteractionSystem::new(),
-            DebugMenu::new(),
-            HudManager::new(),
-            ParticleSystem::new(1000),
-            DebugRenderer::new(),
+            subsystems.ui.debug_menu.clone(),
+            subsystems.ui.hud_manager.clone(),
+            subsystems.graphics.particles.clone(),
+            subsystems.graphics.debug_renderer.clone(),
         );
         
         Ok(Self {
@@ -264,6 +269,9 @@ impl ApplicationHandler for GameApp<'_> {
                                     self.engine.game_state = EngineState::paused(
                                         crate::engine::state::PauseReason::UserRequested
                                     );
+                                } else if self.engine.game_state.is_paused() {
+                                    // Снятие с паузы - возврат в игру
+                                    self.engine.game_state = EngineState::playing();
                                 } else if self.engine.game_state.is_in_menu() {
                                     self.engine.should_quit = true;
                                     event_loop.exit();
@@ -345,6 +353,15 @@ impl Engine {
         // Обновление ввода
         self.input_manager.update();
         
+        // Передача ввода от игрока к физике транспорта
+        if let Some(vehicle_input) = self.input_manager.state().get_vehicle_input() {
+            self.physics_manager.set_vehicle_inputs(
+                vehicle_input.throttle,
+                vehicle_input.steering,
+                vehicle_input.brake,
+            );
+        }
+        
         // Физический шаг с фиксированным timestep
         self.physics_accumulator += dt;
         while self.physics_accumulator >= self.physics_timestep {
@@ -354,14 +371,33 @@ impl Engine {
             self.physics_accumulator -= self.physics_timestep;
         }
         
+        // Синхронизация физики с рендером: передача позиции транспорта в камеру
+        if let Some(vehicle) = self.physics_manager.get_vehicle() {
+            let pos = vehicle.get_position();
+            let rot = vehicle.get_rotation();
+            if let Some(ref mut rm) = self.render_manager {
+                rm.set_vehicle_transform(pos, rot);
+                rm.update_camera_from_vehicle(pos, rot);
+            }
+        }
+        
+        // Синхронизация мира с рендером: освещение, небо, погода
+        let hour = self.world_manager.get_current_hour();
+        let sun_dir = self.world_manager.get_day_night_cycle().get_sun_direction();
+        let (sky_top, sky_horizon) = self.world_manager.get_day_night_cycle().get_sky_colors();
+        if let Some(ref mut rm) = self.render_manager {
+            rm.set_sky_colors(sky_top, sky_horizon);
+            rm.set_sun_direction(sun_dir);
+        }
+        
         // Обновление мира
         if let Err(e) = self.world_manager.update(dt) {
             error!(target: "world", "World update error: {:?}", e);
         }
         
         // Обновление игрового цикла
-        let player_position = None; // TODO: получить из player
-        let player_forward = Vector3::z();
+        let player_position = self.vehicle_manager.get_player_position();
+        let player_forward = self.vehicle_manager.get_player_forward();
         if let Err(e) = self.game_loop_manager.update(dt, &self.game_state, player_position, player_forward) {
             error!(target: "gameloop", "Game loop update error: {:?}", e);
         }

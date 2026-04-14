@@ -97,6 +97,40 @@ impl RenderManager {
         }
     }
     
+    /// Обновляет камеру на основе позиции транспорта (общая версия)
+    pub fn update_camera_from_vehicle(&mut self, position: nalgebra::Vector3<f32>, rotation: nalgebra::Quaternion<f32>) {
+        if let Some(ref mut renderer) = self.renderer {
+            // Камера следует за транспортом с небольшим смещением
+            let offset = rotation * nalgebra::Vector3::new(0.0, 5.0, 10.0);
+            renderer.camera.position = position + offset;
+            renderer.camera.target = position;
+            renderer.camera.update();
+        }
+    }
+    
+    /// Устанавливает трансформацию транспорта для рендеринга
+    pub fn set_vehicle_transform(&mut self, position: nalgebra::Vector3<f32>, rotation: nalgebra::Quaternion<f32>) {
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.vehicle_position = Some(position);
+            renderer.vehicle_rotation = Some(rotation);
+        }
+    }
+    
+    /// Устанавливает цвета неба
+    pub fn set_sky_colors(&mut self, top_color: nalgebra::Vector3<f32>, horizon_color: nalgebra::Vector3<f32>) {
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.sky_top_color = top_color;
+            renderer.sky_horizon_color = horizon_color;
+        }
+    }
+    
+    /// Устанавливает направление солнца
+    pub fn set_sun_direction(&mut self, sun_dir: nalgebra::Vector3<f32>) {
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.sun_direction = sun_dir;
+        }
+    }
+    
     /// Устанавливает состояние меню в рендерере
     pub fn set_menu_state(&mut self, menu_state: MenuState) {
         if let Some(ref mut renderer) = self.renderer {

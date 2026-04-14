@@ -97,6 +97,9 @@ impl PhysicsManager {
             if !vehicle.validate_state() {
                 warn!(target: "physics", "Vehicle state invalid, resetting");
                 vehicle.reset_to_safe_state();
+            } else {
+                // Вызываем update для применения физики колёс, подвески и аэродинамики
+                vehicle.update(dt, |x, z| 0.0, |x, z| crate::physics::SurfaceType::default());
             }
         }
         
@@ -127,6 +130,9 @@ impl PhysicsManager {
         
         // Шаг физического мира
         self.physics_world.step(dt);
+        
+        // Обновляем глобальный указатель на физический мир для raycast
+        crate::physics::set_global_physics_world(&self.physics_world);
         
         Ok(())
     }

@@ -131,6 +131,31 @@ impl Mesh {
             }
         }
     }
+    
+    /// Create an empty mesh (for error cases)
+    pub fn empty(gl: &Context) -> Self {
+        Self::new_placeholder()
+    }
+
+    /// Generate a hash key for vertex/indice data for caching
+    pub fn generate_mesh_key(vertices: &[f32], indices: &[u32]) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let mut hasher = DefaultHasher::new();
+        vertices.len().hash(&mut hasher);
+        indices.len().hash(&mut hasher);
+        // Hash first and last few elements as a quick fingerprint
+        if vertices.len() >= 8 {
+            vertices[0].to_bits().hash(&mut hasher);
+            vertices[vertices.len() - 1].to_bits().hash(&mut hasher);
+        }
+        if indices.len() >= 2 {
+            indices[0].hash(&mut hasher);
+            indices[indices.len() - 1].hash(&mut hasher);
+        }
+        hasher.finish()
+    }
 
     pub fn new_raw(gl: &Context, vertices: &[f32], indices: &[u32]) -> Result<Self, String> {
         unsafe {

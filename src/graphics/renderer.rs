@@ -273,6 +273,9 @@ pub struct Renderer {
     terrain_mesh: Option<Mesh>,
     vehicle_box_mesh: Option<Mesh>,
     vehicle_transform: Option<(Vector3<f32>, UnitQuaternion<f32>)>,
+    // Позиция и вращение транспорта для рендеринга (новые поля)
+    pub vehicle_position: Option<Vector3<f32>>,
+    pub vehicle_rotation: Option<UnitQuaternion<f32>>,
     // Window dimensions for HUD rendering
     pub width: u32,
     pub height: u32,
@@ -284,7 +287,12 @@ pub struct Renderer {
     // Weather and Day/Night cycle support
     sky_color_top: Vector3<f32>,
     sky_color_horizon: Vector3<f32>,
+    // Цвета неба для внешнего доступа (новые поля)
+    pub sky_top_color: Vector3<f32>,
+    pub sky_horizon_color: Vector3<f32>,
     sun_direction: Vector3<f32>,
+    // Направление солнца для внешнего доступа (новое поле)
+    pub sun_direction: Vector3<f32>,
     ambient_intensity: f32,
     vehicle_lights_enabled: bool,
     // Задача 2: Vehicle shader
@@ -312,6 +320,8 @@ pub struct Renderer {
     particle_system: ParticleSystem,
     // Debug mode flag
     pub debug_mode: bool,
+    // Кэш для LOD мешей чтобы не создавать их каждый кадр
+    lod_mesh_cache: HashMap<u64, Mesh>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -484,10 +494,18 @@ impl Renderer {
             terrain_mesh: None,
             vehicle_box_mesh: None,
             vehicle_transform: None,
+            // Позиция и вращение транспорта для рендеринга
+            vehicle_position: None,
+            vehicle_rotation: None,
             hud_data: None,
             // Weather and Day/Night defaults
             sky_color_top: Vector3::new(0.4, 0.6, 0.9),
             sky_color_horizon: Vector3::new(0.7, 0.8, 0.9),
+            // Цвета неба для внешнего доступа
+            sky_top_color: Vector3::new(0.4, 0.6, 0.9),
+            sky_horizon_color: Vector3::new(0.7, 0.8, 0.9),
+            sun_direction: Vector3::y(),
+            // Направление солнца для внешнего доступа
             sun_direction: Vector3::y(),
             ambient_intensity: 0.5,
             vehicle_lights_enabled: false,
@@ -521,6 +539,7 @@ impl Renderer {
             debug_renderer: DebugRenderer::new(),
             particle_system: ParticleSystem::new(1000),
             debug_mode: false,
+            lod_mesh_cache: HashMap::new(),
         })
     }
 
@@ -613,7 +632,10 @@ impl Renderer {
 
     /// Draw a debug line
     fn draw_debug_line(&mut self, start: [f32; 3], end: [f32; 3], color: [f32; 4]) {
-        // Implementation using existing debug rendering
+        let from = Vector3::new(start[0], start[1], start[2]);
+        let to = Vector3::new(end[0], end[1], end[2]);
+        let col = [color[0], color[1], color[2]];
+        self.debug_renderer.draw_line(from, to, col);
     }
 
     /// Draw a UI element
@@ -624,7 +646,10 @@ impl Renderer {
         color: [f32; 4],
         depth: f32,
     ) {
-        // Implementation using existing HUD rendering
+        // Render UI quad using the HUD system
+        if let Some(ref mut hud) = self.hud_batch {
+            hud.draw_quad(rect, texture, color, depth);
+        }
     }
 
     // ========================================================================
@@ -1509,40 +1534,58 @@ impl Renderer {
             match lod_model {
                 crate::graphics::lod_system::LodModel::HighPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
-                        // Convert vertices to proper format for mesh creation
-                        // vertices are just positions, need to generate normals
-                        let vert_data: Vec<f32> = vertices
-                            .iter()
-                            .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
-                            .collect();
-                        match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
-                            Ok(mesh) => mesh.draw(&self.gl),
-                            Err(e) => warn!("Failed to create HighPoly mesh: {}", e),
-                        }
+                        // Generate a hash key for caching
+                        let mesh_key = Mesh::generate_mesh_key(vertices, indices);
+                        
+                        // Get or create mesh from cache
+                        let mesh = self.lod_mesh_cache.entry(mesh_key).or_insert_with(|| {
+                            let vert_data: Vec<f32> = vertices
+                                .iter()
+                                .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
+                                .collect();
+                            Mesh::new_with_normals(&self.gl, &vert_data, indices)
+                                .unwrap_or_else(|e| {
+                                    warn!("Failed to create HighPoly mesh: {}", e);
+                                    Mesh::empty(&self.gl)
+                                })
+                        });
+                        mesh.draw(&self.gl);
                     }
                 }
                 crate::graphics::lod_system::LodModel::MediumPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
-                        let vert_data: Vec<f32> = vertices
-                            .iter()
-                            .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
-                            .collect();
-                        match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
-                            Ok(mesh) => mesh.draw(&self.gl),
-                            Err(e) => warn!("Failed to create MediumPoly mesh: {}", e),
-                        }
+                        let mesh_key = Mesh::generate_mesh_key(vertices, indices);
+                        
+                        let mesh = self.lod_mesh_cache.entry(mesh_key).or_insert_with(|| {
+                            let vert_data: Vec<f32> = vertices
+                                .iter()
+                                .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
+                                .collect();
+                            Mesh::new_with_normals(&self.gl, &vert_data, indices)
+                                .unwrap_or_else(|e| {
+                                    warn!("Failed to create MediumPoly mesh: {}", e);
+                                    Mesh::empty(&self.gl)
+                                })
+                        });
+                        mesh.draw(&self.gl);
                     }
                 }
                 crate::graphics::lod_system::LodModel::LowPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
-                        let vert_data: Vec<f32> = vertices
-                            .iter()
-                            .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
-                            .collect();
-                        match Mesh::new_with_normals(&self.gl, &vert_data, &indices) {
-                            Ok(mesh) => mesh.draw(&self.gl),
-                            Err(e) => warn!("Failed to create LowPoly mesh: {}", e),
-                        }
+                        let mesh_key = Mesh::generate_mesh_key(vertices, indices);
+                        
+                        let mesh = self.lod_mesh_cache.entry(mesh_key).or_insert_with(|| {
+                            let vert_data: Vec<f32> = vertices
+                                .iter()
+                                .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
+                                .collect();
+                            Mesh::new_with_normals(&self.gl, &vert_data, indices)
+                                .unwrap_or_else(|e| {
+                                    warn!("Failed to create LowPoly mesh: {}", e);
+                                    Mesh::empty(&self.gl)
+                                })
+                        });
+                        mesh.draw(&self.gl);
                     }
                 }
                 crate::graphics::lod_system::LodModel::Billboard { texture_id, size } => {
@@ -1583,14 +1626,13 @@ impl Renderer {
                 self.gl
                     .uniform_matrix_4_f32_slice(Some(&u_view), false, view.as_slice());
             }
-            // SPRINT 5: Light position from sun direction (scaled for shader)
-            if let Some(u_light_pos) = self
+            // SPRINT 5: Light direction from sun direction (shader expects u_light_dir)
+            if let Some(u_light_dir) = self
                 .gl
-                .get_uniform_location(self.shader.program(), "u_light_pos")
+                .get_uniform_location(self.shader.program(), "u_light_dir")
             {
-                let light_pos = self.sun_direction * 100.0;
                 self.gl
-                    .uniform_3_f32(Some(&u_light_pos), light_pos.x, light_pos.y, light_pos.z);
+                    .uniform_3_f32(Some(&u_light_dir), self.sun_direction.x, self.sun_direction.y, self.sun_direction.z);
             }
             if let Some(u_view_pos) = self
                 .gl
@@ -1622,6 +1664,31 @@ impl Renderer {
                 .get_uniform_location(self.shader.program(), "u_ambient_intensity")
             {
                 self.gl.uniform_1_f32(Some(&u), self.ambient_intensity);
+            }
+            // Terrain shader material uniforms
+            if let Some(u) = self
+                .gl
+                .get_uniform_location(self.shader.program(), "u_ambient")
+            {
+                self.gl.uniform_3_f32(Some(&u), 0.2, 0.2, 0.2);
+            }
+            if let Some(u) = self
+                .gl
+                .get_uniform_location(self.shader.program(), "u_diffuse")
+            {
+                self.gl.uniform_3_f32(Some(&u), 0.7, 0.7, 0.7);
+            }
+            if let Some(u) = self
+                .gl
+                .get_uniform_location(self.shader.program(), "u_specular")
+            {
+                self.gl.uniform_3_f32(Some(&u), 0.1, 0.1, 0.1);
+            }
+            if let Some(u) = self
+                .gl
+                .get_uniform_location(self.shader.program(), "u_shininess")
+            {
+                self.gl.uniform_1_f32(Some(&u), 32.0);
             }
             // Задача 10: Fog uniforms
             if let Some(u) = self

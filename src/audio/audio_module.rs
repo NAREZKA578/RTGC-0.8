@@ -7,6 +7,8 @@ use parking_lot::Mutex;
 use nalgebra::Vector3;
 use crate::config::AudioConfig;
 use tracing;
+use rodio::{OutputStream, Sink, Source};
+use std::path::Path;
 
 /// Тип для 3D вектора (единый стек с nalgebra)
 pub type Vec3 = Vector3<f32>;
@@ -206,10 +208,18 @@ pub struct AudioSystem {
     max_sources: u32,
     /// Включена ли окклюзия
     occlusion_enabled: bool,
+    /// Аудио устройство вывода
+    _stream: Option<OutputStream>,
+    /// Активный sink для воспроизведения
+    sink: Option<Arc<Sink>>,
 }
 
 impl AudioSystem {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        // Инициализация аудиоустройства
+        let (stream, stream_handle) = OutputStream::try_default()?;
+        let sink = Sink::try_new(&stream_handle)?;
+        
         Ok(Self {
             sources: HashMap::new(),
             next_source_id: 1,
@@ -218,6 +228,8 @@ impl AudioSystem {
             sound_cache: Arc::new(Mutex::new(HashMap::new())),
             max_sources: 64,
             occlusion_enabled: true,
+            _stream: Some(stream),
+            sink: Some(Arc::new(sink)),
         })
     }
     
@@ -243,6 +255,28 @@ impl AudioSystem {
     /// Удаляет источник звука
     pub fn remove_source(&mut self, id: u32) {
         self.sources.remove(&id);
+    }
+    
+    /// Воспроизводит звук из файла
+    pub fn play_sound(&self, sound_path: &str) {
+        if let Some(sink) = &self.sink {
+            if let Ok(file) = std::fs::File::open(sound_path) {
+                if let Ok(source) = rodio::Decoder::new(file) {
+                    sink.append(source);
+                } else {
+                    tracing::warn!("Failed to decode sound file: {}", sound_path);
+                }
+            } else {
+                tracing::warn!("Failed to open sound file: {}", sound_path);
+            }
+        }
+    }
+    
+    /// Останавливает все звуки
+    pub fn stop_all_sounds(&self) {
+        if let Some(sink) = &self.sink {
+            sink.stop();
+        }
     }
     
     /// Обновляет позицию источника
@@ -433,6 +467,9 @@ impl AudioSystem {
     pub fn update(&mut self) {
         // Здесь должна быть логика обновления состояний источников
         // и отправки данных на аудио устройство
+        if let Some(sink) = &self.sink {
+            sink.set_volume(self.listener.master_volume);
+        }
     }
 }
 
@@ -449,6 +486,8 @@ impl Default for AudioSystem {
                 sound_cache: Arc::new(Mutex::new(HashMap::new())),
                 max_sources: 64,
                 occlusion_enabled: true,
+                _stream: None,
+                sink: None,
             }
         })
     }

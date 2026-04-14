@@ -198,6 +198,16 @@ impl VehicleManager {
     pub fn get_active_speed(&self) -> Option<f32> {
         self.active_vehicle.as_ref().map(|v| v.speed())
     }
+    
+    /// Получает позицию игрока (активного транспортного средства или дефолтную)
+    pub fn get_player_position(&self) -> Vector3<f32> {
+        self.get_active_position().unwrap_or(self.default_spawn_position)
+    }
+    
+    /// Получает направление взгляда игрока (вперёд по транспортному средству или дефолтное)
+    pub fn get_player_forward(&self) -> Vector3<f32> {
+        self.active_vehicle.as_ref().map(|v| v.forward()).unwrap_or(Vector3::z())
+    }
 }
 
 #[cfg(test)]
