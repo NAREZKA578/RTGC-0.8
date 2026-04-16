@@ -1,5 +1,4 @@
-//! OpenGL RHI Backend для RTGC-0.8 - Полноценная реализация на glow
-//! Реализует IDevice, ICommandList, ICommandQueue для OpenGL 4.5+
+//! OpenGL RHI Backend для RTGC-0.8 - Реализация на glow
 
 use super::device::{
     IDevice, ICommandList, ICommandQueue, IFence, ISemaphore, ISwapChain, ResourceBarrier,
