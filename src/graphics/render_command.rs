@@ -189,4 +189,102 @@ impl RenderCommandBuilder {
             command_type: CommandType::TerrainChunk,
         }
     }
+
+    /// Build a mesh render command
+    pub fn build_mesh(
+        self,
+        mesh: Handle<Mesh>,
+        material: Handle<Material>,
+        transform: Matrix4<f32>,
+        sort_key: u64,
+    ) -> RenderCommand {
+        RenderCommand::Mesh {
+            mesh,
+            material,
+            transform,
+            sort_key,
+        }
+    }
+
+    /// Build a particle system render command
+    pub fn build_particle_system(
+        self,
+        system: Handle<ParticleSystem>,
+        transform: Matrix4<f32>,
+        sort_key: u64,
+    ) -> RenderCommand {
+        RenderCommand::ParticleSystem {
+            system,
+            transform,
+            sort_key,
+        }
+    }
+
+    /// Build a UI draw command
+    pub fn build_ui_draw(
+        self,
+        texture: Handle<Texture>,
+        position: Vector3<f32>,
+        size: Vector3<f32>,
+        color: [f32; 4],
+        sort_key: u64,
+    ) -> RenderCommand {
+        RenderCommand::UIDraw {
+            texture,
+            position,
+            size,
+            color,
+            sort_key,
+        }
+    }
+
+    /// Build a debug line command
+    pub fn build_debug_line(
+        self,
+        start: Vector3<f32>,
+        end: Vector3<f32>,
+        color: [f32; 4],
+        sort_key: u64,
+    ) -> RenderCommand {
+        RenderCommand::DebugLine {
+            start,
+            end,
+            color,
+            sort_key,
+        }
+    }
+
+    /// Build a skybox command
+    pub fn build_skybox(
+        self,
+        texture: Handle<Texture>,
+        rotation: Matrix4<f32>,
+        sort_key: u64,
+    ) -> RenderCommand {
+        RenderCommand::Skybox {
+            texture,
+            rotation,
+            sort_key,
+        }
+    }
+
+    /// Build a terrain chunk command
+    pub fn build_terrain_chunk(
+        self,
+        chunk_id: u64,
+        mesh: Handle<Mesh>,
+        material: Handle<Material>,
+        transform: Matrix4<f32>,
+        lod_level: u32,
+        sort_key: u64,
+    ) -> RenderCommand {
+        RenderCommand::TerrainChunk {
+            chunk_id,
+            mesh,
+            material,
+            transform,
+            lod_level,
+            sort_key,
+        }
+    }
 }

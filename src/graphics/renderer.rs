@@ -1,4 +1,8 @@
 //! Renderer module - Command queue based rendering system with trait abstraction
+//! 
+//! ARCHITECTURE NOTE: This module uses RenderCommand from render_command.rs for all
+//! rendering operations. The local RenderCommand enum is kept for backward compatibility
+//! but should be deprecated in future versions.
 
 use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::lod_system::{LodManager, LodObject};
@@ -12,6 +16,9 @@ use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{warn, info};
+
+// Re-export RenderCommand and Handle from render_command module for consistency
+pub use crate::graphics::render_command::{Handle as ResourceHandle, RenderCommand as RhiRenderCommand};
 
 /// Renderer trait for backend abstraction
 /// Примечание: не требуем Send так как glow::Context не реализует Send/Sync
@@ -35,7 +42,10 @@ pub trait RendererTrait {
     fn camera_mut(&mut self) -> &mut Camera;
 }
 
-/// Handle to a GPU resource
+// NOTE: Handle struct is deprecated - use render_command::Handle instead
+// Kept for backward compatibility with existing code
+
+/// Handle to a GPU resource (DEPRECATED - use render_command::Handle)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Handle<T>(u64, std::marker::PhantomData<T>);
 
@@ -97,7 +107,10 @@ pub enum UniformValue {
     Bool(bool),
 }
 
-/// Render command types for the command queue
+// NOTE: Local RenderCommand enum is deprecated - use render_command::RenderCommand instead
+// Kept for backward compatibility with existing code that uses this enum directly
+
+/// Render command types for the command queue (DEPRECATED - use render_command::RenderCommand)
 #[derive(Debug, Clone)]
 pub enum RenderCommand {
     /// Render a mesh with transform and material
@@ -161,7 +174,10 @@ pub enum RenderCommand {
     },
 }
 
-/// Render queue for batching and sorting draw calls
+// NOTE: Local RenderQueue is deprecated - use render_queue::RenderQueue instead
+// Kept for backward compatibility with existing code
+
+/// Render queue for batching and sorting draw calls (DEPRECATED - use render_queue::RenderQueue)
 #[derive(Debug)]
 pub struct RenderQueue {
     commands: Vec<RenderCommand>,
@@ -256,6 +272,13 @@ pub struct Model {
     pub textures: Vec<Texture>,
 }
 
+/// Main Renderer struct - high-performance command-based rendering system
+/// 
+/// Architecture:
+/// - Uses render_queue::RenderQueue for efficient batching and sorting
+/// - Supports multiple render backends through RHI abstraction
+/// - Features: LOD, texture streaming, particle systems, debug rendering
+/// - Optimized for minimal draw calls through material/shader batching
 pub struct Renderer {
     gl: Arc<Context>,
     pub shader: Shader,
@@ -265,15 +288,15 @@ pub struct Renderer {
     pub menu_state: MenuState,
     pub lod_manager: LodManager,
     pub texture_streaming: TextureStreamingSystem,
-    // Render queue for command-based rendering
-    render_queue: RenderQueue,
+    // Render queue for command-based rendering (uses dedicated render_queue module)
+    render_queue: crate::graphics::render_queue::RenderQueue,
     // Asset loader for loading meshes and textures
     pub asset_loader: crate::assets::loader::AssetLoader,
     // Terrain & Vehicle rendering
     terrain_mesh: Option<Mesh>,
     vehicle_box_mesh: Option<Mesh>,
     vehicle_transform: Option<(Vector3<f32>, UnitQuaternion<f32>)>,
-    // Позиция и вращение транспорта для рендеринга (новые поля)
+    // Позиция и вращение транспорта для рендеринга
     pub vehicle_position: Option<Vector3<f32>>,
     pub vehicle_rotation: Option<UnitQuaternion<f32>>,
     // Window dimensions for HUD rendering
@@ -287,12 +310,10 @@ pub struct Renderer {
     // Weather and Day/Night cycle support
     sky_color_top: Vector3<f32>,
     sky_color_horizon: Vector3<f32>,
-    // Цвета неба для внешнего доступа (новые поля)
+    // Цвета неба для внешнего доступа
     pub sky_top_color: Vector3<f32>,
     pub sky_horizon_color: Vector3<f32>,
     sun_direction: Vector3<f32>,
-    // Направление солнца для внешнего доступа (новое поле)
-    pub sun_direction: Vector3<f32>,
     ambient_intensity: f32,
     vehicle_lights_enabled: bool,
     // Задача 2: Vehicle shader
@@ -303,10 +324,10 @@ pub struct Renderer {
     sky_shader: Option<Shader>,
     // Задача 3: Sky VAO
     sky_vao: Option<glow::VertexArray>,
-    sky_vbo: Option<glow::Buffer>, // Сохраняем VBO для обновления цветов
+    sky_vbo: Option<glow::Buffer>,
     // Граф-1: Bitmap font texture
     font_texture: Option<Texture>,
-    font_chars: HashMap<char, [f32; 4]>, // char -> [u, v, w, h] UV coords
+    font_chars: HashMap<char, [f32; 4]>,
     // Граф-2: Batched HUD VAO/VBO for optimization
     hud_vao: Option<glow::VertexArray>,
     hud_vbo: Option<glow::Buffer>,
@@ -505,8 +526,6 @@ impl Renderer {
             sky_top_color: Vector3::new(0.4, 0.6, 0.9),
             sky_horizon_color: Vector3::new(0.7, 0.8, 0.9),
             sun_direction: Vector3::y(),
-            // Направление солнца для внешнего доступа
-            sun_direction: Vector3::y(),
             ambient_intensity: 0.5,
             vehicle_lights_enabled: false,
             // Задача 2: Vehicle shader
@@ -533,8 +552,8 @@ impl Renderer {
             // Mouse position for UI interaction
             mouse_x: 0.0,
             mouse_y: 0.0,
-            // Render queue
-            render_queue: RenderQueue::new(),
+            // Render queue (using dedicated render_queue module for optimal batching)
+            render_queue: crate::graphics::render_queue::RenderQueue::new(),
             // Debug renderer and particle system
             debug_renderer: DebugRenderer::new(),
             particle_system: ParticleSystem::new(1000),
