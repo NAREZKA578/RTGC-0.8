@@ -3,6 +3,7 @@ use glow::{Context, HasContext};
 use tracing;
 
 /// Отладочный рендерер для визуализации физики
+#[derive(Clone)]
 pub struct DebugRenderer {
     line_vertices: Vec<f32>,
     point_vertices: Vec<f32>,

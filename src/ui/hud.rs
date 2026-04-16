@@ -120,6 +120,7 @@ impl Default for HudLayout {
 }
 
 /// Единый менеджер HUD — единственное место где рисуется интерфейс
+#[derive(Clone)]
 pub struct HudManager {
     visible: bool,
     opacity: f32,

@@ -63,6 +63,7 @@ impl MapMarker {
 }
 
 /// Map system manager
+#[derive(Clone)]
 pub struct MapSystem {
     /// Is full-screen map open?
     pub map_open: bool,

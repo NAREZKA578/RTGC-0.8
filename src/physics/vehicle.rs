@@ -163,6 +163,7 @@ impl VehicleControls {
 }
 
 /// Simple vehicle physics model
+#[derive(Clone)]
 pub struct Vehicle {
     config: VehicleConfig,
     body: RigidBody,

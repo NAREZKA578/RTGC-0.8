@@ -24,6 +24,7 @@ use crate::graphics::rhi::gl::GlDevice;
 // Не реализуем Send/Sync напрямую для Context (нарушает orphan rules)
 
 /// OpenGL контекст для рендеринга с RHI интеграцией
+#[derive(Clone)]
 pub struct GlContext {
     pub gl: Option<Arc<Context>>,
     pub window: Option<Window>,

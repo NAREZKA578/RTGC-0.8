@@ -24,6 +24,7 @@ use crate::world::DayNightCycle;
 /// 
 /// Эта структура инкапсулирует все подсистемы, предоставляя контролируемый доступ
 /// к ним через методы-геттеры. Это уменьшает связанность и упрощает тестирование.
+#[derive(Clone)]
 pub struct EngineSubsystems {
     /// Графическая подсистема (рендеринг, материалы, частицы)
     pub graphics: GraphicsSubsystem,
@@ -91,6 +92,7 @@ impl EngineSubsystems {
 }
 
 /// Графическая подсистема
+#[derive(Clone)]
 pub struct GraphicsSubsystem {
     pub renderer: Option<Renderer>,
     pub material_manager: MaterialManager,
@@ -126,6 +128,7 @@ impl GraphicsSubsystem {
 }
 
 /// Физическая подсистема
+#[derive(Clone)]
 pub struct PhysicsSubsystem {
     pub physics_world: physics::PhysicsWorld,
 }
@@ -146,6 +149,7 @@ impl PhysicsSubsystem {
 }
 
 /// UI подсистема
+#[derive(Clone)]
 pub struct UISubsystem {
     pub hud_manager: HudManager,
     pub ui_manager: UIManager,
@@ -172,6 +176,7 @@ impl UISubsystem {
 }
 
 /// Подсистема игрового мира
+#[derive(Clone)]
 pub struct WorldSubsystem {
     pub day_night_cycle: DayNightCycle,
 }

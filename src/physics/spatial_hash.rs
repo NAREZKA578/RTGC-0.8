@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 /// Spatial hash structure for efficient broad-phase collision detection
 /// Uses a 3D grid with configurable cell size and supports AABB-based insertion
+#[derive(Clone)]
 pub struct SpatialHash {
     cell_size: f32,
     inv_cell_size: f32, // Pre-computed inverse for faster division

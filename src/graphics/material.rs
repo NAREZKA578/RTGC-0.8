@@ -168,6 +168,7 @@ impl std::fmt::Display for MaterialLoadError {
 }
 
 /// Менеджер материалов — кэширует и управляет материалами
+#[derive(Clone)]
 pub struct MaterialManager {
     materials: Vec<Material>,
     default_quality: TextureQuality,
