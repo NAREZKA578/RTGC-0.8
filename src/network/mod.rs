@@ -379,8 +379,14 @@ impl ReplicationClient {
         
         info!("Connected to server as client {}", client_id);
         
+        // Use stored server_address or a default if not set (shouldn't happen in normal flow)
+        let address = self.server_address.unwrap_or_else(|| {
+            warn!("Server address not set when connection accepted, using default");
+            "127.0.0.1:0".parse().unwrap_or(SocketAddr::from(([127, 0, 0, 1], 0)))
+        });
+        
         let _ = self.event_tx.send(NetworkEvent::Connected {
-            address: self.server_address.unwrap(),
+            address,
         });
     }
     

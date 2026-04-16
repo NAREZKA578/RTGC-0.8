@@ -56,7 +56,7 @@ impl GlContext {
             .build(event_loop, template, |mut configs| {
                 configs
                     .next()
-                    .unwrap_or_else(|| panic!("No suitable OpenGL config found"))
+                    .ok_or("No suitable OpenGL config found")?
             })?;
 
         let window = window.ok_or("Не удалось создать окно")?;
@@ -77,7 +77,7 @@ impl GlContext {
             .build(event_loop, template, |mut configs| {
                 configs
                     .next()
-                    .unwrap_or_else(|| panic!("No suitable OpenGL config found"))
+                    .ok_or("No suitable OpenGL config found")?
             })?;
 
         let window = window.ok_or("Не удалось создать окно")?;
@@ -105,8 +105,10 @@ impl GlContext {
         // Создаём поверхность для рендеринга в окно
         let (raw_width, raw_height): (u32, u32) = window.inner_size().into();
 
-        let nz_width = NonZeroU32::new(raw_width).unwrap_or(NonZeroU32::new(1280).unwrap());
-        let nz_height = NonZeroU32::new(raw_height).unwrap_or(NonZeroU32::new(720).unwrap());
+        // NonZeroU32::new() возвращает None только для 0, что маловероятно для размера окна
+        // Но на всякий случай используем дефолтные значения
+        let nz_width = NonZeroU32::new(raw_width).unwrap_or_else(|| NonZeroU32::new(1280).expect("1280 is non-zero"));
+        let nz_height = NonZeroU32::new(raw_height).unwrap_or_else(|| NonZeroU32::new(720).expect("720 is non-zero"));
 
         let surface_attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
@@ -128,7 +130,8 @@ impl GlContext {
         };
 
         // Включаем VSync
-        let swap_interval = SwapInterval::Wait(NonZeroU32::new(1).unwrap());
+        // NonZeroU32::new(1) всегда успешен, так как 1 != 0
+        let swap_interval = SwapInterval::Wait(NonZeroU32::new(1).expect("1 is non-zero"));
         let _ = surface.set_swap_interval(&gl_context, swap_interval);
 
         // Создаём RHI устройство
@@ -169,9 +172,9 @@ impl GlContext {
         self.height = height;
 
         // glutin 0.32: resize принимает NonZeroU32
-        // Используем unwrap_or с гарантированно валидным значением 1
-        let nz_w = NonZeroU32::new(width).unwrap_or(NonZeroU32::new(1).unwrap());
-        let nz_h = NonZeroU32::new(height).unwrap_or(NonZeroU32::new(1).unwrap());
+        // Используем unwrap_or_else с гарантированно валидным значением 1
+        let nz_w = NonZeroU32::new(width).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
+        let nz_h = NonZeroU32::new(height).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
         if let (Some(surface), Some(gl_context)) = (&self.surface, &self.gl_context) {
             surface.resize(gl_context, nz_w, nz_h);
         }
@@ -295,5 +298,5 @@ impl GlContext {
 fn create_dummy_window() -> winit::window::Window {
     // Создаём dummy окно через headless режим
     // В реальности это не должно вызываться, так как окно создаётся в GlContext::new
-    panic!("Dummy window creation not supported - use GlContext::new instead")
+    unimplemented!("Dummy window creation not supported - use GlContext::new instead")
 }

@@ -192,7 +192,9 @@ impl ApplicationHandler for GameApp<'_> {
                 info!(target: "engine", "GL context created successfully");
                 
                 if !gl_context.is_initialized() {
-                    panic!("Graphics context not initialized after creation");
+                    error!(target: "engine", "Graphics context not initialized after creation");
+                    event_loop.exit();
+                    return;
                 }
                 
                 // Инициализация render_manager
@@ -210,11 +212,20 @@ impl ApplicationHandler for GameApp<'_> {
                 );
                 
                 if let Err(e) = render_manager.initialize_renderer() {
-                    panic!("Renderer init failed: {:?}", e);
+                    error!(target: "engine", "Renderer init failed: {:?}", e);
+                    event_loop.exit();
+                    return;
                 }
                 
-                // Перемещаем окно
-                let window = gl_context.window.take().unwrap();
+                // Перемещаем окно с обработкой ошибки
+                let window = match gl_context.window.take() {
+                    Some(w) => w,
+                    None => {
+                        error!(target: "engine", "GL context window is None after creation");
+                        event_loop.exit();
+                        return;
+                    }
+                };
                 self.engine.graphics_context = gl_context;
                 self.engine.render_manager = Some(render_manager);
                 
@@ -232,7 +243,9 @@ impl ApplicationHandler for GameApp<'_> {
                 }
             }
             Err(e) => {
-                panic!("Failed to create GL context: {:?}", e);
+                error!(target: "engine", "Failed to create GL context: {:?}", e);
+                event_loop.exit();
+                return;
             }
         }
     }

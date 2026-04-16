@@ -54,14 +54,25 @@ impl ThreadPool {
             f();
             let _ = job_sender.send(());
         });
-        if let Err(e) = self.sender.as_ref().unwrap().send(job) {
-            tracing::error!("Failed to send job to thread pool: {}", e);
+        
+        if let Some(sender) = self.sender.as_ref() {
+            if let Err(e) = sender.send(job) {
+                tracing::error!("Failed to send job to thread pool: {}", e);
+                self.active_jobs.fetch_sub(1, Ordering::SeqCst);
+                return JoinHandle {
+                    receiver: job_receiver,
+                    active_jobs: None,
+                };
+            }
+        } else {
+            tracing::warn!("Thread pool is shut down, cannot execute job");
             self.active_jobs.fetch_sub(1, Ordering::SeqCst);
             return JoinHandle {
                 receiver: job_receiver,
                 active_jobs: None,
             };
         }
+        
         JoinHandle {
             receiver: job_receiver,
             active_jobs: Some(Arc::downgrade(&self.active_jobs)),

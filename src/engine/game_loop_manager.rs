@@ -82,6 +82,11 @@ impl GameLoopManager {
         // Обновление системы частиц
         self.particle_system.update(dt);
         
+        // Обновление debug renderer в режиме отладки (очистка кадровых данных)
+        if self.debug_mode {
+            self.debug_renderer.clear();
+        }
+        
         // Таймер автосохранения
         self.save_timer += dt;
         if self.save_timer >= 60.0 {
