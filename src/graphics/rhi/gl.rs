@@ -634,7 +634,7 @@ impl ICommandList for GlCommandList {
         let framebuffer = unsafe { self.context.create_framebuffer() }
             .unwrap_or_else(|_| {
                 tracing::error!(target: "rhi", "Failed to create framebuffer, using default");
-                glow::NativeFramebuffer(NonZeroU32::new(1).unwrap())
+                glow::NativeFramebuffer(NonZeroU32::new(1).expect("1 is non-zero"))
             });
 
         unsafe {
@@ -746,7 +746,11 @@ impl ICommandList for GlCommandList {
             // Здесь упрощённая реализация - в продакшене нужно получать GL buffer из ResourceManager
             unsafe {
                 // Привязываем буфер как ARRAY_BUFFER
-                let gl_buffer = NativeBuffer(NonZeroU32::new(buffer_handle.0 as u32).unwrap());
+                // buffer_handle.0 должен быть > 0, так как это валидный handle
+                let gl_buffer = NativeBuffer(NonZeroU32::new(buffer_handle.0 as u32).unwrap_or_else(|| {
+                    tracing::warn!("Invalid buffer handle {}", buffer_handle.0);
+                    NonZeroU32::new(1).expect("1 is non-zero")
+                }));
                 self.context.bind_buffer(glow::ARRAY_BUFFER, Some(gl_buffer));
 
                 // Настраиваем атрибуты вершин (предполагаем стандартный layout: 4 floats)
@@ -766,7 +770,10 @@ impl ICommandList for GlCommandList {
     fn bind_index_buffer(&mut self, buffer: ResourceHandle, offset: u64, format: IndexFormat) {
         // В OpenGL индексный буфер привязывается к ELEMENT_ARRAY_BUFFER
         unsafe {
-            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
+                tracing::warn!("Invalid index buffer handle {}", buffer.0);
+                NonZeroU32::new(1).expect("1 is non-zero")
+            }));
             self.context.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(gl_buffer));
         }
     }
@@ -774,7 +781,10 @@ impl ICommandList for GlCommandList {
     fn bind_constant_buffer(&mut self, stage: ShaderStage, slot: u32, buffer: ResourceHandle) {
         // В OpenGL uniform buffers привязываются через uniform block binding
         unsafe {
-            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
+                tracing::warn!("Invalid constant buffer handle {}", buffer.0);
+                NonZeroU32::new(1).expect("1 is non-zero")
+            }));
             self.context.bind_buffer_range(
                 glow::UNIFORM_BUFFER,
                 slot,
@@ -798,7 +808,10 @@ impl ICommandList for GlCommandList {
     fn bind_sampler(&mut self, stage: ShaderStage, slot: u32, sampler: ResourceHandle) {
         // Привязка сэмплеров
         unsafe {
-            let gl_sampler = NativeSampler(NonZeroU32::new(sampler.0 as u32).unwrap());
+            let gl_sampler = NativeSampler(NonZeroU32::new(sampler.0 as u32).unwrap_or_else(|| {
+                tracing::warn!("Invalid sampler handle {}", sampler.0);
+                NonZeroU32::new(1).expect("1 is non-zero")
+            }));
             self.context.bind_sampler(slot, Some(gl_sampler));
         }
     }
@@ -847,7 +860,10 @@ impl ICommandList for GlCommandList {
         // OpenGL 4.0+ поддерживает multi-draw-indirect
         // Требуется bindнуть буфер как DRAW_INDIRECT_BUFFER
         unsafe {
-            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
+                tracing::warn!("Invalid indirect buffer handle {}", buffer.0);
+                NonZeroU32::new(1).expect("1 is non-zero")
+            }));
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
                 self.context.draw_arrays_instanced_base_instance(
@@ -865,7 +881,10 @@ impl ICommandList for GlCommandList {
     fn draw_indexed_indirect(&mut self, buffer: ResourceHandle, offset: u64, draw_count: u32) {
         // OpenGL 4.0+ поддерживает multi-draw-indirect для индексированной отрисовки
         unsafe {
-            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
+                tracing::warn!("Invalid indexed indirect buffer handle {}", buffer.0);
+                NonZeroU32::new(1).expect("1 is non-zero")
+            }));
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
                 self.context.draw_elements_instanced_base_vertex_base_instance(
@@ -892,7 +911,10 @@ impl ICommandList for GlCommandList {
         // OpenGL 4.3+ поддерживает dispatch indirect
         // Буфер должен содержать структуру DispatchIndirectCommand { num_groups_x, num_groups_y, num_groups_z }
         unsafe {
-            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap());
+            let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
+                tracing::warn!("Invalid dispatch indirect buffer handle {}", buffer.0);
+                NonZeroU32::new(1).expect("1 is non-zero")
+            }));
             self.context.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(gl_buffer));
             self.context.dispatch_compute_indirect(offset as i32);
             self.context.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, None);

@@ -35,14 +35,13 @@ pub type CoreResult<T> = Result<T, Box<dyn std::error::Error>>;
 /// # Пример использования
 /// ```rust
 /// fn main() -> CoreResult<()> {
-///     tracing_subscriber::fmt::init();
 ///     core::run()?;
 ///     Ok(())
 /// }
 /// ```
 pub fn run() -> CoreResult<()> {
-    // Инициализация логгера
-    tracing_subscriber::fmt::init();
+    // Инициализация логгера с проверкой на повторную инициализацию
+    init_logger_safe();
     
     // Создание движка
     let mut engine = Engine::new()?;
@@ -51,6 +50,30 @@ pub fn run() -> CoreResult<()> {
     engine.run()?;
     
     Ok(())
+}
+
+/// Безопасная инициализация логгера с защитой от повторной инициализации
+fn init_logger_safe() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    
+    INIT.call_once(|| {
+        // Try to initialize with env filter, fallback to default level
+        use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+        
+        fmt()
+            .with_target(true)
+            .with_thread_ids(false)
+            .with_file(false)
+            .with_line_number(false)
+            .with_level(true)
+            .with_timer(fmt::time::SystemTime::default())
+            .with_env_filter(filter)
+            .finish()
+            .init();
+    });
 }
 
 /// Создание нового экземпляра движка

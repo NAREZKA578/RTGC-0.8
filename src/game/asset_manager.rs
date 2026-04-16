@@ -300,7 +300,10 @@ impl AssetManager {
         use std::time::{SystemTime, UNIX_EPOCH};
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| {
+                tracing::warn!("SystemTime before UNIX_EPOCH, using zero");
+                std::time::Duration::ZERO
+            })
             .subsec_nanos() as u64
     }
 

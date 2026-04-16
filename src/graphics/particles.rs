@@ -106,7 +106,11 @@ impl ParticleSystem {
                 // Pass view_proj to shader as u_view_proj uniform
                 // Note: Shader must have this uniform defined
                 let program = gl.get_parameter_i32(glow::CURRENT_PROGRAM);
-                let native_program = glow::NativeProgram(std::num::NonZero::new(program as u32).unwrap());
+                // program может быть 0 если нет активного шейдерного программы, но это маловероятно в render
+                let native_program = glow::NativeProgram(std::num::NonZero::new(program as u32).unwrap_or_else(|| {
+                    tracing::warn!("No active GL program during particle render");
+                    std::num::NonZero::new(1).expect("1 is non-zero")
+                }));
                 if let Some(loc) = gl.get_uniform_location(native_program, "u_view_proj") {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), false, view_proj.as_slice());
                 }
@@ -275,6 +279,14 @@ impl ParticleSystem {
         for p in &mut self.particles {
             p.active = false;
         }
+    }
+}
+
+impl Drop for ParticleSystem {
+    fn drop(&mut self) {
+        // Cleanup: deactivate all particles and free resources
+        self.clear();
+        tracing::debug!(target: "particles", "ParticleSystem dropped, {} particles cleaned up", self.max_particles);
     }
 }
 

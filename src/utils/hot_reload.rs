@@ -155,7 +155,10 @@ impl HotReloadManager {
 
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|e| {
+                tracing::warn!("SystemTime before UNIX_EPOCH in hot_reload poll: {}", e);
+                std::time::Duration::ZERO
+            })
             .as_secs();
 
         // Check if enough time has passed since last poll
@@ -171,7 +174,10 @@ impl HotReloadManager {
             if let Ok(new_metadata) = fs::metadata(path) {
                 let new_modified = new_metadata
                     .modified()
-                    .map(|t| t.duration_since(UNIX_EPOCH).unwrap().as_secs())
+                    .map(|t| t.duration_since(UNIX_EPOCH).unwrap_or_else(|e| {
+                        tracing::warn!("File modified time before UNIX_EPOCH for {:?}: {}", path, e);
+                        std::time::Duration::ZERO
+                    }).as_secs())
                     .unwrap_or(0);
 
                 if new_modified > meta.last_modified {
