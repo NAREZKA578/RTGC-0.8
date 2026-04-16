@@ -109,7 +109,7 @@ impl RenderManager {
     }
     
     /// Устанавливает трансформацию транспорта для рендеринга
-    pub fn set_vehicle_transform(&mut self, position: nalgebra::Vector3<f32>, rotation: nalgebra::Quaternion<f32>) {
+    pub fn set_vehicle_transform(&mut self, position: nalgebra::Vector3<f32>, rotation: nalgebra::UnitQuaternion<f32>) {
         if let Some(ref mut renderer) = self.renderer {
             renderer.vehicle_position = Some(position);
             renderer.vehicle_rotation = Some(rotation);

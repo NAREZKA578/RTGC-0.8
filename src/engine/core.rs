@@ -116,7 +116,7 @@ impl Engine {
         // Set global physics world pointer for raycast queries
         set_global_physics_world(&subsystems.physics.physics_world);
         
-        let world_manager = WorldManager::new(42, subsystems.world.day_night_cycle.clone());
+        let world_manager = WorldManager::new(42);
         let vehicle_manager = VehicleManager::new(Vector3::zeros());
         let input_manager = InputManagerWrapper::new();
         

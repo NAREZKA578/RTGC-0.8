@@ -37,8 +37,9 @@ pub struct WorldManager {
 
 impl WorldManager {
     /// Создаёт новый менеджер мира
-    pub fn new(world_seed: u64, day_night_cycle: DayNightCycle) -> Self {
+    pub fn new(world_seed: u64) -> Self {
         let weather_system = WeatherSystem::new(world_seed);
+        let day_night_cycle = DayNightCycle::new(55.0, 82.9);
         
         Self {
             open_world: None,
@@ -60,10 +61,10 @@ impl WorldManager {
         
         // Initialize settlements and road network
         self.settlements = self.generate_settlements();
-        self.road_network = Some(RoadNetwork::generate(&self.settlements, self.world_seed));
+        self.road_network = Some(RoadNetwork::generate(&self.settlements, self.world_seed, &|_x, _z| 0.0));
         
         // Initialize mission generator
-        self.mission_generator = Some(MissionGenerator::new(self.world_seed));
+        self.mission_generator = Some(MissionGenerator::new(self.settlements.clone(), self.road_network.clone().unwrap_or_default(), self.world_seed));
         
         Ok(())
     }
