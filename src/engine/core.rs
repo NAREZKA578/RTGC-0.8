@@ -27,7 +27,7 @@ use std::time::Instant;
 use tracing::{info, error, warn};
 use winit::application::ApplicationHandler;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes};
+use winit::window::{Window, WindowAttributes, WindowId};
 
 /// Основной класс движка
 pub struct Engine {

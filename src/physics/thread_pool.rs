@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::thread;
 use tracing;
 
+#[derive(Clone)]
 pub struct ThreadPool {
     workers: Vec<Worker>,
     sender: Option<Sender<Job>>,

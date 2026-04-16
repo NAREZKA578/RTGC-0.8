@@ -3,7 +3,8 @@ use std::ops::IndexMut;
 use std::vec::Vec;
 
 /// A simple arena allocator for efficient memory management with generation tracking to prevent use-after-free bugs
-pub struct ArenaAllocator<T> {
+#[derive(Clone)]
+pub struct ArenaAllocator<T: Clone> {
     items: Vec<Option<T>>,
     free_indices: Vec<usize>,
     generations: Vec<u64>, // Generation counter for each slot to detect use-after-free

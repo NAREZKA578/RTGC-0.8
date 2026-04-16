@@ -803,6 +803,7 @@ impl Aabb {
     }
 }
 
+#[derive(Clone)]
 pub struct PhysicsWorld {
     pub rigid_bodies: ArenaAllocator<RigidBody>,
     pub gravity: Vector3<f32>,

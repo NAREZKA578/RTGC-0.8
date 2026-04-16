@@ -6,6 +6,7 @@ use crate::physics::PhysicsStats;
 use nalgebra::Vector3;
 
 /// Debug menu state
+#[derive(Clone)]
 pub struct DebugMenu {
     /// Is debug menu visible
     pub visible: bool,
