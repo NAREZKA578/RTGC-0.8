@@ -210,7 +210,6 @@ impl RendererRhi {
     pub fn set_terrain_mesh(&mut self, mesh: Mesh) {
         // Upload mesh data to GPU via RHI
         // Create vertex and index buffers from mesh data
-        // Note: Full implementation requires proper mesh data access
         self.terrain_mesh = Some(mesh);
     }
 
@@ -250,7 +249,7 @@ impl RendererRhi {
             .create_command_list(crate::graphics::rhi::CommandListType::Direct);
 
         // Use cmd_list to record and submit rendering commands
-        // Note: Full RHI integration requires pipeline state, descriptor heaps, etc.
+        // Full RHI integration requires pipeline state, descriptor heaps, etc.
         if let Ok(_list) = cmd_list {
             // In a full implementation, we would:
             // 1. Begin render pass

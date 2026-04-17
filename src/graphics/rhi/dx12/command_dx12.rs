@@ -1097,8 +1097,9 @@ impl Dx12CommandList {
     }
 
     /// 4.53: SPIR-V to DXIL conversion
-    /// Note: Full SPIR-V to DXIL conversion requires external compiler (dxcompiler)
+    /// Full SPIR-V to DXIL conversion requires external compiler (dxcompiler)
     /// This function provides a placeholder that indicates the requirement
+    /// TODO: Integrate dxcompiler-rs or use HLSL shaders directly for production
     pub fn convert_spirv_to_dxil(spirv_data: &[u8]) -> Result<Vec<u8>, String> {
         // SPIR-V to DXIL conversion requires dxcompiler or similar library
         // For production use, integrate with dxcompiler-rs or use HLSL shaders directly

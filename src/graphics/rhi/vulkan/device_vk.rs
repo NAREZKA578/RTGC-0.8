@@ -596,7 +596,7 @@ impl IDevice for VkDevice {
             
             let handle = ResourceHandle::new();
             
-            // NOTE: Pipeline creation requires render pass which is not available in IDevice trait
+            // TODO: Pipeline creation requires render pass which is not available in IDevice trait
             // This method should be called through a higher-level interface that provides render pass
             // For now, we return an error indicating that direct pipeline creation is not supported
             return Err(RhiError::Unsupported(

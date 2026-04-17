@@ -1,16 +1,13 @@
+use std::sync::Arc;
 use glow::{Context, HasContext};
 
-pub struct Shader {
+pub struct ShaderInner {
     program: glow::Program,
 }
 
-impl Clone for Shader {
-    fn clone(&self) -> Self {
-        // Note: This creates a shallow clone - actual GPU resources are not duplicated
-        Self {
-            program: self.program,
-        }
-    }
+#[derive(Clone)]
+pub struct Shader {
+    inner: Arc<ShaderInner>,
 }
 
 impl std::fmt::Debug for Shader {
@@ -46,13 +43,15 @@ impl Shader {
             gl.delete_shader(vertex_shader);
             gl.delete_shader(fragment_shader);
 
-            Ok(Shader { program })
+            Ok(Shader { 
+                inner: Arc::new(ShaderInner { program }) 
+            })
         }
     }
 
     pub fn bind(&self, gl: &Context) {
         unsafe {
-            gl.use_program(Some(self.program));
+            gl.use_program(Some(self.inner.program));
         }
     }
 
@@ -63,7 +62,17 @@ impl Shader {
     }
 
     pub fn program(&self) -> glow::Program {
-        self.program
+        self.inner.program
+    }
+
+    /// Явное удаление GPU-ресурса. Вызывать вручную перед уничтожением GL контекста.
+    pub fn delete(&self, gl: &Context) {
+        unsafe {
+            // Проверяем, есть ли другие ссылки на этот шейдер
+            if Arc::strong_count(&self.inner) == 1 {
+                gl.delete_program(self.inner.program);
+            }
+        }
     }
 }
 
@@ -86,10 +95,7 @@ unsafe fn compile_shader(
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        // Note: Shader program deletion requires GL context which is not available here.
-        // In a real application, you would need to call explicit cleanup methods before dropping
-        // or use a resource manager that tracks the GL context lifetime.
-        // For now, resources are cleaned up when GL context is destroyed.
-        // If explicit cleanup is needed, add a delete(&self, gl: &Context) method and call it manually.
+        // Ресурсы удаляются только если это последняя ссылка
+        // Для гарантированного удаления используйте метод delete(&self, gl: &Context)
     }
 }

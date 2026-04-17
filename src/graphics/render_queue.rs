@@ -43,10 +43,12 @@ impl RenderQueue {
         match &command {
             RenderCommand::Mesh { .. } => self.stats.mesh_commands += 1,
             RenderCommand::ParticleSystem { .. } => self.stats.particle_commands += 1,
-            RenderCommand::UIDraw { .. } => self.stats.ui_commands += 1,
-            RenderCommand::DebugLine { .. } => self.stats.debug_commands += 1,
+            RenderCommand::UIDraw { .. } | RenderCommand::UIElement { .. } => self.stats.ui_commands += 1,
+            RenderCommand::DebugLine { .. } | RenderCommand::DebugLines { .. } => self.stats.debug_commands += 1,
             RenderCommand::Skybox { .. } => self.stats.skybox_commands += 1,
             RenderCommand::TerrainChunk { .. } => self.stats.terrain_commands += 1,
+            RenderCommand::Vehicle { .. } => self.stats.mesh_commands += 1, // Count vehicle as mesh
+            RenderCommand::Clear { .. } | RenderCommand::Viewport { .. } => {} // Control commands not counted
         }
 
         self.commands.push(command);
@@ -76,17 +78,19 @@ impl RenderQueue {
 
     /// Compute a sort key for a render command
     fn compute_sort_key(command: &RenderCommand) -> u64 {
-        // Priority order: Skybox -> Terrain -> Mesh -> Particles -> UI -> Debug
+        // Priority order: Clear/Viewport -> Skybox -> Terrain -> Vehicle -> Mesh -> Particles -> UI -> Debug
         let priority = match command {
-            RenderCommand::Skybox { .. } => 0u64,
-            RenderCommand::TerrainChunk { .. } => 1,
-            RenderCommand::Mesh { .. } => 2,
-            RenderCommand::ParticleSystem { .. } => 3,
-            RenderCommand::UIDraw { .. } => 4,
-            RenderCommand::DebugLine { .. } => 5,
+            RenderCommand::Clear { .. } | RenderCommand::Viewport { .. } => 0u64,
+            RenderCommand::Skybox { .. } => 1,
+            RenderCommand::TerrainChunk { .. } => 2,
+            RenderCommand::Vehicle { .. } => 3,
+            RenderCommand::Mesh { .. } => 4,
+            RenderCommand::ParticleSystem { .. } => 5,
+            RenderCommand::UIDraw { .. } | RenderCommand::UIElement { .. } => 6,
+            RenderCommand::DebugLine { .. } | RenderCommand::DebugLines { .. } => 7,
         };
 
-        // Get material ID for batching
+        // Get material ID for batching (commands without materials get 0)
         let material_id = command.material_handle().map(|h| h.id()).unwrap_or(0);
 
         // Combine priority and material ID into a single sort key
