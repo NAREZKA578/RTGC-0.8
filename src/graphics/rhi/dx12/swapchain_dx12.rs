@@ -23,6 +23,9 @@ pub struct Dx12SwapChain {
     #[cfg(target_os = "windows")]
     rtv_handles: Vec<u64>, // RTV descriptor handles
     
+    #[cfg(target_os = "windows")]
+    device: Option<ID3D12Device>, // Stored device reference for resize operations
+    
     width: u32,
     height: u32,
     format: TextureFormat,
@@ -155,6 +158,7 @@ impl Dx12SwapChain {
             swap_chain,
             back_buffers,
             rtv_handles,
+            device: Some(device.clone()), // Store device reference for resize operations
             width,
             height,
             format,
@@ -228,9 +232,42 @@ impl Dx12SwapChain {
         // Recreate RTV descriptors
         self.rtv_handles.clear();
         
-        // Device reference is required - in practice this would be stored in the swapchain struct
-        // For now, we'll recreate using the same logic as in new()
-        // TODO: Store device reference in Dx12SwapChain to avoid recreation issues
+        // Use stored device reference to recreate RTV descriptors
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(ref device) = self.device {
+                let rtv_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC {
+                    Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                    NumDescriptors: 2,
+                    Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                    NodeMask: 0,
+                };
+                
+                let rtv_heap: ID3D12DescriptorHeap = unsafe {
+                    device.CreateDescriptorHeap(&rtv_heap_desc)
+                        .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to create RTV heap: {:?}", e)))?
+                };
+                
+                let rtv_handle_size = unsafe {
+                    device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+                };
+                let rtv_heap_start = unsafe { rtv_heap.GetCPUDescriptorHandleForHeapStart() };
+                
+                for (i, buffer) in self.back_buffers.iter().enumerate() {
+                    let rtv_handle = D3D12_CPU_DESCRIPTOR_HANDLE {
+                        ptr: rtv_heap_start.ptr + (rtv_handle_size as usize) * i,
+                    };
+                    
+                    unsafe {
+                        device.CreateRenderTargetView(buffer, None, rtv_handle);
+                    }
+                    
+                    self.rtv_handles.push(rtv_handle.ptr as u64);
+                }
+            } else {
+                return Err(RhiError::ResourceCreationFailed("Device reference not available for RTV recreation".to_string()));
+            }
+        }
         
         Ok(())
     }

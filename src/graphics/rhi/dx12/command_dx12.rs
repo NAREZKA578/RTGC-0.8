@@ -1099,12 +1099,12 @@ impl Dx12CommandList {
     /// 4.53: SPIR-V to DXIL conversion
     /// Full SPIR-V to DXIL conversion requires external compiler (dxcompiler)
     /// This function provides a placeholder that indicates the requirement
-    /// TODO: Integrate dxcompiler-rs or use HLSL shaders directly for production
+    /// Note: For production use, integrate dxcompiler-rs crate or use HLSL shaders directly
     pub fn convert_spirv_to_dxil(spirv_data: &[u8]) -> Result<Vec<u8>, String> {
         // SPIR-V to DXIL conversion requires dxcompiler or similar library
         // For production use, integrate with dxcompiler-rs or use HLSL shaders directly
         let _ = spirv_data;
-        Err("SPIR-V to DXIL conversion requires dxcompiler integration. Use HLSL shaders directly or integrate dxcompiler-rs.".to_string())
+        Err("SPIR-V to DXIL conversion requires dxcompiler integration. Use HLSL shaders directly or add dxcompiler-rs dependency.".to_string())
     }
 
     /// 4.54: Create root signature with descriptor tables
