@@ -228,9 +228,9 @@ impl Dx12SwapChain {
         // Recreate RTV descriptors
         self.rtv_handles.clear();
         
-        // We need device reference - in practice this would be passed or stored
+        // Device reference is required - in practice this would be stored in the swapchain struct
         // For now, we'll recreate using the same logic as in new()
-        // Note: In a real implementation, device should be stored in the swapchain
+        // TODO: Store device reference in Dx12SwapChain to avoid recreation issues
         
         Ok(())
     }

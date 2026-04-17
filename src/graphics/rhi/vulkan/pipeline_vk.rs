@@ -313,7 +313,7 @@ impl VkPipelineState {
         use crate::graphics::rhi::resource_manager::ResourceManager;
         use std::sync::{Arc, Mutex};
         
-        // NOTE: В production коде здесь нужно получить ResourceManager из контекста устройства
+        // TODO: В production коде здесь нужно получить ResourceManager из контекста устройства
         // и извлечь spirv_bytecode по shader_handle
         // Пример: let shader_data = resource_manager.get_shader(*shader_handle)?;
         //         let spirv_code = shader_data.spirv_bytecode;

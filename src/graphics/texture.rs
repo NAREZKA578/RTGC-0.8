@@ -1,16 +1,13 @@
+use std::sync::Arc;
 use glow::{Context, HasContext};
 
-pub struct Texture {
+pub struct TextureInner {
     texture: glow::Texture,
 }
 
-impl Clone for Texture {
-    fn clone(&self) -> Self {
-        // Note: This creates a shallow clone - actual GPU resources are not duplicated
-        Self {
-            texture: self.texture,
-        }
-    }
+#[derive(Clone)]
+pub struct Texture {
+    inner: Arc<TextureInner>,
 }
 
 impl std::fmt::Debug for Texture {
@@ -44,7 +41,9 @@ impl Texture {
             gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
             gl.bind_texture(glow::TEXTURE_2D, None);
 
-            Ok(Texture { texture })
+            Ok(Texture { 
+                inner: Arc::new(TextureInner { texture }) 
+            })
         }
     }
     
@@ -54,7 +53,9 @@ impl Texture {
         // Используем unsafe new_unchecked с валидным non-zero значением
         // Placeholder texture используется как временная заглушка до загрузки реальной текстуры
         Ok(Self {
-            texture: glow::NativeTexture(unsafe { NonZero::new_unchecked(1) }),
+            inner: Arc::new(TextureInner {
+                texture: glow::NativeTexture(unsafe { NonZero::new_unchecked(1) }),
+            }),
         })
     }
 
@@ -80,13 +81,15 @@ impl Texture {
             gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
             gl.bind_texture(glow::TEXTURE_2D, None);
 
-            Ok(Texture { texture })
+            Ok(Texture { 
+                inner: Arc::new(TextureInner { texture }) 
+            })
         }
     }
 
     pub fn bind(&self, gl: &Context) {
         unsafe {
-            gl.bind_texture(glow::TEXTURE_2D, Some(self.texture));
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.inner.texture));
         }
     }
 
@@ -95,14 +98,21 @@ impl Texture {
             gl.bind_texture(glow::TEXTURE_2D, None);
         }
     }
+
+    /// Явное удаление GPU-ресурса. Вызывать вручную перед уничтожением GL контекста.
+    pub fn delete(&self, gl: &Context) {
+        unsafe {
+            // Проверяем, есть ли другие ссылки на эту текстуру
+            if Arc::strong_count(&self.inner) == 1 {
+                gl.delete_texture(self.inner.texture);
+            }
+        }
+    }
 }
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        // Note: Texture deletion requires GL context which is not available here.
-        // In a real application, you would need to call explicit cleanup methods before dropping
-        // or use a resource manager that tracks the GL context lifetime.
-        // For now, resources are cleaned up when GL context is destroyed.
-        // If explicit cleanup is needed, add a delete(&self, gl: &Context) method and call it manually.
+        // Ресурсы удаляются только если это последняя ссылка
+        // Для гарантированного удаления используйте метод delete(&self, gl: &Context)
     }
 }

@@ -68,11 +68,24 @@ pub enum RenderCommand {
         color: [f32; 4],
         sort_key: u64,
     },
+    /// UI element with rect (for legacy compatibility)
+    UIElement {
+        rect: [f32; 4],
+        texture: Option<Handle<Texture>>,
+        color: [f32; 4],
+        depth: f32,
+        sort_key: u64,
+    },
     /// Debug line drawing
     DebugLine {
         start: Vector3<f32>,
         end: Vector3<f32>,
         color: [f32; 4],
+        sort_key: u64,
+    },
+    /// Debug lines batch (legacy compatibility)
+    DebugLines {
+        lines: Vec<([f32; 3], [f32; 3], [f32; 4])>,
         sort_key: u64,
     },
     /// Skybox rendering
@@ -90,6 +103,28 @@ pub enum RenderCommand {
         lod_level: u32,
         sort_key: u64,
     },
+    /// Vehicle rendering
+    Vehicle {
+        position: Vector3<f32>,
+        rotation: Matrix4<f32>,
+        color: [f32; 4],
+        sort_key: u64,
+    },
+    /// Clear screen
+    Clear {
+        color: Option<[f32; 4]>,
+        depth: bool,
+        stencil: bool,
+        sort_key: u64,
+    },
+    /// Set viewport
+    Viewport {
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        sort_key: u64,
+    },
 }
 
 impl RenderCommand {
@@ -99,9 +134,14 @@ impl RenderCommand {
             RenderCommand::Mesh { sort_key, .. } => *sort_key,
             RenderCommand::ParticleSystem { sort_key, .. } => *sort_key,
             RenderCommand::UIDraw { sort_key, .. } => *sort_key,
+            RenderCommand::UIElement { sort_key, .. } => *sort_key,
             RenderCommand::DebugLine { sort_key, .. } => *sort_key,
+            RenderCommand::DebugLines { sort_key, .. } => *sort_key,
             RenderCommand::Skybox { sort_key, .. } => *sort_key,
             RenderCommand::TerrainChunk { sort_key, .. } => *sort_key,
+            RenderCommand::Vehicle { sort_key, .. } => *sort_key,
+            RenderCommand::Clear { sort_key, .. } => *sort_key,
+            RenderCommand::Viewport { sort_key, .. } => *sort_key,
         }
     }
 
@@ -111,9 +151,14 @@ impl RenderCommand {
             RenderCommand::Mesh { sort_key, .. } => *sort_key = key,
             RenderCommand::ParticleSystem { sort_key, .. } => *sort_key = key,
             RenderCommand::UIDraw { sort_key, .. } => *sort_key = key,
+            RenderCommand::UIElement { sort_key, .. } => *sort_key = key,
             RenderCommand::DebugLine { sort_key, .. } => *sort_key = key,
+            RenderCommand::DebugLines { sort_key, .. } => *sort_key = key,
             RenderCommand::Skybox { sort_key, .. } => *sort_key = key,
             RenderCommand::TerrainChunk { sort_key, .. } => *sort_key = key,
+            RenderCommand::Vehicle { sort_key, .. } => *sort_key = key,
+            RenderCommand::Clear { sort_key, .. } => *sort_key = key,
+            RenderCommand::Viewport { sort_key, .. } => *sort_key = key,
         }
     }
 
@@ -133,6 +178,7 @@ impl RenderCommand {
             RenderCommand::ParticleSystem { transform, .. } => Some(transform),
             RenderCommand::Skybox { rotation, .. } => Some(rotation),
             RenderCommand::TerrainChunk { transform, .. } => Some(transform),
+            RenderCommand::Vehicle { rotation, .. } => Some(rotation),
             _ => None,
         }
     }
@@ -151,6 +197,7 @@ enum CommandType {
     DebugLine,
     Skybox,
     TerrainChunk,
+    Vehicle,
 }
 
 impl RenderCommandBuilder {
@@ -187,6 +234,12 @@ impl RenderCommandBuilder {
     pub fn terrain_chunk() -> Self {
         Self {
             command_type: CommandType::TerrainChunk,
+        }
+    }
+
+    pub fn vehicle() -> Self {
+        Self {
+            command_type: CommandType::Vehicle,
         }
     }
 
@@ -284,6 +337,22 @@ impl RenderCommandBuilder {
             material,
             transform,
             lod_level,
+            sort_key,
+        }
+    }
+
+    /// Build a vehicle render command
+    pub fn build_vehicle(
+        self,
+        position: Vector3<f32>,
+        rotation: Matrix4<f32>,
+        color: [f32; 4],
+        sort_key: u64,
+    ) -> RenderCommand {
+        RenderCommand::Vehicle {
+            position,
+            rotation,
+            color,
             sort_key,
         }
     }

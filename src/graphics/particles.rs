@@ -104,7 +104,6 @@ impl ParticleSystem {
                 gl.vertex_attrib_pointer_f32(2, 1, glow::FLOAT, false, 28, 24);
                 
                 // Pass view_proj to shader as u_view_proj uniform
-                // Note: Shader must have this uniform defined
                 let program = gl.get_parameter_i32(glow::CURRENT_PROGRAM);
                 // program может быть 0 если нет активного шейдерного программы, но это маловероятно в render
                 let native_program = glow::NativeProgram(std::num::NonZero::new(program as u32).unwrap_or_else(|| {

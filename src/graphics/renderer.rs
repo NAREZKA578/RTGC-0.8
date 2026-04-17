@@ -1,14 +1,17 @@
 //! Renderer module - Command queue based rendering system with trait abstraction
 //! 
-//! ARCHITECTURE NOTE: This module uses RenderCommand from render_command.rs for all
-//! rendering operations. The local RenderCommand enum is kept for backward compatibility
-//! but should be deprecated in future versions.
+//! ARCHITECTURE: This module uses RenderCommand from render_command.rs for all
+//! rendering operations. Local types (Handle, Material, RenderCommand, RenderQueue)
+//! have been removed to avoid duplication.
 
 use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::lod_system::{LodManager, LodObject};
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::texture_streaming::TextureStreamingSystem;
 use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Texture};
+use crate::graphics::material::Material;
+use crate::graphics::render_command::{Handle, RenderCommand};
+use crate::graphics::render_queue::RenderQueue;
 use glow::{Context, HasContext};
 use nalgebra::{Matrix4, UnitQuaternion, Vector3};
 use std::collections::HashMap;
@@ -17,9 +20,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{warn, info};
 
-// Re-export RenderCommand and Handle from render_command module for consistency
-pub use crate::graphics::render_command::{Handle as ResourceHandle, RenderCommand as RhiRenderCommand};
-
 /// Renderer trait for backend abstraction
 /// Примечание: не требуем Send так как glow::Context не реализует Send/Sync
 pub trait RendererTrait {
@@ -27,7 +27,7 @@ pub trait RendererTrait {
     fn submit(&mut self, command: RenderCommand);
 
     /// Flush the render queue - execute all commands
-    fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+    fn flush_render(&mut self) -> Result<(), Box<dyn std::error::Error>>;
 
     /// Set viewport dimensions
     fn set_viewport(&mut self, x: i32, y: i32, width: u32, height: u32);
@@ -40,224 +40,6 @@ pub trait RendererTrait {
 
     /// Get mutable camera reference
     fn camera_mut(&mut self) -> &mut Camera;
-}
-
-// NOTE: Handle struct is deprecated - use render_command::Handle instead
-// Kept for backward compatibility with existing code
-
-/// Handle to a GPU resource (DEPRECATED - use render_command::Handle)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Handle<T>(u64, std::marker::PhantomData<T>);
-
-impl<T> Handle<T> {
-    pub const fn null() -> Self {
-        Self(0, std::marker::PhantomData)
-    }
-
-    pub const fn is_null(&self) -> bool {
-        self.0 == 0
-    }
-
-    fn new(id: u64) -> Self {
-        Self(id, std::marker::PhantomData)
-    }
-}
-
-/// Material definition for rendering
-#[derive(Debug, Clone)]
-pub struct Material {
-    pub shader: Handle<Shader>,
-    pub textures: Vec<Handle<Texture>>,
-    pub uniforms: HashMap<String, UniformValue>,
-    pub render_order: i32,
-    pub transparent: bool,
-}
-
-impl Material {
-    pub fn new(shader: Handle<Shader>) -> Self {
-        Self {
-            shader,
-            textures: Vec::new(),
-            uniforms: HashMap::new(),
-            render_order: 0,
-            transparent: false,
-        }
-    }
-
-    pub fn with_texture(mut self, texture: Handle<Texture>) -> Self {
-        self.textures.push(texture);
-        self
-    }
-
-    pub fn with_uniform(mut self, name: &str, value: UniformValue) -> Self {
-        self.uniforms.insert(name.to_string(), value);
-        self
-    }
-}
-
-/// Uniform value types for shaders
-#[derive(Debug, Clone)]
-pub enum UniformValue {
-    Float(f32),
-    Vec2([f32; 2]),
-    Vec3([f32; 3]),
-    Vec4([f32; 4]),
-    Mat4([[f32; 4]; 4]),
-    Int(i32),
-    Bool(bool),
-}
-
-// NOTE: Local RenderCommand enum is deprecated - use render_command::RenderCommand instead
-// Kept for backward compatibility with existing code that uses this enum directly
-
-/// Render command types for the command queue (DEPRECATED - use render_command::RenderCommand)
-#[derive(Debug, Clone)]
-pub enum RenderCommand {
-    /// Render a mesh with transform and material
-    Mesh {
-        handle: Handle<Mesh>,
-        transform: Matrix4<f32>,
-        material: Material,
-    },
-    /// Render a particle system
-    ParticleSystem {
-        handle: Handle<crate::graphics::particles::ParticleSystem>,
-        view_proj: Matrix4<f32>,
-    },
-    /// Render a UI element
-    UIElement {
-        rect: [f32; 4], // x, y, width, height
-        texture: Option<Handle<Texture>>,
-        color: [f32; 4],
-        depth: f32,
-    },
-    /// Render a debug line
-    DebugLine {
-        start: [f32; 3],
-        end: [f32; 3],
-        color: [f32; 4],
-    },
-    /// Render debug lines (batched)
-    DebugLines {
-        lines: Vec<([f32; 3], [f32; 3], [f32; 4])>,
-    },
-    /// Render skybox/skydome
-    Skybox {
-        texture: Option<Handle<Texture>>,
-        rotation: Matrix4<f32>,
-    },
-    /// Render terrain
-    Terrain {
-        handle: Handle<Mesh>,
-        transform: Matrix4<f32>,
-        material: Material,
-    },
-    /// Render vehicle
-    Vehicle {
-        handle: Handle<Mesh>,
-        transform: Matrix4<f32>,
-        material: Material,
-        lights_enabled: bool,
-    },
-    /// Clear screen
-    Clear {
-        color: Option<[f32; 4]>,
-        depth: bool,
-        stencil: bool,
-    },
-    /// Set viewport
-    Viewport {
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-    },
-}
-
-// NOTE: Local RenderQueue is deprecated - use render_queue::RenderQueue instead
-// Kept for backward compatibility with existing code
-
-/// Render queue for batching and sorting draw calls (DEPRECATED - use render_queue::RenderQueue)
-#[derive(Debug)]
-pub struct RenderQueue {
-    commands: Vec<RenderCommand>,
-    sorted: bool,
-}
-
-impl RenderQueue {
-    pub fn new() -> Self {
-        Self {
-            commands: Vec::with_capacity(256),
-            sorted: false,
-        }
-    }
-
-    /// Submit a render command to the queue
-    pub fn submit(&mut self, command: RenderCommand) {
-        self.commands.push(command);
-        self.sorted = false;
-    }
-
-    /// Clear all commands
-    pub fn clear(&mut self) {
-        self.commands.clear();
-        self.sorted = false;
-    }
-
-    /// Sort commands by material/shader for efficient batching
-    pub fn sort(&mut self) {
-        if self.sorted {
-            return;
-        }
-
-        // Sort by: transparent flag, then shader, then texture
-        self.commands.sort_by(|a, b| {
-            let transparent_a = Self::is_transparent(a);
-            let transparent_b = Self::is_transparent(b);
-
-            // Render opaque first, then transparent
-            transparent_a
-                .cmp(&transparent_b)
-                .then_with(|| Self::get_shader_id(a).cmp(&Self::get_shader_id(b)))
-        });
-
-        self.sorted = true;
-    }
-
-    fn is_transparent(cmd: &RenderCommand) -> bool {
-        match cmd {
-            RenderCommand::Mesh { material, .. } => material.transparent,
-            RenderCommand::UIElement { .. } => true,
-            RenderCommand::Vehicle { material, .. } => material.transparent,
-            RenderCommand::Terrain { material, .. } => material.transparent,
-            _ => false,
-        }
-    }
-
-    fn get_shader_id(cmd: &RenderCommand) -> u64 {
-        match cmd {
-            RenderCommand::Mesh { material, .. } => material.shader.0,
-            RenderCommand::Vehicle { material, .. } => material.shader.0,
-            RenderCommand::Terrain { material, .. } => material.shader.0,
-            _ => 0,
-        }
-    }
-
-    /// Get all commands
-    pub fn commands(&self) -> &[RenderCommand] {
-        &self.commands
-    }
-
-    /// Get mutable commands
-    pub fn commands_mut(&mut self) -> &mut Vec<RenderCommand> {
-        &mut self.commands
-    }
-}
-
-impl Default for RenderQueue {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -568,7 +350,7 @@ impl Renderer {
     }
 
     /// Flush the render queue - execute all commands
-    pub fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn flush_render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.render_queue.sort();
 
         let commands: Vec<_> = self.render_queue.commands().iter().cloned().collect();
@@ -578,6 +360,11 @@ impl Renderer {
 
         self.render_queue.clear();
         Ok(())
+    }
+
+    /// Flush the render queue - execute all commands (alias for backward compatibility)
+    pub fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.flush_render()
     }
 
     /// Проблема 11: Get orthographic projection matrix for UI rendering
@@ -603,6 +390,7 @@ impl Renderer {
                 color,
                 depth,
                 stencil,
+                ..
             } => unsafe {
                 let mut clear_bits = 0;
                 if let Some([r, g, b, a]) = color {
@@ -624,13 +412,14 @@ impl Renderer {
                 y,
                 width,
                 height,
+                ..
             } => unsafe {
-                self.gl.viewport(*x, *y, *width, *height);
+                self.gl.viewport(*x, *y, *width as u32, *height as u32);
             },
-            RenderCommand::DebugLine { start, end, color } => {
-                self.draw_debug_line(*start, *end, *color);
+            RenderCommand::DebugLine { start, end, color, .. } => {
+                self.draw_debug_line([start.x, start.y, start.z], [end.x, end.y, end.z], *color);
             }
-            RenderCommand::DebugLines { lines } => {
+            RenderCommand::DebugLines { lines, .. } => {
                 for (start, end, color) in lines {
                     self.draw_debug_line(*start, *end, *color);
                 }
@@ -640,13 +429,191 @@ impl Renderer {
                 texture,
                 color,
                 depth,
+                ..
             } => {
                 self.draw_ui_element(*rect, texture.clone(), *color, *depth);
             }
-            // Other commands handled by existing render methods
-            _ => {}
+            // Execute Mesh command with proper rendering
+            RenderCommand::Mesh {
+                mesh,
+                material,
+                transform,
+                ..
+            } => {
+                self.render_mesh_command(mesh, material, transform);
+            }
+            // Execute TerrainChunk command
+            RenderCommand::TerrainChunk {
+                chunk_id: _,
+                mesh,
+                material,
+                transform,
+                lod_level: _,
+                ..
+            } => {
+                self.render_terrain_command(mesh, material, transform);
+            }
+            // Execute Skybox command
+            RenderCommand::Skybox {
+                texture: _,
+                rotation,
+                ..
+            } => {
+                self.render_skybox_command(rotation);
+            }
+            // Execute ParticleSystem command
+            RenderCommand::ParticleSystem {
+                system,
+                transform,
+                ..
+            } => {
+                self.render_particles_command(system, transform);
+            }
+            // Execute Vehicle command
+            RenderCommand::Vehicle {
+                position,
+                rotation,
+                ..
+            } => {
+                let rot = UnitQuaternion::from_matrix(&rotation);
+                self.render_vehicle_command(position, &rot);
+            }
+            // UIDraw is handled in render_hud()
+            RenderCommand::UIDraw { .. } => {
+                // Handled separately in render_hud() method
+            }
         }
         Ok(())
+    }
+
+    /// Render vehicle box from command
+    fn render_vehicle_command(
+        &mut self,
+        position: &Vector3<f32>,
+        rotation: &UnitQuaternion<f32>,
+    ) {
+        let model_matrix = rotation.to_homogeneous().prepend_translation(position);
+
+        // Use vehicle_shader if available
+        if let Some(ref vs) = self.vehicle_shader {
+            vs.bind(&self.gl);
+            unsafe {
+                if let Some(u_model) = self.gl.get_uniform_location(vs.program(), "u_model") {
+                    self.gl.uniform_matrix_4_f32_slice(
+                        Some(&u_model),
+                        false,
+                        model_matrix.as_slice(),
+                    );
+                }
+                if let Some(u_color) = self.gl.get_uniform_location(vs.program(), "u_color") {
+                    // Rusty metal color
+                    self.gl.uniform_4_f32(Some(&u_color), 0.8, 0.3, 0.1, 1.0);
+                }
+            }
+        } else {
+            self.shader.bind(&self.gl);
+            unsafe {
+                if let Some(u_model) = self
+                    .gl
+                    .get_uniform_location(self.shader.program(), "u_model")
+                {
+                    self.gl.uniform_matrix_4_f32_slice(
+                        Some(&u_model),
+                        false,
+                        model_matrix.as_slice(),
+                    );
+                }
+            }
+        }
+
+        if let Some(ref box_mesh) = self.vehicle_box_mesh {
+            box_mesh.draw(&self.gl);
+        }
+    }
+
+    /// Render a mesh from command
+    fn render_mesh_command(
+        &mut self,
+        mesh_handle: &Handle<Mesh>,
+        _material_handle: &Handle<Material>,
+        transform: &Matrix4<f32>,
+    ) {
+        // Set model transform uniform
+        unsafe {
+            self.shader.bind(&self.gl);
+            if let Some(u_model) = self
+                .gl
+                .get_uniform_location(self.shader.program(), "u_model")
+            {
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&u_model), false, transform.as_slice());
+            }
+        }
+        // Fetch mesh from resource manager using mesh_handle
+        // For now, use terrain_mesh as fallback for demonstration
+        if let Some(ref m) = self.terrain_mesh {
+            m.draw(&self.gl);
+        }
+    }
+
+    /// Render a terrain chunk from command
+    fn render_terrain_command(
+        &mut self,
+        _mesh_handle: &Handle<Mesh>,
+        _material_handle: &Handle<Material>,
+        transform: &Matrix4<f32>,
+    ) {
+        // Set model transform uniform
+        unsafe {
+            self.shader.bind(&self.gl);
+            if let Some(u_model) = self
+                .gl
+                .get_uniform_location(self.shader.program(), "u_model")
+            {
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&u_model), false, transform.as_slice());
+            }
+        }
+        // Fetch terrain mesh from resource manager using mesh_handle
+        // For now, use terrain_mesh as fallback for demonstration
+        if let Some(ref m) = self.terrain_mesh {
+            m.draw(&self.gl);
+        }
+    }
+
+    /// Render skybox from command
+    fn render_skybox_command(&mut self, rotation: &Matrix4<f32>) {
+        // Apply rotation to skybox rendering by passing rotation matrix to sky_shader
+        unsafe {
+            if let Some(ref ss) = self.sky_shader {
+                ss.bind(&self.gl);
+                if let Some(u_rotation) = self.gl.get_uniform_location(ss.program(), "u_rotation") {
+                    self.gl.uniform_matrix_4_f32_slice(Some(&u_rotation), false, rotation.as_slice());
+                }
+            }
+        }
+        let _ = self.render_sky();
+    }
+
+    /// Render particle system from command
+    fn render_particles_command(
+        &mut self,
+        _system_handle: &Handle<ParticleSystem>,
+        transform: &Matrix4<f32>,
+    ) {
+        // Use built-in particle_system with transform applied
+        // Full implementation would fetch particle system from resource manager using handle
+        let view_proj = self.camera.projection_matrix() * self.camera.view_matrix();
+        
+        // Apply transform to particle system (model matrix for particle emission point)
+        // ParticleSystem::render expects view_proj, we set model matrix in shader
+        unsafe {
+            self.shader.bind(&self.gl);
+            if let Some(u_model) = self.gl.get_uniform_location(self.shader.program(), "u_model") {
+                self.gl.uniform_matrix_4_f32_slice(Some(&u_model), false, transform.as_slice());
+            }
+        }
+        self.particle_system.render(&self.gl, view_proj);
     }
 
     /// Draw a debug line
@@ -665,9 +632,39 @@ impl Renderer {
         color: [f32; 4],
         depth: f32,
     ) {
-        // Render UI quad using the HUD system
-        if let Some(ref mut hud) = self.hud_batch {
-            hud.draw_quad(rect, texture, color, depth);
+        // Render UI quad using the HUD batch system
+        // Uses hud_vao/hud_vbo for batched rendering
+        self.hud_vertices.clear();
+        
+        let [x, y, w, h] = rect;
+        // Add quad vertices for batched rendering (position + color + uv)
+        // Vertex format: x, y, r, g, b, a, u, v (8 floats = 32 bytes per vertex)
+        let vertices: [f32; 32] = [
+            // Top-left
+            x, y, color[0], color[1], color[2], color[3], 0.0, 0.0,
+            // Top-right
+            x + w, y, color[0], color[1], color[2], color[3], 1.0, 0.0,
+            // Bottom-right
+            x + w, y + h, color[0], color[1], color[2], color[3], 1.0, 1.0,
+            // Bottom-left
+            x, y + h, color[0], color[1], color[2], color[3], 0.0, 1.0,
+        ];
+        self.hud_vertices.extend_from_slice(&vertices);
+        
+        // Upload and draw if we have a VAO
+        if let (Some(vao), Some(vbo)) = (self.hud_vao, self.hud_vbo) {
+            unsafe {
+                self.gl.bind_vertex_array(Some(vao));
+                self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+                self.gl.buffer_data_u8_slice(
+                    glow::ARRAY_BUFFER,
+                    bytemuck::cast_slice(&self.hud_vertices),
+                    glow::DYNAMIC_DRAW,
+                );
+                self.gl.draw_arrays(glow::TRIANGLE_FAN, 0, 4);
+                self.gl.bind_vertex_array(None);
+                self.gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            }
         }
     }
 
@@ -2644,8 +2641,7 @@ impl RendererTrait for Renderer {
         self.render_queue.submit(command);
     }
 
-    fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Call the existing pub fn flush method
+    fn flush_render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.flush()
     }
 

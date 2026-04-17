@@ -30,28 +30,22 @@ unsafe impl bytemuck::Zeroable for Vertex {}
 unsafe impl Send for Mesh {}
 unsafe impl Sync for Mesh {}
 
-pub struct Mesh {
+pub struct MeshInner {
     vao: glow::VertexArray,
     vbo: glow::Buffer,
     ebo: glow::Buffer,
     indices_count: i32,
 }
 
-impl Clone for Mesh {
-    fn clone(&self) -> Self {
-        Self {
-            vao: self.vao,
-            vbo: self.vbo,
-            ebo: self.ebo,
-            indices_count: self.indices_count,
-        }
-    }
+#[derive(Clone)]
+pub struct Mesh {
+    inner: Arc<MeshInner>,
 }
 
 impl std::fmt::Debug for Mesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mesh")
-            .field("indices_count", &self.indices_count)
+            .field("indices_count", &self.inner.indices_count)
             .finish()
     }
 }
@@ -92,10 +86,12 @@ impl Mesh {
             gl.bind_buffer(glow::ARRAY_BUFFER, None);
 
             Ok(Mesh {
-                vao,
-                vbo,
-                ebo,
-                indices_count: indices.len() as i32,
+                inner: Arc::new(MeshInner {
+                    vao,
+                    vbo,
+                    ebo,
+                    indices_count: indices.len() as i32,
+                }),
             })
         }
     }
@@ -122,13 +118,13 @@ impl Mesh {
         use std::num::NonZero;
         // Используем unsafe new_unchecked с валидным non-zero значением
         // Placeholder mesh используется как временная заглушка до загрузки реальной модели
-        unsafe {
-            Self {
+        Self {
+            inner: Arc::new(MeshInner {
                 vao: NativeVertexArray(NonZero::new_unchecked(1)),
                 vbo: NativeBuffer(NonZero::new_unchecked(1)),
                 ebo: NativeBuffer(NonZero::new_unchecked(1)),
                 indices_count: 0,
-            }
+            }),
         }
     }
     
@@ -191,10 +187,12 @@ impl Mesh {
             gl.bind_buffer(glow::ARRAY_BUFFER, None);
 
             Ok(Mesh {
-                vao,
-                vbo,
-                ebo,
-                indices_count: indices.len() as i32,
+                inner: Arc::new(MeshInner {
+                    vao,
+                    vbo,
+                    ebo,
+                    indices_count: indices.len() as i32,
+                }),
             })
         }
     }
@@ -253,37 +251,49 @@ impl Mesh {
             gl.bind_buffer(glow::ARRAY_BUFFER, None);
 
             Ok(Mesh {
-                vao,
-                vbo,
-                ebo,
-                indices_count: indices.len() as i32,
+                inner: Arc::new(MeshInner {
+                    vao,
+                    vbo,
+                    ebo,
+                    indices_count: indices.len() as i32,
+                }),
             })
         }
     }
 
     pub fn draw(&self, gl: &Context) {
         // Пропускаем рендеринг для placeholder мешей с нулевым количеством индексов
-        if self.indices_count == 0 {
+        if self.inner.indices_count == 0 {
             return;
         }
         unsafe {
-            gl.bind_vertex_array(Some(self.vao));
-            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.ebo));
-            gl.draw_elements(glow::TRIANGLES, self.indices_count, glow::UNSIGNED_INT, 0);
+            gl.bind_vertex_array(Some(self.inner.vao));
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.inner.ebo));
+            gl.draw_elements(glow::TRIANGLES, self.inner.indices_count, glow::UNSIGNED_INT, 0);
             gl.bind_vertex_array(None);
         }
     }
 
     pub fn indices_count(&self) -> i32 {
-        self.indices_count
+        self.inner.indices_count
+    }
+
+    /// Явное удаление GPU-ресурса. Вызывать вручную перед уничтожением GL контекста.
+    pub fn delete(&self, gl: &Context) {
+        unsafe {
+            // Проверяем, есть ли другие ссылки на этот меш
+            if Arc::strong_count(&self.inner) == 1 {
+                gl.delete_vertex_array(self.inner.vao);
+                gl.delete_buffer(self.inner.vbo);
+                gl.delete_buffer(self.inner.ebo);
+            }
+        }
     }
 }
 
 impl Drop for Mesh {
     fn drop(&mut self) {
-        // Note: GL resources deletion requires active GL context which may not be available here
-        // In a real application, you would need to call explicit cleanup methods before dropping
-        // or use a resource manager that tracks the GL context lifetime.
-        // For now, resources are cleaned up when GL context is destroyed.
+        // Ресурсы удаляются только если это последняя ссылка
+        // Для гарантированного удаления используйте метод delete(&self, gl: &Context)
     }
 }
