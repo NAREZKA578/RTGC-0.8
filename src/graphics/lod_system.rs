@@ -32,6 +32,7 @@ impl Default for LodModel {
 }
 
 /// LOD Object with hysteresis to prevent "popcorn" effect during LOD transitions
+#[derive(Clone)]
 pub struct LodObject {
     pub position: Vector3<f32>,
     pub lod_distances: [f32; 3], // [high_to_med, med_to_low, low_to_billboard]
@@ -176,6 +177,7 @@ impl LodObject {
 }
 
 /// LOD Manager with frustum culling and batched updates
+#[derive(Clone)]
 pub struct LodManager {
     pub objects: Vec<LodObject>,
     total_triangles_rendered: usize,

@@ -353,24 +353,36 @@ impl RigidBody {
         // Вычисляем реальные bounds terrain
         let rows = height_map.len();
         let cols = if rows > 0 { height_map[0].len() } else { 0 };
-        let terrain_width = if cols > 0 { cols as f32 * scale.x } else { scale.x };
-        let terrain_depth = if rows > 0 { rows as f32 * scale.z } else { scale.z };
-        
+        let terrain_width = if cols > 0 {
+            cols as f32 * scale.x
+        } else {
+            scale.x
+        };
+        let terrain_depth = if rows > 0 {
+            rows as f32 * scale.z
+        } else {
+            scale.z
+        };
+
         // Находим min/max высоты
         let (min_h, max_h) = if rows > 0 && cols > 0 {
             let mut min_h = f32::MAX;
             let mut max_h = f32::MIN;
             for row in &height_map {
                 for &h in row {
-                    if h < min_h { min_h = h; }
-                    if h > max_h { max_h = h; }
+                    if h < min_h {
+                        min_h = h;
+                    }
+                    if h > max_h {
+                        max_h = h;
+                    }
                 }
             }
             (min_h * scale.y, max_h * scale.y)
         } else {
             (0.0, 0.0)
         };
-        
+
         let half_size = Vector3::new(
             terrain_width / 2.0,
             (max_h - min_h).abs().max(1.0) / 2.0,
@@ -381,7 +393,7 @@ impl RigidBody {
             min: center - half_size,
             max: center + half_size,
         };
-        
+
         Self {
             position,
             rotation: UnitQuaternion::identity(),
@@ -534,7 +546,7 @@ impl RigidBody {
                 self.forces += force;
                 return;
             }
-            
+
             self.forces += force;
             let r = point - self.position - self.center_of_mass;
             let torque = r.cross(&force);
@@ -560,9 +572,9 @@ impl RigidBody {
                 tracing::warn!(target: "physics", "NaN impulse in apply_impulse_at_point, ignoring");
                 return;
             }
-            
+
             self.velocity += impulse * self.inverse_mass;
-            
+
             if point.x.is_finite() && point.y.is_finite() && point.z.is_finite() {
                 let r = point - self.position - self.center_of_mass;
                 let angular_impulse = r.cross(&impulse);
@@ -1010,7 +1022,7 @@ impl PhysicsWorld {
             self.handle_collisions_parallel();
 
             // Step 5: Solve constraints (contacts, joints) in parallel
-            self.solve_constraints_parallel();
+            self.solve_constraints();
 
             // Step 6: Check for sleeping bodies (performance optimization)
             self.update_sleeping_bodies(sub_dt);
@@ -1860,10 +1872,10 @@ impl PhysicsWorld {
     ) -> Option<Contact> {
         // SAT (Separating Axis Theorem) для box-box
         // 15 осей для проверки: 3 из A + 3 из B + 9 cross products
-        
+
         let transform_a = body_a.get_world_transform();
         let transform_b = body_b.get_world_transform();
-        
+
         // Получаем оси ориентации боксов (колонки матрицы вращения)
         let axes_a = [
             transform_a.rotation * Vector3::x(),
@@ -1875,16 +1887,16 @@ impl PhysicsWorld {
             transform_b.rotation * Vector3::y(),
             transform_b.rotation * Vector3::z(),
         ];
-        
+
         let center_a = transform_a.translation.vector;
         let center_b = transform_b.translation.vector;
-        
+
         // Вектор между центрами
         let t = center_b - center_a;
-        
+
         let mut smallest_overlap = f32::MAX;
         let mut penetration_axis = axes_a[0];
-        
+
         // Матрица поворота (проекции осей A на оси B)
         let mut r = [[0.0f32; 3]; 3];
         for i in 0..3 {
@@ -1892,53 +1904,55 @@ impl PhysicsWorld {
                 r[i][j] = axes_a[i].dot(&axes_b[j]);
             }
         }
-        
+
         // Тестируем 15 осей
-        let test_axes: Vec<(Vector3<f32>, f32, f32)> = (0..15).map(|axis_idx| {
-            let mut axis: Vector3<f32>;
-            let mut ra: f32;
-            let mut rb: f32;
-            
-            if axis_idx < 3 {
-                // Оси из A
-                axis = axes_a[axis_idx];
-                ra = extents_a[axis_idx];
-                rb = extents_b.x * r[axis_idx][0].abs() 
-                   + extents_b.y * r[axis_idx][1].abs() 
-                   + extents_b.z * r[axis_idx][2].abs();
-            } else if axis_idx < 6 {
-                // Оси из B
-                axis = axes_b[axis_idx - 3];
-                ra = extents_a.x * r[0][axis_idx - 3].abs() 
-                   + extents_a.y * r[1][axis_idx - 3].abs() 
-                   + extents_a.z * r[2][axis_idx - 3].abs();
-                rb = extents_b[axis_idx - 3];
-            } else {
-                // Cross product оси (9 комбинаций)
-                let i = (axis_idx - 6) / 3;
-                let j = (axis_idx - 6) % 3;
-                axis = axes_a[i].cross(&axes_b[j]);
-                
-                // Если ось нулевая (параллельные), пропускаем
-                let axis_len_sq = axis.norm_squared();
-                if axis_len_sq < 1e-6 {
-                    return (axis, f32::MAX, 0.0); // Нет разделения
+        let test_axes: Vec<(Vector3<f32>, f32, f32)> = (0..15)
+            .map(|axis_idx| {
+                let mut axis: Vector3<f32>;
+                let mut ra: f32;
+                let mut rb: f32;
+
+                if axis_idx < 3 {
+                    // Оси из A
+                    axis = axes_a[axis_idx];
+                    ra = extents_a[axis_idx];
+                    rb = extents_b.x * r[axis_idx][0].abs()
+                        + extents_b.y * r[axis_idx][1].abs()
+                        + extents_b.z * r[axis_idx][2].abs();
+                } else if axis_idx < 6 {
+                    // Оси из B
+                    axis = axes_b[axis_idx - 3];
+                    ra = extents_a.x * r[0][axis_idx - 3].abs()
+                        + extents_a.y * r[1][axis_idx - 3].abs()
+                        + extents_a.z * r[2][axis_idx - 3].abs();
+                    rb = extents_b[axis_idx - 3];
+                } else {
+                    // Cross product оси (9 комбинаций)
+                    let i = (axis_idx - 6) / 3;
+                    let j = (axis_idx - 6) % 3;
+                    axis = axes_a[i].cross(&axes_b[j]);
+
+                    // Если ось нулевая (параллельные), пропускаем
+                    let axis_len_sq = axis.norm_squared();
+                    if axis_len_sq < 1e-6 {
+                        return (axis, f32::MAX, 0.0); // Нет разделения
+                    }
+                    axis = axis.normalize();
+
+                    ra = extents_a[(i + 1) % 3] * axes_a[(i + 1) % 3].dot(&axis).abs()
+                        + extents_a[(i + 2) % 3] * axes_a[(i + 2) % 3].dot(&axis).abs();
+                    rb = extents_b[(j + 1) % 3] * axes_b[(j + 1) % 3].dot(&axis).abs()
+                        + extents_b[(j + 2) % 3] * axes_b[(j + 2) % 3].dot(&axis).abs();
                 }
-                axis = axis.normalize();
-                
-                ra = extents_a[(i + 1) % 3] * axes_a[(i + 1) % 3].dot(&axis).abs() 
-                   + extents_a[(i + 2) % 3] * axes_a[(i + 2) % 3].dot(&axis).abs();
-                rb = extents_b[(j + 1) % 3] * axes_b[(j + 1) % 3].dot(&axis).abs() 
-                   + extents_b[(j + 2) % 3] * axes_b[(j + 2) % 3].dot(&axis).abs();
-            }
-            
-            // Проекция расстояния между центрами
-            let projected_distance = t.dot(&axis).abs();
-            let overlap = projected_distance - (ra + rb);
-            
-            (axis, overlap, ra + rb)
-        }).collect();
-        
+
+                // Проекция расстояния между центрами
+                let projected_distance = t.dot(&axis).abs();
+                let overlap = projected_distance - (ra + rb);
+
+                (axis, overlap, ra + rb)
+            })
+            .collect();
+
         for (axis, overlap, _) in &test_axes {
             if *overlap > 0.0 {
                 // Найдена разделяющая ось - нет коллизии
@@ -1949,17 +1963,19 @@ impl PhysicsWorld {
                 penetration_axis = *axis;
             }
         }
-        
+
         // Убедимся что ось направлена от A к B
         if penetration_axis.dot(&t) < 0.0 {
             penetration_axis = -penetration_axis;
         }
-        
+
         // Точка контакта - середина проникновения
-        let contact_point_a = center_a + penetration_axis * (extents_a.norm() - smallest_overlap / 2.0);
-        let contact_point_b = center_b - penetration_axis * (extents_b.norm() - smallest_overlap / 2.0);
+        let contact_point_a =
+            center_a + penetration_axis * (extents_a.norm() - smallest_overlap / 2.0);
+        let contact_point_b =
+            center_b - penetration_axis * (extents_b.norm() - smallest_overlap / 2.0);
         let contact_point = (contact_point_a + contact_point_b) / 2.0;
-        
+
         Some(Contact {
             body_a: _i,
             body_b: _j,
@@ -2367,8 +2383,10 @@ impl PhysicsWorld {
 
     /// Sequential Impulse Solver for realistic constraint resolution
     /// This iterative solver handles multiple contacts and produces stable stacking
+    /// NOTE: This was previously named solve_constraints_parallel - now accurately named as sequential
     fn solve_constraints(&mut self) {
-        // Заглушка - упрощено для компиляции
+        self.solve_constraints_sequential();
+        self.solve_spring_constraints(self.time_step / self.sub_steps as f32);
     }
 
     /// Sequential constraint solver - safe version without raw pointers
@@ -2394,17 +2412,6 @@ impl PhysicsWorld {
                 }
             }
         }
-    }
-
-    /// Parallel Sequential Impulse Solver using rayon for multi-core performance
-    /// FIXED: Removed unsafe raw pointer access, using sequential version instead
-    fn solve_constraints_parallel(&mut self) {
-        // Use sequential version to avoid data races
-        // NOTE: Parallel implementation requires disjoint set union (DSU) for island detection
-        self.solve_constraints_sequential();
-
-        // Solve spring constraints (B1) - use method from constraints module
-        self.solve_spring_constraints(self.time_step / self.sub_steps as f32);
     }
 
     // Raycasting methods
@@ -2628,95 +2635,101 @@ impl PhysicsWorld {
     ) -> Option<RaycastHit> {
         // Реализация raycast для terrain с использованием height map
         // Используем bilinear interpolation для определения высоты в точке
-        
+
         if height_map.is_empty() || height_map[0].is_empty() {
             return None;
         }
-        
+
         let rows = height_map.len();
         let cols = height_map[0].len();
-        
+
         // Вычисляем размеры terrain
         let half_size_x = (cols as f32 * scale.x) / 2.0;
         let half_size_z = (rows as f32 * scale.z) / 2.0;
-        
+
         // Находим пересечение луча с Y=0 плоскостью как начальное приближение
         if ray.direction.y == 0.0 {
             return None; // Луч параллелен земле
         }
-        
+
         let t_flat = -ray.origin.y / ray.direction.y;
         if t_flat < 0.0 {
             return None; // Пересечение позади луча
         }
-        
+
         let hit_pos_flat = ray.origin + ray.direction * t_flat;
-        
+
         // Проверяем, находится ли точка внутри bounds terrain
-        if hit_pos_flat.x < -half_size_x || hit_pos_flat.x > half_size_x 
-            || hit_pos_flat.z < -half_size_z || hit_pos_flat.z > half_size_z {
+        if hit_pos_flat.x < -half_size_x
+            || hit_pos_flat.x > half_size_x
+            || hit_pos_flat.z < -half_size_z
+            || hit_pos_flat.z > half_size_z
+        {
             return None;
         }
-        
+
         // Преобразуем мировые координаты в UV координаты height map
         let u = ((hit_pos_flat.x + half_size_x) / (half_size_x * 2.0)).clamp(0.0, 1.0);
         let v = ((hit_pos_flat.z + half_size_z) / (half_size_z * 2.0)).clamp(0.0, 1.0);
-        
+
         // Находим индексы ячеек
         let col_f = u * (cols - 1) as f32;
         let row_f = v * (rows - 1) as f32;
-        
+
         let col0 = col_f.floor() as usize;
         let row0 = row_f.floor() as usize;
         let col1 = (col0 + 1).min(cols - 1);
         let row1 = (row0 + 1).min(rows - 1);
-        
+
         // Bilinear interpolation высоты
         let h00 = height_map[row0][col0] * scale.y;
         let h01 = height_map[row0][col1] * scale.y;
         let h10 = height_map[row1][col0] * scale.y;
         let h11 = height_map[row1][col1] * scale.y;
-        
+
         let du = col_f - col0 as f32;
         let dv = row_f - row0 as f32;
-        
-        let height = (1.0 - du) * (1.0 - dv) * h00 
-                   + du * (1.0 - dv) * h01 
-                   + (1.0 - du) * dv * h10 
-                   + du * dv * h11;
-        
+
+        let height = (1.0 - du) * (1.0 - dv) * h00
+            + du * (1.0 - dv) * h01
+            + (1.0 - du) * dv * h10
+            + du * dv * h11;
+
         // Теперь проверяем реальное пересечение с поверхностью на этой высоте
         let t = (height - ray.origin.y) / ray.direction.y;
-        
+
         if t < 0.0 {
             return None;
         }
-        
+
         let hit_pos = ray.origin + ray.direction * t;
-        
+
         // Проверяем bounds ещё раз с учётом реальной высоты
-        if hit_pos.x < -half_size_x || hit_pos.x > half_size_x 
-            || hit_pos.z < -half_size_z || hit_pos.z > half_size_z {
+        if hit_pos.x < -half_size_x
+            || hit_pos.x > half_size_x
+            || hit_pos.z < -half_size_z
+            || hit_pos.z > half_size_z
+        {
             return None;
         }
-        
+
         // Вычисляем нормаль через конечные разности
         let eps = scale.x / cols as f32;
         let u_eps = ((hit_pos.x + eps + half_size_x) / (half_size_x * 2.0)).clamp(0.0, 1.0);
         let v_eps = ((hit_pos.z + eps + half_size_z) / (half_size_z * 2.0)).clamp(0.0, 1.0);
-        
+
         let col_eps = (u_eps * (cols - 1) as f32).floor() as usize;
         let row_eps = (v_eps * (rows - 1) as f32).floor() as usize;
-        
-        let h_right = height_map[row0.min(rows-1)][col_eps.min(cols-1)] * scale.y;
-        let h_up = height_map[row_eps.min(rows-1)][col0.min(cols-1)] * scale.y;
-        
+
+        let h_right = height_map[row0.min(rows - 1)][col_eps.min(cols - 1)] * scale.y;
+        let h_up = height_map[row_eps.min(rows - 1)][col0.min(cols - 1)] * scale.y;
+
         let dx = (h_right - height) / eps;
         let dz = (h_up - height) / eps;
-        
+
         let mut normal = Vector3::new(-dx, 1.0, -dz);
         normal.normalize_mut();
-        
+
         Some(RaycastHit {
             point: hit_pos,
             normal,
@@ -2984,7 +2997,10 @@ pub fn raycast_world(
     unsafe {
         if let Some(world_ptr) = GLOBAL_PHYSICS_WORLD {
             let world = &*world_ptr;
-            let ray = Ray { origin, direction };
+            let ray = Ray {
+                origin: origin.into(),
+                direction,
+            };
             world.raycast(&ray).and_then(|hit| {
                 if hit.distance <= max_distance {
                     Some(hit)

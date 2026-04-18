@@ -272,6 +272,7 @@ impl Default for InputState {
 }
 
 /// Input manager for handling all input sources
+#[derive(Clone)]
 pub struct InputManager {
     state: InputState,
 }

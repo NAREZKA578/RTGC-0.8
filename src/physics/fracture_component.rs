@@ -43,7 +43,7 @@ impl FractureComponent {
 
         // Check material properties
         if !self.material_properties.density.is_finite()
-            || !self.material_properties.young_modulus.is_finite()
+            || !self.material_properties.elastic_modulus.is_finite()
         {
             return false;
         }

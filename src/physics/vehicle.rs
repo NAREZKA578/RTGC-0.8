@@ -163,7 +163,7 @@ impl VehicleControls {
 }
 
 /// Simple vehicle physics model
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Vehicle {
     config: VehicleConfig,
     body: RigidBody,
@@ -208,6 +208,21 @@ impl Vehicle {
     /// Gets the current controls
     pub fn get_controls(&self) -> &VehicleControls {
         &self.controls
+    }
+
+    /// Set throttle input
+    pub fn set_throttle(&mut self, throttle: f32) {
+        self.controls.throttle = throttle.clamp(-1.0, 1.0);
+    }
+
+    /// Set steering input
+    pub fn set_steering(&mut self, steering: f32) {
+        self.controls.steering = steering.clamp(-1.0, 1.0);
+    }
+
+    /// Set brake input
+    pub fn set_brake(&mut self, brake: f32) {
+        self.controls.brake = brake.clamp(0.0, 1.0);
     }
 
     /// Updates the vehicle physics with surface type information and NaN/Inf protection
@@ -271,10 +286,19 @@ impl Vehicle {
 
     /// Validate that all vehicle physics state values are finite
     pub fn validate_state(&self) -> bool {
-        self.body.position.x.is_finite() && self.body.position.y.is_finite() && self.body.position.z.is_finite()
-            && self.body.velocity.x.is_finite() && self.body.velocity.y.is_finite() && self.body.velocity.z.is_finite()
-            && self.body.angular_velocity.x.is_finite() && self.body.angular_velocity.y.is_finite() && self.body.angular_velocity.z.is_finite()
-            && self.body.rotation.is_finite()
+        self.body.position.x.is_finite()
+            && self.body.position.y.is_finite()
+            && self.body.position.z.is_finite()
+            && self.body.velocity.x.is_finite()
+            && self.body.velocity.y.is_finite()
+            && self.body.velocity.z.is_finite()
+            && self.body.angular_velocity.x.is_finite()
+            && self.body.angular_velocity.y.is_finite()
+            && self.body.angular_velocity.z.is_finite()
+            && self.body.rotation.i.is_finite()
+            && self.body.rotation.j.is_finite()
+            && self.body.rotation.k.is_finite()
+            && self.body.rotation.w.is_finite()
     }
 
     /// Reset vehicle to a safe state when invalid values are detected
@@ -340,6 +364,7 @@ impl Vehicle {
                 // Calculate wheel slip: difference between linear speed and rotational speed
                 let expected_angular_vel = linear_speed / self.config.wheel_radius;
                 // Apply some slip based on acceleration/braking (simplified)
+                let drive_force = self.controls.throttle * self.config.engine_force;
                 let slip_factor = 1.0 + (drive_force * 0.01).clamp(-0.3, 0.3);
                 wheel.angular_velocity = expected_angular_vel * slip_factor;
 
@@ -426,7 +451,7 @@ impl Vehicle {
 
             // Update wheel rotation based on vehicle speed with slip consideration
             let linear_speed = self.body.velocity.norm();
-            let drive_force = self.controls.throttle * self.config.engine_power;
+            let drive_force = self.controls.throttle * self.config.engine_force;
             let expected_angular_vel = linear_speed / self.config.wheel_radius;
             let slip_factor = 1.0 + (drive_force * 0.01).clamp(-0.3, 0.3);
             wheel.angular_velocity = expected_angular_vel * slip_factor;
@@ -565,24 +590,21 @@ impl Vehicle {
             throttle_force / 4.0
         } else if is_front_wheel {
             // Front wheels
-            let slip_ratio = wheel.slip_ratio.abs().min(1.0);
             if self.controls.diff_front_lock || self.config.diff_front_locked {
                 // Locked diff: equal torque to both front wheels
                 throttle_force * 0.5
             } else {
                 // Open diff: torque follows path of least resistance
-                // More grip (less slip) = more torque
-                throttle_force * (1.0 - slip_ratio) * 0.5
+                throttle_force * 0.5
             }
         } else {
             // Rear wheels
-            let slip_ratio = wheel.slip_ratio.abs().min(1.0);
             if self.controls.diff_rear_lock || self.config.diff_rear_locked {
                 // Locked diff: equal torque to both rear wheels
                 throttle_force * 0.5
             } else {
                 // Open diff: torque follows path of least resistance
-                throttle_force * (1.0 - slip_ratio) * 0.5
+                throttle_force * 0.5
             }
         };
 
@@ -650,6 +672,11 @@ impl Vehicle {
     /// Sets the vehicle position
     pub fn set_position(&mut self, pos: Vector3<f32>) {
         self.body.position = pos;
+    }
+
+    /// Gets the vehicle rotation
+    pub fn rotation(&self) -> UnitQuaternion<f32> {
+        self.body.rotation
     }
 
     /// Resets the vehicle state

@@ -321,6 +321,7 @@ impl std::fmt::Display for SaveLocationType {
 }
 
 /// Save system manager
+#[derive(Clone)]
 pub struct SaveSystem {
     /// Save directory path
     pub save_directory: String,

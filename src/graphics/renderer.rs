@@ -1,24 +1,24 @@
 //! Renderer module - Command queue based rendering system with trait abstraction
-//! 
+//!
 //! ARCHITECTURE: This module uses RenderCommand from render_command.rs for all
 //! rendering operations. Local types (Handle, Material, RenderCommand, RenderQueue)
 //! have been removed to avoid duplication.
 
 use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::lod_system::{LodManager, LodObject};
-use crate::graphics::particles::ParticleSystem;
-use crate::graphics::texture_streaming::TextureStreamingSystem;
-use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Texture};
 use crate::graphics::material::Material;
+use crate::graphics::particles::ParticleSystem;
 use crate::graphics::render_command::{Handle, RenderCommand};
 use crate::graphics::render_queue::RenderQueue;
+use crate::graphics::texture_streaming::TextureStreamingSystem;
+use crate::graphics::{camera::Camera, mesh::Mesh, shader::Shader, texture::Texture};
 use glow::{Context, HasContext};
 use nalgebra::{Matrix4, UnitQuaternion, Vector3};
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{warn, info};
+use tracing::{info, warn};
 
 /// Renderer trait for backend abstraction
 /// Примечание: не требуем Send так как glow::Context не реализует Send/Sync
@@ -55,7 +55,7 @@ pub struct Model {
 }
 
 /// Main Renderer struct - high-performance command-based rendering system
-/// 
+///
 /// Architecture:
 /// - Uses render_queue::RenderQueue for efficient batching and sorting
 /// - Supports multiple render backends through RHI abstraction
@@ -95,7 +95,7 @@ pub struct Renderer {
     // Цвета неба для внешнего доступа
     pub sky_top_color: Vector3<f32>,
     pub sky_horizon_color: Vector3<f32>,
-    sun_direction: Vector3<f32>,
+    pub sun_direction: Vector3<f32>,
     ambient_intensity: f32,
     vehicle_lights_enabled: bool,
     // Задача 2: Vehicle shader
@@ -163,6 +163,22 @@ fn get_assets_dir() -> PathBuf {
         return current_assets;
     }
 
+    // Фолбэк: ищем в родительских директориях (для release сборки в target/release)
+    let parent = exe_dir.parent().map(|p| p.to_path_buf());
+    if let Some(parent) = parent {
+        let target_assets = parent.join("assets");
+        if target_assets.join("shaders").exists() {
+            return target_assets;
+        }
+        // Также пробуем parent/../assets (симметричная структура)
+        let project_assets = parent.parent().map(|p| p.join("assets"));
+        if let Some(project_assets) = project_assets {
+            if project_assets.join("shaders").exists() {
+                return project_assets;
+            }
+        }
+    }
+
     // Фолбэк: assets рядом с exe
     exe_assets
 }
@@ -180,29 +196,51 @@ impl Renderer {
         let assets_dir = get_assets_dir();
         let shader_path = assets_dir.join("shaders");
 
+        // Проверяем что assets директория существует
+        if !shader_path.exists() {
+            return Err(format!("Shader directory not found: {:?}", shader_path).into());
+        }
+
         // Загрузка terrain shader с обработкой ошибок
-        let vertex_src = std::fs::read_to_string(shader_path.join("terrain.vert"))
-            .map_err(|e| format!("Failed to load terrain.vert: {}", e))?;
-        let fragment_src = std::fs::read_to_string(shader_path.join("terrain.frag"))
-            .map_err(|e| format!("Failed to load terrain.frag: {}", e))?;
-        let shader = Shader::new(&gl, &vertex_src, &fragment_src)?;
+        let vertex_src = match std::fs::read_to_string(shader_path.join("terrain.vert")) {
+            Ok(s) => s,
+            Err(e) => return Err(format!("Failed to load terrain.vert: {}", e).into()),
+        };
+        let fragment_src = match std::fs::read_to_string(shader_path.join("terrain.frag")) {
+            Ok(s) => s,
+            Err(e) => return Err(format!("Failed to load terrain.frag: {}", e).into()),
+        };
+        let shader = match Shader::new(&gl, &vertex_src, &fragment_src) {
+            Ok(s) => s,
+            Err(e) => return Err(format!("Failed to create terrain shader: {}", e).into()),
+        };
 
         // Задача 2: Загрузить vehicle shader
-        let vehicle_vertex_src = std::fs::read_to_string(shader_path.join("vehicle.vert"))
-            .map_err(|e| format!("Failed to load vehicle.vert: {}", e))?;
-        let vehicle_fragment_src = std::fs::read_to_string(shader_path.join("vehicle.frag"))
-            .map_err(|e| format!("Failed to load vehicle.frag: {}", e))?;
-        let vehicle_shader = Shader::new(&gl, &vehicle_vertex_src, &vehicle_fragment_src).ok();
+        let vehicle_shader = match std::fs::read_to_string(shader_path.join("vehicle.vert")) {
+            Ok(vs) => match std::fs::read_to_string(shader_path.join("vehicle.frag")) {
+                Ok(fs) => Shader::new(&gl, &vs, &fs).ok(),
+                Err(e) => {
+                    warn!("Failed to load vehicle.frag: {}", e);
+                    None
+                }
+            },
+            Err(e) => {
+                warn!("Failed to load vehicle.vert: {}", e);
+                None
+            }
+        };
 
         // UI шейдер для отрисовки интерфейса
-        let ui_vertex_src = std::fs::read_to_string(shader_path.join("ui.vert"))
-            .map_err(|e| format!("Failed to load ui.vert: {}", e))?;
-        let ui_fragment_src = std::fs::read_to_string(shader_path.join("ui.frag"))
-            .map_err(|e| format!("Failed to load ui.frag: {}", e))?;
-        let ui_shader = match Shader::new(&gl, &ui_vertex_src, &ui_fragment_src) {
-            Ok(s) => Some(s),
+        let ui_shader = match std::fs::read_to_string(shader_path.join("ui.vert")) {
+            Ok(vs) => match std::fs::read_to_string(shader_path.join("ui.frag")) {
+                Ok(fs) => Shader::new(&gl, &vs, &fs).ok(),
+                Err(e) => {
+                    warn!("UI frag shader failed: {}", e);
+                    None
+                }
+            },
             Err(e) => {
-                warn!("UI shader failed: {}", e);
+                warn!("UI vertex shader failed: {}", e);
                 None
             }
         };
@@ -414,9 +452,11 @@ impl Renderer {
                 height,
                 ..
             } => unsafe {
-                self.gl.viewport(*x, *y, *width as u32, *height as u32);
+                self.gl.viewport(*x, *y, *width as i32, *height as i32);
             },
-            RenderCommand::DebugLine { start, end, color, .. } => {
+            RenderCommand::DebugLine {
+                start, end, color, ..
+            } => {
                 self.draw_debug_line([start.x, start.y, start.z], [end.x, end.y, end.z], *color);
             }
             RenderCommand::DebugLines { lines, .. } => {
@@ -463,19 +503,16 @@ impl Renderer {
             }
             // Execute ParticleSystem command
             RenderCommand::ParticleSystem {
-                system,
-                transform,
-                ..
+                system, transform, ..
             } => {
                 self.render_particles_command(system, transform);
             }
             // Execute Vehicle command
             RenderCommand::Vehicle {
-                position,
-                rotation,
-                ..
+                position, rotation, ..
             } => {
-                let rot = UnitQuaternion::from_matrix(&rotation);
+                let rot =
+                    UnitQuaternion::from_matrix(&rotation.fixed_view::<3, 3>(0, 0).into_owned());
                 self.render_vehicle_command(position, &rot);
             }
             // UIDraw is handled in render_hud()
@@ -487,11 +524,7 @@ impl Renderer {
     }
 
     /// Render vehicle box from command
-    fn render_vehicle_command(
-        &mut self,
-        position: &Vector3<f32>,
-        rotation: &UnitQuaternion<f32>,
-    ) {
+    fn render_vehicle_command(&mut self, position: &Vector3<f32>, rotation: &UnitQuaternion<f32>) {
         let model_matrix = rotation.to_homogeneous().prepend_translation(position);
 
         // Use vehicle_shader if available
@@ -588,7 +621,11 @@ impl Renderer {
             if let Some(ref ss) = self.sky_shader {
                 ss.bind(&self.gl);
                 if let Some(u_rotation) = self.gl.get_uniform_location(ss.program(), "u_rotation") {
-                    self.gl.uniform_matrix_4_f32_slice(Some(&u_rotation), false, rotation.as_slice());
+                    self.gl.uniform_matrix_4_f32_slice(
+                        Some(&u_rotation),
+                        false,
+                        rotation.as_slice(),
+                    );
                 }
             }
         }
@@ -604,13 +641,17 @@ impl Renderer {
         // Use built-in particle_system with transform applied
         // Full implementation would fetch particle system from resource manager using handle
         let view_proj = self.camera.projection_matrix() * self.camera.view_matrix();
-        
+
         // Apply transform to particle system (model matrix for particle emission point)
         // ParticleSystem::render expects view_proj, we set model matrix in shader
         unsafe {
             self.shader.bind(&self.gl);
-            if let Some(u_model) = self.gl.get_uniform_location(self.shader.program(), "u_model") {
-                self.gl.uniform_matrix_4_f32_slice(Some(&u_model), false, transform.as_slice());
+            if let Some(u_model) = self
+                .gl
+                .get_uniform_location(self.shader.program(), "u_model")
+            {
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&u_model), false, transform.as_slice());
             }
         }
         self.particle_system.render(&self.gl, view_proj);
@@ -635,22 +676,50 @@ impl Renderer {
         // Render UI quad using the HUD batch system
         // Uses hud_vao/hud_vbo for batched rendering
         self.hud_vertices.clear();
-        
+
         let [x, y, w, h] = rect;
         // Add quad vertices for batched rendering (position + color + uv)
         // Vertex format: x, y, r, g, b, a, u, v (8 floats = 32 bytes per vertex)
         let vertices: [f32; 32] = [
             // Top-left
-            x, y, color[0], color[1], color[2], color[3], 0.0, 0.0,
+            x,
+            y,
+            color[0],
+            color[1],
+            color[2],
+            color[3],
+            0.0,
+            0.0,
             // Top-right
-            x + w, y, color[0], color[1], color[2], color[3], 1.0, 0.0,
+            x + w,
+            y,
+            color[0],
+            color[1],
+            color[2],
+            color[3],
+            1.0,
+            0.0,
             // Bottom-right
-            x + w, y + h, color[0], color[1], color[2], color[3], 1.0, 1.0,
+            x + w,
+            y + h,
+            color[0],
+            color[1],
+            color[2],
+            color[3],
+            1.0,
+            1.0,
             // Bottom-left
-            x, y + h, color[0], color[1], color[2], color[3], 0.0, 1.0,
+            x,
+            y + h,
+            color[0],
+            color[1],
+            color[2],
+            color[3],
+            0.0,
+            1.0,
         ];
         self.hud_vertices.extend_from_slice(&vertices);
-        
+
         // Upload and draw if we have a VAO
         if let (Some(vao), Some(vbo)) = (self.hud_vao, self.hud_vbo) {
             unsafe {
@@ -1132,8 +1201,11 @@ impl Renderer {
         // Очистка экрана голубым цветом (один раз за кадр)
         unsafe {
             self.gl.clear_color(0.4, 0.6, 0.9, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            self.gl
+                .clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
+
+        info!(target: "render", ">>> Renderer::render() called, menu_state={:?}", self.menu_state);
 
         // Update LOD system based on camera position
         self.lod_manager.update_all_lods(&self.camera.position);
@@ -1147,7 +1219,9 @@ impl Renderer {
 
         match self.menu_state {
             MenuState::Loading => self.render_loading_screen()?,
-            MenuState::MainMenu => self.render_main_menu()?,
+            MenuState::MainMenu => {
+                info!(target: "render", "Rendering MainMenu state - UI rendered via MainMenu");
+            }
             MenuState::CitySelection => self.render_city_selection()?,
             MenuState::InGame => {
                 self.render_game()?;
@@ -1173,7 +1247,7 @@ impl Renderer {
         button: winit::event::MouseButton,
     ) {
         use winit::event::{ElementState, MouseButton};
-        
+
         if state != ElementState::Pressed {
             return;
         }
@@ -1270,8 +1344,6 @@ impl Renderer {
     fn render_main_menu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         unsafe {
             self.gl.disable(glow::DEPTH_TEST);
-
-            // Включаем blending для прозрачности UI элементов
             self.gl.enable(glow::BLEND);
             self.gl
                 .blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
@@ -1551,55 +1623,58 @@ impl Renderer {
                 crate::graphics::lod_system::LodModel::HighPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
                         // Generate a hash key for caching
-                        let mesh_key = Mesh::generate_mesh_key(vertices, indices);
-                        
+                        let mesh_key = Mesh::generate_mesh_key_from_arc(vertices, indices);
+
                         // Get or create mesh from cache
                         let mesh = self.lod_mesh_cache.entry(mesh_key).or_insert_with(|| {
                             let vert_data: Vec<f32> = vertices
                                 .iter()
                                 .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
                                 .collect();
-                            Mesh::new_with_normals(&self.gl, &vert_data, indices)
-                                .unwrap_or_else(|e| {
+                            Mesh::new_with_normals(&self.gl, &vert_data, indices).unwrap_or_else(
+                                |e| {
                                     warn!("Failed to create HighPoly mesh: {}", e);
                                     Mesh::empty(&self.gl)
-                                })
+                                },
+                            )
                         });
                         mesh.draw(&self.gl);
                     }
                 }
                 crate::graphics::lod_system::LodModel::MediumPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
-                        let mesh_key = Mesh::generate_mesh_key(vertices, indices);
-                        
+                        let mesh_key = Mesh::generate_mesh_key_from_arc(vertices, indices);
+
                         let mesh = self.lod_mesh_cache.entry(mesh_key).or_insert_with(|| {
                             let vert_data: Vec<f32> = vertices
                                 .iter()
                                 .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
                                 .collect();
-                            Mesh::new_with_normals(&self.gl, &vert_data, indices)
-                                .unwrap_or_else(|e| {
+                            Mesh::new_with_normals(&self.gl, &vert_data, indices).unwrap_or_else(
+                                |e| {
                                     warn!("Failed to create MediumPoly mesh: {}", e);
                                     Mesh::empty(&self.gl)
-                                })
+                                },
+                            )
                         });
                         mesh.draw(&self.gl);
                     }
                 }
                 crate::graphics::lod_system::LodModel::LowPoly { vertices, indices } => {
                     if !vertices.is_empty() && !indices.is_empty() {
-                        let mesh_key = Mesh::generate_mesh_key(vertices, indices);
-                        
+                        let mesh_key = Mesh::generate_mesh_key_from_arc(vertices, indices);
+
                         let mesh = self.lod_mesh_cache.entry(mesh_key).or_insert_with(|| {
                             let vert_data: Vec<f32> = vertices
                                 .iter()
                                 .flat_map(|v| [v[0], v[1], v[2], 0.0, 0.0, 1.0, 0.0, 0.0])
                                 .collect();
-                            Mesh::new_with_normals(&self.gl, &vert_data, indices)
-                                .unwrap_or_else(|e| {
+                            Mesh::new_with_normals(&self.gl, &vert_data, indices).unwrap_or_else(
+                                |e| {
                                     warn!("Failed to create LowPoly mesh: {}", e);
                                     Mesh::empty(&self.gl)
-                                })
+                                },
+                            )
                         });
                         mesh.draw(&self.gl);
                     }
@@ -1647,8 +1722,12 @@ impl Renderer {
                 .gl
                 .get_uniform_location(self.shader.program(), "u_light_dir")
             {
-                self.gl
-                    .uniform_3_f32(Some(&u_light_dir), self.sun_direction.x, self.sun_direction.y, self.sun_direction.z);
+                self.gl.uniform_3_f32(
+                    Some(&u_light_dir),
+                    self.sun_direction.x,
+                    self.sun_direction.y,
+                    self.sun_direction.z,
+                );
             }
             if let Some(u_view_pos) = self
                 .gl
@@ -2298,7 +2377,7 @@ impl Renderer {
         // Draw the quad
         self.gl
             .draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
-        
+
         // Flush OpenGL commands immediately
         self.gl.flush();
 

@@ -1,6 +1,6 @@
-use glow::{Context, HasContext, NativeVertexArray, NativeBuffer};
-use std::sync::Arc;
+use glow::{Context, HasContext, NativeBuffer, NativeVertexArray};
 use nalgebra::Vector3;
+use std::sync::Arc;
 
 /// Handle to a mesh resource
 #[derive(Debug, Clone)]
@@ -18,6 +18,7 @@ impl MeshHandle {
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
+#[repr(packed)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
@@ -54,10 +55,14 @@ impl Mesh {
     /// Create a new mesh from vertices and indices
     pub fn new(gl: &Context, vertices: &[Vertex], indices: &[u32]) -> Result<Self, String> {
         unsafe {
-            let vao = gl.create_vertex_array().map_err(|e| format!("Failed to create VAO: {}", e))?;
+            let vao = gl
+                .create_vertex_array()
+                .map_err(|e| format!("Failed to create VAO: {}", e))?;
             gl.bind_vertex_array(Some(vao));
 
-            let vbo = gl.create_buffer().map_err(|e| format!("Failed to create VBO: {}", e))?;
+            let vbo = gl
+                .create_buffer()
+                .map_err(|e| format!("Failed to create VBO: {}", e))?;
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
@@ -65,7 +70,9 @@ impl Mesh {
                 glow::STATIC_DRAW,
             );
 
-            let ebo = gl.create_buffer().map_err(|e| format!("Failed to create EBO: {}", e))?;
+            let ebo = gl
+                .create_buffer()
+                .map_err(|e| format!("Failed to create EBO: {}", e))?;
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
             gl.buffer_data_u8_slice(
                 glow::ELEMENT_ARRAY_BUFFER,
@@ -97,7 +104,11 @@ impl Mesh {
     }
 
     /// Create mesh from raw vertex data with normals
-    pub fn new_with_normals(gl: &Context, vertices: &[f32], indices: &[u32]) -> Result<Self, String> {
+    pub fn new_with_normals(
+        gl: &Context,
+        vertices: &[f32],
+        indices: &[u32],
+    ) -> Result<Self, String> {
         // vertices should be interleaved: pos_x, pos_y, pos_z, norm_x, norm_y, norm_z, tex_u, tex_v
         // Convert to Vertex structs
         let vertex_count = vertices.len() / 8;
@@ -112,22 +123,20 @@ impl Mesh {
         }
         Self::new(gl, &vertex_data, indices)
     }
-    
+
     /// Create a placeholder mesh (for async loading)
     pub fn new_placeholder() -> Self {
         use std::num::NonZero;
-        // Используем unsafe new_unchecked с валидным non-zero значением
-        // Placeholder mesh используется как временная заглушка до загрузки реальной модели
         Self {
             inner: Arc::new(MeshInner {
-                vao: NativeVertexArray(NonZero::new_unchecked(1)),
-                vbo: NativeBuffer(NonZero::new_unchecked(1)),
-                ebo: NativeBuffer(NonZero::new_unchecked(1)),
+                vao: unsafe { NativeVertexArray(NonZero::new_unchecked(1)) },
+                vbo: unsafe { NativeBuffer(NonZero::new_unchecked(1)) },
+                ebo: unsafe { NativeBuffer(NonZero::new_unchecked(1)) },
                 indices_count: 0,
             }),
         }
     }
-    
+
     /// Create an empty mesh (for error cases)
     pub fn empty(gl: &Context) -> Self {
         Self::new_placeholder()
@@ -137,7 +146,7 @@ impl Mesh {
     pub fn generate_mesh_key(vertices: &[f32], indices: &[u32]) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         vertices.len().hash(&mut hasher);
         indices.len().hash(&mut hasher);
@@ -153,12 +162,34 @@ impl Mesh {
         hasher.finish()
     }
 
+    /// Generate a hash key for Arc-wrapped vertex/indice data for caching
+    pub fn generate_mesh_key_from_arc(
+        vertices: &Arc<Vec<Vector3<f32>>>,
+        indices: &Arc<Vec<u32>>,
+    ) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let i: &[u32] = indices;
+
+        let flat_vertices: Vec<f32> = vertices
+            .iter()
+            .flat_map(|v| v.as_slice().to_vec())
+            .collect();
+
+        Self::generate_mesh_key(&flat_vertices, i)
+    }
+
     pub fn new_raw(gl: &Context, vertices: &[f32], indices: &[u32]) -> Result<Self, String> {
         unsafe {
-            let vao = gl.create_vertex_array().map_err(|e| format!("Failed to create VAO: {}", e))?;
+            let vao = gl
+                .create_vertex_array()
+                .map_err(|e| format!("Failed to create VAO: {}", e))?;
             gl.bind_vertex_array(Some(vao));
 
-            let vbo = gl.create_buffer().map_err(|e| format!("Failed to create VBO: {}", e))?;
+            let vbo = gl
+                .create_buffer()
+                .map_err(|e| format!("Failed to create VBO: {}", e))?;
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
@@ -166,7 +197,9 @@ impl Mesh {
                 glow::STATIC_DRAW,
             );
 
-            let ebo = gl.create_buffer().map_err(|e| format!("Failed to create EBO: {}", e))?;
+            let ebo = gl
+                .create_buffer()
+                .map_err(|e| format!("Failed to create EBO: {}", e))?;
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
             gl.buffer_data_u8_slice(
                 glow::ELEMENT_ARRAY_BUFFER,
@@ -201,10 +234,14 @@ impl Mesh {
     /// TerrainVertex layout: position(3), normal(3), tangent(3), bitangent(3), texcoord(2), splat_weights(4)
     pub fn new_terrain(gl: &Context, vertices: &[f32], indices: &[u32]) -> Result<Self, String> {
         unsafe {
-            let vao = gl.create_vertex_array().map_err(|e| format!("Failed to create VAO: {}", e))?;
+            let vao = gl
+                .create_vertex_array()
+                .map_err(|e| format!("Failed to create VAO: {}", e))?;
             gl.bind_vertex_array(Some(vao));
 
-            let vbo = gl.create_buffer().map_err(|e| format!("Failed to create VBO: {}", e))?;
+            let vbo = gl
+                .create_buffer()
+                .map_err(|e| format!("Failed to create VBO: {}", e))?;
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
@@ -212,7 +249,9 @@ impl Mesh {
                 glow::STATIC_DRAW,
             );
 
-            let ebo = gl.create_buffer().map_err(|e| format!("Failed to create EBO: {}", e))?;
+            let ebo = gl
+                .create_buffer()
+                .map_err(|e| format!("Failed to create EBO: {}", e))?;
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
             gl.buffer_data_u8_slice(
                 glow::ELEMENT_ARRAY_BUFFER,
@@ -222,7 +261,7 @@ impl Mesh {
 
             // Stride = 72 bytes (18 floats * 4 bytes)
             let stride: i32 = 72;
-            
+
             // position: location 0, offset 0
             gl.enable_vertex_attrib_array(0);
             gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
@@ -269,7 +308,12 @@ impl Mesh {
         unsafe {
             gl.bind_vertex_array(Some(self.inner.vao));
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.inner.ebo));
-            gl.draw_elements(glow::TRIANGLES, self.inner.indices_count, glow::UNSIGNED_INT, 0);
+            gl.draw_elements(
+                glow::TRIANGLES,
+                self.inner.indices_count,
+                glow::UNSIGNED_INT,
+                0,
+            );
             gl.bind_vertex_array(None);
         }
     }

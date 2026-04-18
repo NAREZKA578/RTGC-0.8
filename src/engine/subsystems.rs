@@ -1,7 +1,7 @@
 //! Подсистемы движка - инкапсулированные модули для разделения ответственности
-//! 
+//!
 //! Этот модуль предоставляет структуру для хранения всех подсистем движка,
-//! обеспечивая слабую связанность между компонентами.
+//! обеспечивая слабую связанность между компонентов.
 
 use crate::audio::AudioSystem;
 use crate::ecs::EcsManager;
@@ -13,43 +13,44 @@ use crate::game::save::SaveSystem;
 use crate::game::ui::UIManager;
 use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::material::MaterialManager;
-use crate::graphics::renderer::Renderer;
 use crate::graphics::particles::ParticleSystem;
+use crate::graphics::renderer::Renderer;
 use crate::input::InputManager;
 use crate::physics;
 use crate::ui::HudManager;
 use crate::world::DayNightCycle;
+use std::sync::Arc;
 
 /// Контейнер для всех подсистем движка
-/// 
+///
 /// Эта структура инкапсулирует все подсистемы, предоставляя контролируемый доступ
 /// к ним через методы-геттеры. Это уменьшает связанность и упрощает тестирование.
 #[derive(Clone)]
 pub struct EngineSubsystems {
     /// Графическая подсистема (рендеринг, материалы, частицы)
     pub graphics: GraphicsSubsystem,
-    
+
     /// Физическая подсистема
     pub physics: PhysicsSubsystem,
-    
+
     /// Подсистема ввода
     pub input: InputManager,
-    
+
     /// Аудио подсистема
     pub audio: AudioSystem,
-    
+
     /// ECS менеджер
     pub ecs: EcsManager,
-    
+
     /// UI подсистема
     pub ui: UISubsystem,
-    
+
     /// Подсистема игрового мира
     pub world: WorldSubsystem,
-    
+
     /// Подсистема загрузки ресурсов
     pub loading: LoadingManager,
-    
+
     /// Подсистема сохранения
     pub save: SaveSystem,
 }
@@ -79,7 +80,7 @@ impl EngineSubsystems {
             save,
         }
     }
-    
+
     /// Обновляет все подсистемы
     pub fn update(&mut self, dt: f32) {
         self.graphics.update(dt);
@@ -92,12 +93,22 @@ impl EngineSubsystems {
 }
 
 /// Графическая подсистема
-#[derive(Clone)]
 pub struct GraphicsSubsystem {
     pub renderer: Option<Renderer>,
     pub material_manager: MaterialManager,
     pub particle_system: ParticleSystem,
     pub debug_renderer: DebugRenderer,
+}
+
+impl Clone for GraphicsSubsystem {
+    fn clone(&self) -> Self {
+        Self {
+            renderer: None, // Can't clone Renderer
+            material_manager: self.material_manager.clone(),
+            particle_system: self.particle_system.clone(),
+            debug_renderer: self.debug_renderer.clone(),
+        }
+    }
 }
 
 impl GraphicsSubsystem {
@@ -114,14 +125,18 @@ impl GraphicsSubsystem {
             debug_renderer,
         }
     }
-    
+
     pub fn update(&mut self, dt: f32) {
         self.particle_system.update(dt);
     }
-    
+
     pub fn render(&mut self) -> Result<(), crate::error::EngineError> {
         if let Some(ref mut renderer) = self.renderer {
-            renderer.render()?;
+            renderer.render().map_err(|e| {
+                crate::error::EngineError::Graphics(crate::error::GraphicsError::PipelineError(
+                    e.to_string(),
+                ))
+            })?;
         }
         Ok(())
     }
@@ -130,6 +145,7 @@ impl GraphicsSubsystem {
 /// Физическая подсистема
 #[derive(Clone)]
 pub struct PhysicsSubsystem {
+    // Clone - O(1) для маленьких структур, данные шарингатся через внутренний Arc в PhysicsWorld
     pub physics_world: physics::PhysicsWorld,
 }
 
@@ -137,12 +153,11 @@ impl PhysicsSubsystem {
     pub fn new(physics_world: physics::PhysicsWorld) -> Self {
         Self { physics_world }
     }
-    
-    pub fn update(&mut self, dt: f32) {
+
+    pub fn update(&mut self, _dt: f32) {
         // Базовое обновление физического мира
-        // Детальная логика обновляется в специализированных методах
     }
-    
+
     pub fn step_simulation(&mut self, dt: f32) {
         self.physics_world.step(dt);
     }
@@ -157,20 +172,17 @@ pub struct UISubsystem {
 }
 
 impl UISubsystem {
-    pub fn new(
-        hud_manager: HudManager,
-        ui_manager: UIManager,
-        debug_menu: DebugMenu,
-    ) -> Self {
+    pub fn new(hud_manager: HudManager, ui_manager: UIManager, debug_menu: DebugMenu) -> Self {
         Self {
             hud_manager,
             ui_manager,
             debug_menu,
         }
     }
-    
+
     pub fn update(&mut self, dt: f32) {
-        self.hud_manager.update(dt);
+        self.hud_manager
+            .update(crate::ui::hud::VehicleHudData::default(), dt);
         self.ui_manager.update(dt);
     }
 }
@@ -185,8 +197,8 @@ impl WorldSubsystem {
     pub fn new(day_night_cycle: DayNightCycle) -> Self {
         Self { day_night_cycle }
     }
-    
+
     pub fn update(&mut self, dt: f32) {
-        self.day_night_cycle.update(dt);
+        self.day_night_cycle.advance_time(dt);
     }
 }

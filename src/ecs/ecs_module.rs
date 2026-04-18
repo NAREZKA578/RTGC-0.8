@@ -7,11 +7,11 @@
 // и максимизирует эффективность использования кэша процессора.
 // ============================================================================
 
+use crossbeam_channel::{bounded, Receiver, Sender};
+use parking_lot::RwLock;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use crossbeam_channel::{bounded, Sender, Receiver};
-use parking_lot::RwLock;
 
 // ============================================================================
 // Entity ID type - компактный идентификатор с поколением для безопасности
@@ -24,16 +24,19 @@ pub struct Entity {
 }
 
 impl Entity {
-    pub const NULL: Entity = Entity { id: u32::MAX, generation: u32::MAX };
-    
+    pub const NULL: Entity = Entity {
+        id: u32::MAX,
+        generation: u32::MAX,
+    };
+
     pub fn new(id: u32) -> Self {
         Entity { id, generation: 0 }
     }
-    
+
     pub fn index(&self) -> usize {
         self.id as usize
     }
-    
+
     pub fn is_null(&self) -> bool {
         self.id == u32::MAX
     }
@@ -79,7 +82,7 @@ impl Archetype {
     pub fn new(component_types: Vec<TypeId>) -> Self {
         let mut sorted_types = component_types.clone();
         sorted_types.sort_by(|a, b| a.cmp(b));
-        
+
         let hash = Self::compute_hash(&sorted_types);
         Archetype {
             id: ArchetypeId(hash),
@@ -87,7 +90,7 @@ impl Archetype {
             entity_indices: Vec::new(),
         }
     }
-    
+
     fn compute_hash(types: &[TypeId]) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -97,7 +100,7 @@ impl Archetype {
         }
         hasher.finish()
     }
-    
+
     pub fn has_component(&self, type_id: TypeId) -> bool {
         self.component_types.contains(&type_id)
     }
@@ -130,7 +133,7 @@ impl<T: Component> ConcreteComponentStorage<T> {
             dense_indices: Vec::new(),
         }
     }
-    
+
     pub fn add(&mut self, entity_index: usize, component: T) {
         if entity_index >= self.data.len() {
             self.data.resize(entity_index + 1, None);
@@ -140,12 +143,14 @@ impl<T: Component> ConcreteComponentStorage<T> {
         }
         self.data[entity_index] = Some(component);
     }
-    
+
     pub fn get_cloned(&self, entity_index: usize) -> Option<T>
     where
         T: Clone,
     {
-        self.data.get(entity_index).and_then(|opt| opt.as_ref().cloned())
+        self.data
+            .get(entity_index)
+            .and_then(|opt| opt.as_ref().cloned())
     }
 
     pub fn get(&self, entity_index: usize) -> Option<&T> {
@@ -160,15 +165,22 @@ impl<T: Component> ConcreteComponentStorage<T> {
     // Удалено: этот метод больше не используется после перехода на безопасный get_mut
     #[deprecated(note = "Используйте get_mut() вместо unsafe указателей")]
     pub fn get_mut_ptr(&mut self, entity_index: usize) -> Option<*mut T> {
-        self.data.get_mut(entity_index).and_then(|opt| opt.as_mut()).map(|c| c as *mut T)
+        self.data
+            .get_mut(entity_index)
+            .and_then(|opt| opt.as_mut())
+            .map(|c| c as *mut T)
     }
-    
+
     // Исправлено: собираем индексы и данные в Vec для корректного времени жизни
     pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {
-        let items: Vec<(usize, &T)> = self.dense_indices
+        let items: Vec<(usize, &T)> = self
+            .dense_indices
             .iter()
             .filter_map(|&idx| {
-                self.data.get(idx).and_then(|opt| opt.as_ref()).map(|c| (idx, c))
+                self.data
+                    .get(idx)
+                    .and_then(|opt| opt.as_ref())
+                    .map(|c| (idx, c))
             })
             .collect();
         items.into_iter()
@@ -180,11 +192,9 @@ impl<T: Component> ConcreteComponentStorage<T> {
         // SAFETY: Мы гарантируем что данные не будут изменены во время итерации
         let indices = self.dense_indices.clone();
         let data_ptr = self.data.as_mut_ptr();
-        indices.into_iter().filter_map(move |idx| {
-            unsafe {
-                let opt = &mut *data_ptr.add(idx);
-                opt.as_mut().map(|component| (idx, component))
-            }
+        indices.into_iter().filter_map(move |idx| unsafe {
+            let opt = &mut *data_ptr.add(idx);
+            opt.as_mut().map(|component| (idx, component))
         })
     }
 }
@@ -196,19 +206,21 @@ impl<T: Component> ComponentStorage for ConcreteComponentStorage<T> {
             self.dense_indices.retain(|&idx| idx != entity_index);
         }
     }
-    
+
     fn has(&self, entity_index: usize) -> bool {
-        self.data.get(entity_index).map_or(false, |opt| opt.is_some())
+        self.data
+            .get(entity_index)
+            .map_or(false, |opt| opt.is_some())
     }
-    
+
     fn len(&self) -> usize {
         self.dense_indices.len()
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -222,7 +234,7 @@ impl<T: Component> ComponentStorage for ConcreteComponentStorage<T> {
 pub struct EntityRecord {
     pub entity: Entity,
     pub archetype_id: ArchetypeId,
-    pub archetype_index: usize, // Индекс в архетипе
+    pub archetype_index: usize,             // Индекс в архетипе
     pub components: HashMap<TypeId, usize>, // TypeId -> индекс в хранилище
     pub is_alive: bool,
 }
@@ -231,22 +243,38 @@ pub struct EntityRecord {
 // EcsManager - основной менеджер ECS с DOD архитектурой
 // ============================================================================
 
+use std::sync::Arc;
+
+// Manually implement Clone since RwLock<T> where T: Clone can be cloned
 pub struct EcsManager {
     // Хранилища компонентов по TypeId
-    component_storages: RwLock<HashMap<TypeId, Box<dyn ComponentStorage>>>,
-    
+    component_storages: Arc<RwLock<HashMap<TypeId, Box<dyn ComponentStorage>>>>,
+
     // Архетипы для группировки сущностей
-    archetypes: RwLock<HashMap<ArchetypeId, Archetype>>,
-    
+    archetypes: Arc<RwLock<HashMap<ArchetypeId, Archetype>>>,
+
     // Информация о сущностях
-    entities: RwLock<Vec<EntityRecord>>,
-    
+    entities: Arc<RwLock<Vec<EntityRecord>>>,
+
     // Пул освобождённых сущностей для повторного использования
-    free_entities: RwLock<Vec<Entity>>,
-    
+    free_entities: Arc<RwLock<Vec<Entity>>>,
+
     // Каналы для многопоточной работы
     command_sender: Sender<EcsCommand>,
     command_receiver: Receiver<EcsCommand>,
+}
+
+impl Clone for EcsManager {
+    fn clone(&self) -> Self {
+        Self {
+            component_storages: Arc::clone(&self.component_storages),
+            archetypes: Arc::clone(&self.archetypes),
+            entities: Arc::clone(&self.entities),
+            free_entities: Arc::clone(&self.free_entities),
+            command_sender: self.command_sender.clone(),
+            command_receiver: self.command_receiver.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -268,10 +296,10 @@ impl EcsManager {
         let (sender, receiver) = bounded(1024);
 
         Self {
-            component_storages: RwLock::new(HashMap::new()),
-            archetypes: RwLock::new(HashMap::new()),
-            entities: RwLock::new(Vec::new()),
-            free_entities: RwLock::new(Vec::new()),
+            component_storages: Arc::new(RwLock::new(HashMap::new())),
+            archetypes: Arc::new(RwLock::new(HashMap::new())),
+            entities: Arc::new(RwLock::new(Vec::new())),
+            free_entities: Arc::new(RwLock::new(Vec::new())),
             command_sender: sender,
             command_receiver: receiver,
         }
@@ -296,11 +324,17 @@ impl EcsManager {
                 EcsCommand::CreateEntity(_) => {
                     // Обработка создаётся в create_entity
                 }
-                EcsCommand::AddComponent { entity, component_type } => {
+                EcsCommand::AddComponent {
+                    entity,
+                    component_type,
+                } => {
                     // Компонент уже добавлен, нужно обновить архетип
                     self.update_entity_archetype(entity, component_type);
                 }
-                EcsCommand::RemoveComponent { entity, component_type } => {
+                EcsCommand::RemoveComponent {
+                    entity,
+                    component_type,
+                } => {
                     self.update_entity_archetype(entity, component_type);
                 }
                 EcsCommand::DestroyEntity(entity) => {
@@ -309,7 +343,7 @@ impl EcsManager {
             }
         }
     }
-    
+
     // Создание сущности
     pub fn create_entity(&mut self) -> Entity {
         // Повторное использование из пула
@@ -322,11 +356,11 @@ impl EcsManager {
             }
             return entity;
         }
-        
+
         // Создание новой сущности
         let id = generate_entity_id();
         let entity = Entity::new(id);
-        
+
         let record = EntityRecord {
             entity,
             archetype_id: ArchetypeId(0), // Пустой архетип
@@ -334,17 +368,17 @@ impl EcsManager {
             components: HashMap::new(),
             is_alive: true,
         };
-        
+
         let mut entities = self.entities.write();
         if entity.index() >= entities.len() {
             entities.resize(entity.index() + 1, record);
         } else {
             entities[entity.index()] = record;
         }
-        
+
         entity
     }
-    
+
     // Добавление компонента сущности
     // Исправлено: разделяем заимствования чтобы избежать multiple mutable borrows
     pub fn add_component<T: Component>(&mut self, entity: Entity, component: T) {
@@ -361,10 +395,13 @@ impl EcsManager {
             .entry(type_id)
             .or_insert_with(|| Box::new(ConcreteComponentStorage::<T>::new()));
 
-        if let Some(concrete_storage) = storage.as_any_mut().downcast_mut::<ConcreteComponentStorage<T>>() {
+        if let Some(concrete_storage) = storage
+            .as_any_mut()
+            .downcast_mut::<ConcreteComponentStorage<T>>()
+        {
             concrete_storage.add(entity_index, component);
         }
-        
+
         // Освобождаем storages перед заимствованием entities
         drop(storages);
 
@@ -372,7 +409,7 @@ impl EcsManager {
         let mut entities = self.entities.write();
         if let Some(record) = entities.get_mut(entity_index) {
             record.components.insert(type_id, entity_index);
-            
+
             // Инлайним логику update_archetype_for_entity чтобы избежать multiple borrows
             let component_types: Vec<TypeId> = record.components.keys().cloned().collect();
             let archetype_id = if component_types.is_empty() {
@@ -387,7 +424,7 @@ impl EcsManager {
             record.archetype_id = archetype_id;
         }
     }
-    
+
     // Получение компонента (immutable)
     // Исправлено: возвращаем клон компонента чтобы избежать проблем с временем жизни
     pub fn get_component<T: Component + Clone>(&self, entity: Entity) -> Option<T> {
@@ -407,7 +444,9 @@ impl EcsManager {
         let storages = self.component_storages.read();
         let storage = storages.get(&type_id)?;
 
-        let concrete_storage = storage.as_any().downcast_ref::<ConcreteComponentStorage<T>>()?;
+        let concrete_storage = storage
+            .as_any()
+            .downcast_ref::<ConcreteComponentStorage<T>>()?;
         concrete_storage.get(entity.index()).cloned()
     }
 
@@ -431,7 +470,9 @@ impl EcsManager {
         let mut storages = self.component_storages.write();
         let storage = storages.get_mut(&type_id)?;
 
-        let concrete_storage = storage.as_any_mut().downcast_mut::<ConcreteComponentStorage<T>>()?;
+        let concrete_storage = storage
+            .as_any_mut()
+            .downcast_mut::<ConcreteComponentStorage<T>>()?;
 
         // SAFETY: Мы получаем сырой указатель и возвращаем ссылку с временем жизни self
         // Это корректно так как storages является частью self
@@ -439,7 +480,7 @@ impl EcsManager {
         let ptr = concrete_storage.get_mut(entity_index)?;
         Some(unsafe { std::mem::transmute::<&mut T, &mut T>(ptr) })
     }
-    
+
     // Удаление компонента
     // Исправлено: разделяем заимствования чтобы избежать multiple mutable borrows
     pub fn remove_component<T: Component>(&mut self, entity: Entity) {
@@ -461,7 +502,7 @@ impl EcsManager {
         let mut entities = self.entities.write();
         if let Some(record) = entities.get_mut(entity_index) {
             record.components.remove(&type_id);
-            
+
             // Инлайним логику update_archetype_for_entity
             let component_types: Vec<TypeId> = record.components.keys().cloned().collect();
             let archetype_id = if component_types.is_empty() {
@@ -476,39 +517,41 @@ impl EcsManager {
             record.archetype_id = archetype_id;
         }
     }
-    
+
     // Проверка наличия компонента
     pub fn has_component<T: Component>(&self, entity: Entity) -> bool {
         if entity.is_null() || entity.index() >= self.entities.read().len() {
             return false;
         }
-        
+
         let entities = self.entities.read();
         let record = entities.get(entity.index());
-        
+
         if let Some(rec) = record {
             if !rec.is_alive {
                 return false;
             }
             let type_id = TypeId::of::<T>();
             let storages = self.component_storages.read();
-            return storages.get(&type_id).map_or(false, |s| s.has(entity.index()));
+            return storages
+                .get(&type_id)
+                .map_or(false, |s| s.has(entity.index()));
         }
         false
     }
-    
+
     // Уничтожение сущности
     pub fn destroy_entity(&mut self, entity: Entity) {
         if entity.is_null() {
             return;
         }
-        
+
         self.destroy_entity_internal(entity);
-        
+
         // Добавляем в пул для повторного использования
         self.free_entities.write().push(entity);
     }
-    
+
     fn destroy_entity_internal(&mut self, entity: Entity) {
         let entity_index = entity.index();
 
@@ -538,14 +581,15 @@ impl EcsManager {
             record.archetype_index = usize::MAX;
         }
     }
-    
+
     // Проверка живости сущности
     pub fn is_alive(&self, entity: Entity) -> bool {
         if entity.is_null() || entity.index() >= self.entities.read().len() {
             return false;
         }
 
-        self.entities.read()
+        self.entities
+            .read()
             .get(entity.index())
             .map_or(false, |r| r.is_alive)
     }
@@ -553,21 +597,26 @@ impl EcsManager {
     // Исправлено: полностью переработан для избежания multiple mutable borrows
     fn update_entity_archetype(&mut self, entity: Entity, _component_type: TypeId) {
         let entity_index = entity.index();
-        
+
         // Сначала получаем данные о сущности
         let (component_types, is_alive) = {
             let entities = self.entities.read();
             entities
                 .get(entity_index)
-                .map(|record| (record.components.keys().cloned().collect::<Vec<_>>(), record.is_alive))
+                .map(|record| {
+                    (
+                        record.components.keys().cloned().collect::<Vec<_>>(),
+                        record.is_alive,
+                    )
+                })
                 .unwrap_or((Vec::new(), false))
         };
-        
+
         // Освободили immutable borrow и теперь можем делать mutable операции
         if !is_alive {
             return;
         }
-        
+
         // Вычисляем и обновляем архетип
         let archetype_id = if component_types.is_empty() {
             ArchetypeId(0)
@@ -578,7 +627,7 @@ impl EcsManager {
             archetypes.entry(archetype_id.clone()).or_insert(archetype);
             archetype_id
         };
-        
+
         // Обновляем запись сущности
         let mut entities = self.entities.write();
         if let Some(record) = entities.get_mut(entity_index) {
@@ -600,7 +649,10 @@ impl EcsManager {
             let type_id = TypeId::of::<T>();
 
             if let Some(storage) = storages.get(&type_id) {
-                if let Some(concrete_storage) = storage.as_any().downcast_ref::<ConcreteComponentStorage<T>>() {
+                if let Some(concrete_storage) = storage
+                    .as_any()
+                    .downcast_ref::<ConcreteComponentStorage<T>>()
+                {
                     concrete_storage
                         .iter()
                         .filter_map(|(entity_index, component)| {
@@ -626,7 +678,7 @@ impl EcsManager {
             f(entity, &component);
         }
     }
-    
+
     // Параллельная итерация (для Job System)
     // Исправлено: собираем данные в Vec перед параллельной обработкой
     // чтобы избежать проблем с заимствованием в замыкании
@@ -643,7 +695,10 @@ impl EcsManager {
             let type_id = TypeId::of::<T>();
 
             if let Some(storage) = storages.get(&type_id) {
-                if let Some(concrete_storage) = storage.as_any().downcast_ref::<ConcreteComponentStorage<T>>() {
+                if let Some(concrete_storage) = storage
+                    .as_any()
+                    .downcast_ref::<ConcreteComponentStorage<T>>()
+                {
                     concrete_storage
                         .dense_indices
                         .iter()
@@ -662,12 +717,12 @@ impl EcsManager {
             f(component);
         });
     }
-    
+
     // Получение количества сущностей
     pub fn entity_count(&self) -> usize {
         self.entities.read().iter().filter(|e| e.is_alive).count()
     }
-    
+
     // Очистка всех сущностей
     pub fn clear(&mut self) {
         self.entities.write().clear();
@@ -728,7 +783,7 @@ pub struct QueryResult<'a> {
 
 impl<'a> QueryResult<'a> {
     // Исправлено: возвращаем Vec вместо итератора для корректного времени жизни
-    pub fn collect<T: Component>(&self) -> Vec<(Entity, T)> 
+    pub fn collect<T: Component>(&self) -> Vec<(Entity, T)>
     where
         T: Clone,
     {
@@ -737,7 +792,10 @@ impl<'a> QueryResult<'a> {
         let type_id = TypeId::of::<T>();
 
         if let Some(storage) = storages.get(&type_id) {
-            if let Some(concrete_storage) = storage.as_any().downcast_ref::<ConcreteComponentStorage<T>>() {
+            if let Some(concrete_storage) = storage
+                .as_any()
+                .downcast_ref::<ConcreteComponentStorage<T>>()
+            {
                 concrete_storage
                     .iter()
                     .filter_map(|(entity_index, component)| {
@@ -766,87 +824,129 @@ impl<'a> QueryResult<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[derive(Clone, Debug)]
     struct Position {
         x: f32,
         y: f32,
         z: f32,
     }
-    
+
     #[derive(Clone, Debug)]
     struct Velocity {
         vx: f32,
         vy: f32,
         vz: f32,
     }
-    
+
     #[test]
     fn test_create_entity() {
         let mut ecs = EcsManager::new();
         let entity = ecs.create_entity();
-        
+
         assert!(!entity.is_null());
         assert!(ecs.is_alive(entity));
     }
-    
+
     #[test]
     fn test_add_get_component() {
         let mut ecs = EcsManager::new();
         let entity = ecs.create_entity();
-        
-        ecs.add_component(entity, Position { x: 1.0, y: 2.0, z: 3.0 });
-        
+
+        ecs.add_component(
+            entity,
+            Position {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+        );
+
         let pos = ecs.get_component::<Position>(entity);
         assert!(pos.is_some());
         assert_eq!(pos.expect("Position component should exist").x, 1.0);
     }
-    
+
     #[test]
     fn test_remove_component() {
         let mut ecs = EcsManager::new();
         let entity = ecs.create_entity();
-        
-        ecs.add_component(entity, Position { x: 1.0, y: 2.0, z: 3.0 });
+
+        ecs.add_component(
+            entity,
+            Position {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+        );
         assert!(ecs.has_component::<Position>(entity));
-        
+
         ecs.remove_component::<Position>(entity);
         assert!(!ecs.has_component::<Position>(entity));
     }
-    
+
     #[test]
     fn test_destroy_entity() {
         let mut ecs = EcsManager::new();
         let entity = ecs.create_entity();
-        
-        ecs.add_component(entity, Position { x: 1.0, y: 2.0, z: 3.0 });
+
+        ecs.add_component(
+            entity,
+            Position {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+        );
         assert!(ecs.is_alive(entity));
-        
+
         ecs.destroy_entity(entity);
         assert!(!ecs.is_alive(entity));
-        
+
         // Повторное использование
         let new_entity = ecs.create_entity();
         assert_eq!(new_entity.id, entity.id);
         assert_ne!(new_entity.generation, entity.generation);
     }
-    
+
     #[test]
     fn test_query() {
         let mut ecs = EcsManager::new();
-        
+
         let e1 = ecs.create_entity();
-        ecs.add_component(e1, Position { x: 1.0, y: 2.0, z: 3.0 });
-        ecs.add_component(e1, Velocity { vx: 0.1, vy: 0.2, vz: 0.3 });
-        
+        ecs.add_component(
+            e1,
+            Position {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+        );
+        ecs.add_component(
+            e1,
+            Velocity {
+                vx: 0.1,
+                vy: 0.2,
+                vz: 0.3,
+            },
+        );
+
         let e2 = ecs.create_entity();
-        ecs.add_component(e2, Position { x: 4.0, y: 5.0, z: 6.0 });
-        
+        ecs.add_component(
+            e2,
+            Position {
+                x: 4.0,
+                y: 5.0,
+                z: 6.0,
+            },
+        );
+
         let mut count = 0;
         ecs.query(|_entity, _pos: &Position| {
             count += 1;
         });
-        
+
         assert_eq!(count, 2);
     }
 }

@@ -14,6 +14,7 @@ use raw_window_handle::HasWindowHandle;
 use std::ffi::CStr;
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use tracing::info;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes};
 
@@ -24,17 +25,30 @@ use crate::graphics::rhi::gl::GlDevice;
 // Не реализуем Send/Sync напрямую для Context (нарушает orphan rules)
 
 /// OpenGL контекст для рендеринга с RHI интеграцией
-#[derive(Clone)]
 pub struct GlContext {
     pub gl: Option<Arc<Context>>,
-    pub window: Option<Window>,
+    pub window: Option<Arc<Window>>,
     pub width: u32,
     pub height: u32,
     // Храним контекст и поверхность для swap_buffers
-    gl_context: Option<PossiblyCurrentContext>,
-    surface: Option<glutin::surface::Surface<WindowSurface>>,
+    gl_context: Option<Arc<PossiblyCurrentContext>>,
+    surface: Option<Arc<glutin::surface::Surface<WindowSurface>>>,
     // RHI device для OpenGL
     pub rhi_device: Option<Arc<GlDevice>>,
+}
+
+impl Clone for GlContext {
+    fn clone(&self) -> Self {
+        Self {
+            gl: self.gl.clone(),
+            window: self.window.clone(),
+            width: self.width,
+            height: self.height,
+            gl_context: self.gl_context.clone(),
+            surface: self.surface.clone(),
+            rhi_device: self.rhi_device.clone(),
+        }
+    }
 }
 
 unsafe impl Send for GlContext {}
@@ -46,21 +60,24 @@ impl GlContext {
         event_loop: &ActiveEventLoop,
         window_attrs: WindowAttributes,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        // Шаблон для поиска подходящей конфигурации OpenGL
+        info!(target: "gl", "=== GlContext::new START ===");
+
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
             .with_transparency(false);
 
-        // Создаём Display и окно одновременно через DisplayBuilder
+        info!(target: "gl", "Building display with window...");
         let (window, gl_config) = DisplayBuilder::new()
             .with_window_attributes(Some(window_attrs))
             .build(event_loop, template, |mut configs| {
                 configs
-                    .next()
-                    .ok_or("No suitable OpenGL config found")?
+                    .find(|c| c.depth_size() > 0)
+                    .expect("No config with depth buffer found")
             })?;
 
+        info!(target: "gl", "Window created: {:?}", window.is_some());
         let window = window.ok_or("Не удалось создать окно")?;
+        info!(target: "gl", "Calling create_from_window...");
         Self::create_from_window(window, gl_config)
     }
 
@@ -77,8 +94,8 @@ impl GlContext {
             .with_window_attributes(Some(winit::window::WindowAttributes::default()))
             .build(event_loop, template, |mut configs| {
                 configs
-                    .next()
-                    .ok_or("No suitable OpenGL config found")?
+                    .find(|c| c.depth_size() > 0)
+                    .expect("No config with depth buffer found")
             })?;
 
         let window = window.ok_or("Не удалось создать окно")?;
@@ -90,6 +107,8 @@ impl GlContext {
         window: winit::window::Window,
         gl_config: Config,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        use glow::HasContext;
+
         // Получаем display из config
         let display = gl_config.display();
 
@@ -108,8 +127,10 @@ impl GlContext {
 
         // NonZeroU32::new() возвращает None только для 0, что маловероятно для размера окна
         // Но на всякий случай используем дефолтные значения
-        let nz_width = NonZeroU32::new(raw_width).unwrap_or_else(|| NonZeroU32::new(1280).expect("1280 is non-zero"));
-        let nz_height = NonZeroU32::new(raw_height).unwrap_or_else(|| NonZeroU32::new(720).expect("720 is non-zero"));
+        let nz_width = NonZeroU32::new(raw_width)
+            .unwrap_or_else(|| NonZeroU32::new(1280).expect("1280 is non-zero"));
+        let nz_height = NonZeroU32::new(raw_height)
+            .unwrap_or_else(|| NonZeroU32::new(720).expect("720 is non-zero"));
 
         let surface_attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
@@ -135,34 +156,29 @@ impl GlContext {
         let swap_interval = SwapInterval::Wait(NonZeroU32::new(1).expect("1 is non-zero"));
         let _ = surface.set_swap_interval(&gl_context, swap_interval);
 
-        // Создаём RHI устройство
+        // Создаём RHI устройство - save gl for later use before moving into Arc
         let gl_arc = Arc::new(gl);
         let rhi_device = Arc::new(GlDevice::new(gl_arc.clone()));
 
-        // Включаем DEPTH_TEST
+        // Включаем DEPTH_TEST - use the reference from the arc
         unsafe {
-            gl.enable(glow::DEPTH_TEST);
-            gl.depth_func(glow::LEQUAL);
+            use glow::HasContext;
+            gl_arc.enable(glow::DEPTH_TEST);
+            gl_arc.depth_func(glow::LEQUAL);
         }
 
         // Устанавливаем viewport при инициализации
         unsafe {
-            use glow::HasContext;
-            gl.viewport(
-                0,
-                0,
-                nz_width.get() as i32,
-                nz_height.get() as i32,
-            );
+            gl_arc.viewport(0, 0, nz_width.get() as i32, nz_height.get() as i32);
         }
 
         Ok(Self {
             gl: Some(gl_arc),
-            window: Some(window),
+            window: Some(Arc::new(window)),
             width: nz_width.get(),
             height: nz_height.get(),
-            gl_context: Some(gl_context),
-            surface: Some(surface),
+            gl_context: Some(Arc::new(gl_context)),
+            surface: Some(Arc::new(surface)),
             rhi_device: Some(rhi_device),
         })
     }
@@ -174,8 +190,10 @@ impl GlContext {
 
         // glutin 0.32: resize принимает NonZeroU32
         // Используем unwrap_or_else с гарантированно валидным значением 1
-        let nz_w = NonZeroU32::new(width).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
-        let nz_h = NonZeroU32::new(height).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
+        let nz_w =
+            NonZeroU32::new(width).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
+        let nz_h =
+            NonZeroU32::new(height).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
         if let (Some(surface), Some(gl_context)) = (&self.surface, &self.gl_context) {
             surface.resize(gl_context, nz_w, nz_h);
         }
@@ -268,9 +286,7 @@ impl GlContext {
     /// Создаёт контекст из уже существующего окна winit
     /// ВНИМАНИЕ: Эта функция должна вызываться ТОЛЬКО в resumed() обработчике
     /// когда у нас есть доступ к ActiveEventLoop через closure
-    pub fn new_from_window(window: &Window) -> Result<Self, Box<dyn std::error::Error>> {
-        // Временно возвращаем placeholder
-        // Реальная инициализация должна происходить в engine.run() через GlContext::new()
+    pub fn new_from_window(window: &Window) -> Result<Self, String> {
         tracing::warn!("GlContext::new_from_window вызван - используется placeholder");
         tracing::warn!("Реальный контекст будет создан через GlContext::new()");
         Ok(Self::new_placeholder())

@@ -1,12 +1,12 @@
 //! Менеджер ввода - инкапсуляция системы ввода
-//! 
+//!
 //! Этот модуль управляет обработкой ввода с клавиатуры, мыши и геймпадов,
 //! предоставляя контролируемый интерфейс для игровых систем.
 
 use crate::input::InputManager;
+use tracing::debug;
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use tracing::debug;
 
 /// Менеджер ввода для движка
 pub struct InputManagerWrapper {
@@ -21,37 +21,38 @@ impl InputManagerWrapper {
             input_manager: InputManager::new(),
         }
     }
-    
+
     /// Обновляет состояние ввода
     pub fn update(&mut self) {
         self.input_manager.update();
     }
-    
+
     /// Устанавливает состояние клавиши
     pub fn set_key_state(&mut self, key: PhysicalKey, pressed: bool) {
         self.input_manager.set_key_state(key, pressed);
     }
-    
+
     /// Устанавливает состояние кнопки мыши
     pub fn set_mouse_button_state(&mut self, button: MouseButton, pressed: bool) {
-        self.input_manager.set_mouse_button_state(button, pressed);
+        self.input_manager
+            .set_mouse_button_state(button.into(), pressed);
     }
-    
+
     /// Проверяет, удерживается ли клавиша
     pub fn is_key_held(&self, key: KeyCode) -> bool {
         self.input_manager.state().is_key_held(key)
     }
-    
-    /// Получает ActionMap если доступен
-    pub fn action_map(&self) -> Option<&crate::input::action_map::ActionMap> {
+
+    /// Получает PlayerInput если доступен
+    pub fn action_map(&self) -> Option<crate::network::protocol::PlayerInput> {
         self.input_manager.action_map()
     }
-    
+
     /// Получает состояние ввода
-    pub fn state(&self) -> &crate::input::mapping::InputState {
+    pub fn state(&self) -> &crate::input::input_module::InputState {
         self.input_manager.state()
     }
-    
+
     /// Обрабатывает событие клавиатуры для движения персонажа
     pub fn handle_movement_keys(&mut self, key_code: KeyCode, pressed: bool) {
         let physical_key = match key_code {
@@ -63,9 +64,9 @@ impl InputManagerWrapper {
             KeyCode::ShiftLeft => PhysicalKey::Code(KeyCode::ShiftLeft),
             _ => return,
         };
-        
+
         self.set_key_state(physical_key, pressed);
-        
+
         if pressed {
             debug!(target: "input", "Movement key pressed: {:?}", key_code);
         }
@@ -81,13 +82,13 @@ impl Default for InputManagerWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_input_manager_creation() {
         let manager = InputManagerWrapper::new();
         assert!(!manager.is_key_held(KeyCode::KeyW));
     }
-    
+
     #[test]
     fn test_key_state_setting() {
         let mut manager = InputManagerWrapper::new();

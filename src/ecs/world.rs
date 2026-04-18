@@ -1,8 +1,8 @@
 //! ECS World for RTGC-0.8
 //! Контейнер сущностей с Archetype storage
 
-use std::collections::HashMap;
 use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Тип сущности
@@ -13,7 +13,7 @@ impl Entity {
     pub fn new(id: u64) -> Self {
         Self(id)
     }
-    
+
     pub fn id(&self) -> u64 {
         self.0
     }
@@ -37,7 +37,7 @@ impl<T: Component> Archetype<T> {
             free_indices: Vec::new(),
         }
     }
-    
+
     fn allocate(&mut self, component: T) -> usize {
         if let Some(index) = self.free_indices.pop() {
             self.components[index] = Some(component);
@@ -48,26 +48,26 @@ impl<T: Component> Archetype<T> {
             index
         }
     }
-    
+
     fn deallocate(&mut self, index: usize) {
         if index < self.components.len() {
             self.components[index] = None;
             self.free_indices.push(index);
         }
     }
-    
+
     fn get(&self, index: usize) -> Option<&T> {
         self.components.get(index).and_then(|opt| opt.as_ref())
     }
-    
+
     fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.components.get_mut(index).and_then(|opt| opt.as_mut())
     }
-    
+
     fn iter(&self) -> impl Iterator<Item = &T> {
         self.components.iter().filter_map(|opt| opt.as_ref())
     }
-    
+
     fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.components.iter_mut().filter_map(|opt| opt.as_mut())
     }
@@ -84,6 +84,17 @@ pub struct EcsWorld {
     alive_entities: HashMap<Entity, bool>,
 }
 
+impl Clone for EcsWorld {
+    fn clone(&self) -> Self {
+        Self {
+            next_entity_id: self.next_entity_id,
+            storages: HashMap::new(),
+            entity_indices: self.entity_indices.clone(),
+            alive_entities: self.alive_entities.clone(),
+        }
+    }
+}
+
 impl EcsWorld {
     pub fn new() -> Self {
         Self {
@@ -93,7 +104,7 @@ impl EcsWorld {
             alive_entities: HashMap::new(),
         }
     }
-    
+
     /// Создание новой сущности
     pub fn create_entity(&mut self) -> Entity {
         let entity = Entity(self.next_entity_id);
@@ -101,7 +112,7 @@ impl EcsWorld {
         self.alive_entities.insert(entity, true);
         entity
     }
-    
+
     /// Удаление сущности
     pub fn destroy_entity(&mut self, entity: Entity) {
         if let Some((type_id, index)) = self.entity_indices.remove(&entity) {
@@ -114,20 +125,25 @@ impl EcsWorld {
         }
         self.alive_entities.remove(&entity);
     }
-    
+
     /// Добавление компонента к сущности
-    pub fn add_component<T: Component>(&mut self, entity: Entity, component: T) -> Result<(), &'static str> {
+    pub fn add_component<T: Component>(
+        &mut self,
+        entity: Entity,
+        component: T,
+    ) -> Result<(), &'static str> {
         if !self.is_alive(entity) {
             return Err("Entity is not alive");
         }
-        
+
         let type_id = TypeId::of::<T>();
-        
+
         // Получаем или создаём хранилище для этого типа
-        let storage = self.storages.entry(type_id).or_insert_with(|| {
-            Box::new(ArchetypeStorage::new::<T>())
-        });
-        
+        let storage = self
+            .storages
+            .entry(type_id)
+            .or_insert_with(|| Box::new(ArchetypeStorage::new::<T>()));
+
         // Пытаемся downcast к нужному типу
         if let Some(archetype) = storage.downcast_mut::<ArchetypeStorage>() {
             let index = archetype.allocate_typed::<T>(component);
@@ -137,58 +153,58 @@ impl EcsWorld {
             Err("Type mismatch in storage")
         }
     }
-    
+
     /// Получение компонента (immutable)
     pub fn get_component<T: Component>(&self, entity: Entity) -> Option<&T> {
         if !self.is_alive(entity) {
             return None;
         }
-        
+
         let type_id = TypeId::of::<T>();
-        
+
         if let Some(&(stored_type_id, index)) = self.entity_indices.get(&entity) {
             if stored_type_id != type_id {
                 return None;
             }
-            
+
             if let Some(storage) = self.storages.get(&type_id) {
                 if let Some(archetype) = storage.downcast_ref::<ArchetypeStorage>() {
                     return archetype.get_typed::<T>(index);
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Получение компонента (mutable)
     pub fn get_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
         if !self.is_alive(entity) {
             return None;
         }
-        
+
         let type_id = TypeId::of::<T>();
-        
+
         if let Some(&(stored_type_id, index)) = self.entity_indices.get(&entity) {
             if stored_type_id != type_id {
                 return None;
             }
-            
+
             if let Some(storage) = self.storages.get_mut(&type_id) {
                 if let Some(archetype) = storage.downcast_mut::<ArchetypeStorage>() {
                     return archetype.get_typed_mut::<T>(index);
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Проверка жива ли сущность
     pub fn is_alive(&self, entity: Entity) -> bool {
         self.alive_entities.get(&entity).copied().unwrap_or(false)
     }
-    
+
     /// Итерация по всем сущностям с данным компонентом
     pub fn iter_with_component<T: Component + Clone>(&self) -> impl Iterator<Item = (Entity, T)> {
         let type_id = TypeId::of::<T>();
@@ -209,19 +225,22 @@ impl EcsWorld {
         }
 
         // Безопасно: используем прямой доступ к данным через хранилище
-        let result: Vec<(Entity, T)> = entities_with_component.into_iter().filter_map(move |(entity, _ptr)| {
-            // SAFETY: мы получаем компонент напрямую из хранилища без сырых указателей
-            self.get_component::<T>(entity).map(|c| (entity, c.clone()))
-        }).collect();
+        let result: Vec<(Entity, T)> = entities_with_component
+            .into_iter()
+            .filter_map(move |(entity, _ptr)| {
+                // SAFETY: мы получаем компонент напрямую из хранилища без сырых указателей
+                self.get_component::<T>(entity).map(|c| (entity, c.clone()))
+            })
+            .collect();
 
         result.into_iter()
     }
-    
+
     /// Получить количество живых сущностей
     pub fn entity_count(&self) -> usize {
         self.alive_entities.values().filter(|&&alive| alive).count()
     }
-    
+
     /// Очистка всех сущностей
     pub fn clear(&mut self) {
         self.storages.clear();
@@ -253,11 +272,11 @@ impl ArchetypeStorage {
             data: (ptr, TypeId::of::<T>()),
         }
     }
-    
+
     fn allocate_typed<T: Component>(&mut self, component: T) -> usize {
         let (ptr, type_id) = self.data;
         assert!(type_id == TypeId::of::<T>(), "Type mismatch");
-        
+
         // SAFETY: ptr был создан из Box<Archetype<T>> с тем же типом T в new::<T>().
         // Тип проверяется через type_id перед использованием, поэтому приведение корректно.
         unsafe {
@@ -265,18 +284,18 @@ impl ArchetypeStorage {
             archetype.allocate(component)
         }
     }
-    
+
     fn deallocate_by_index(&mut self, index: usize) {
         // Не можем удалить без знания типа, оставляем как есть
         // В полной реализации нужно хранить тип вместе с индексом
     }
-    
+
     fn get_typed<T: Component>(&self, index: usize) -> Option<&T> {
         let (ptr, type_id) = self.data;
         if type_id != TypeId::of::<T>() {
             return None;
         }
-        
+
         // SAFETY: ptr был создан из Box<Archetype<T>> с тем же типом T в new::<T>().
         // type_id проверен выше, поэтому приведение типа корректно.
         unsafe {
@@ -284,13 +303,13 @@ impl ArchetypeStorage {
             archetype.get(index)
         }
     }
-    
+
     fn get_typed_mut<T: Component>(&mut self, index: usize) -> Option<&mut T> {
         let (ptr, type_id) = self.data;
         if type_id != TypeId::of::<T>() {
             return None;
         }
-        
+
         // SAFETY: ptr был создан из Box<Archetype<T>> с тем же типом T в new::<T>().
         // type_id проверен выше, поэтому приведение типа корректно.
         unsafe {
@@ -310,13 +329,13 @@ impl Drop for ArchetypeStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[derive(Component, Debug, Clone)]
     struct Position(f32, f32, f32);
-    
+
     #[derive(Component, Debug, Clone)]
     struct Velocity(f32, f32, f32);
-    
+
     #[test]
     fn test_entity_creation() {
         let mut world = EcsWorld::new();
@@ -324,42 +343,48 @@ mod tests {
         assert!(world.is_alive(entity));
         assert_eq!(entity.id(), 0);
     }
-    
+
     #[test]
     fn test_component_add_get() {
         let mut world = EcsWorld::new();
         let entity = world.create_entity();
-        
-        world.add_component(entity, Position(1.0, 2.0, 3.0)).expect("Failed to add component");
-        
+
+        world
+            .add_component(entity, Position(1.0, 2.0, 3.0))
+            .expect("Failed to add component");
+
         let pos = world.get_component::<Position>(entity);
         assert!(pos.is_some());
         assert_eq!(pos.expect("Position component should exist").0, 1.0);
     }
-    
+
     #[test]
     fn test_component_mut() {
         let mut world = EcsWorld::new();
         let entity = world.create_entity();
-        
-        world.add_component(entity, Position(1.0, 2.0, 3.0)).expect("Failed to add component");
-        
+
+        world
+            .add_component(entity, Position(1.0, 2.0, 3.0))
+            .expect("Failed to add component");
+
         if let Some(pos) = world.get_component_mut::<Position>(entity) {
             pos.0 = 10.0;
         }
-        
+
         let pos = world.get_component::<Position>(entity);
         assert_eq!(pos.expect("Position component should exist").0, 10.0);
     }
-    
+
     #[test]
     fn test_entity_destroy() {
         let mut world = EcsWorld::new();
         let entity = world.create_entity();
-        
-        world.add_component(entity, Position(1.0, 2.0, 3.0)).expect("Failed to add component");
+
+        world
+            .add_component(entity, Position(1.0, 2.0, 3.0))
+            .expect("Failed to add component");
         world.destroy_entity(entity);
-        
+
         assert!(!world.is_alive(entity));
         assert!(world.get_component::<Position>(entity).is_none());
     }

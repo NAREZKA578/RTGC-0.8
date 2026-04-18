@@ -5,8 +5,9 @@ use crate::game::interaction::{InteractableType, InteractionResult};
 use crate::game::player::{CameraMode, PlayerState};
 use crate::game::skills::PlayerSkills;
 use crate::game::weather::{PrecipitationType, WeatherState};
+use crate::graphics::render_command::RenderCommand;
 use crate::graphics::render_command::{UI_DEPTH_HUD, UI_DEPTH_NOTIFICATIONS, UI_DEPTH_PROMPT};
-use crate::graphics::renderer::{RenderCommand, RenderQueue};
+use crate::graphics::render_queue::RenderQueue;
 use nalgebra::{Vector2, Vector3};
 
 // Type aliases for backwards compatibility
@@ -200,6 +201,7 @@ impl Default for MinimapData {
 }
 
 /// Main UI manager
+#[derive(Clone)]
 pub struct UIManager {
     visibility: UIVisibility,
     hud_data: HUDData,
@@ -408,6 +410,7 @@ impl UIManager {
                     texture: None,
                     color,
                     depth: UI_DEPTH_NOTIFICATIONS,
+                    sort_key: 0,
                 });
                 y_offset += 35.0;
             }
@@ -427,6 +430,7 @@ impl UIManager {
                         texture: None,
                         color: [1.0, 1.0, 1.0, 1.0],
                         depth: UI_DEPTH_PROMPT,
+                        sort_key: 0,
                     });
                 }
             }
@@ -441,6 +445,7 @@ impl UIManager {
                     texture: None,
                     color: [0.0, 0.0, 0.0, 0.5],
                     depth: UI_DEPTH_HUD,
+                    sort_key: 0,
                 });
             }
 
@@ -451,6 +456,7 @@ impl UIManager {
                     texture: None,
                     color: [0.0, 0.0, 0.0, 0.5],
                     depth: UI_DEPTH_HUD,
+                    sort_key: 0,
                 });
             }
 
@@ -461,6 +467,7 @@ impl UIManager {
                     texture: None,
                     color: [0.0, 0.0, 0.0, 0.5],
                     depth: UI_DEPTH_HUD,
+                    sort_key: 0,
                 });
             }
 
@@ -471,6 +478,7 @@ impl UIManager {
                     texture: None,
                     color: [0.0, 0.0, 0.0, 0.5],
                     depth: UI_DEPTH_HUD,
+                    sort_key: 0,
                 });
             }
         }

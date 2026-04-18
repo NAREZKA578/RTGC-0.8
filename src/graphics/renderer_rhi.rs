@@ -54,7 +54,6 @@ pub struct RendererRhi {
     // State
     models: HashMap<String, Model>,
     current_city_index: usize,
-    pub menu_state: MenuState,
     pub lod_manager: LodManager,
     pub texture_streaming: TextureStreamingSystem,
 
@@ -78,18 +77,6 @@ pub struct RendererRhi {
     // Font for HUD text
     font_texture: Option<ResourceHandle>,
     font_chars: HashMap<char, [f32; 4]>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MenuState {
-    Loading,
-    MainMenu,
-    CitySelection,
-    InGame,
-    WorldCreation,
-    Settings,
-    Paused,
-    CharacterCreation,
 }
 
 impl RendererRhi {
@@ -126,7 +113,6 @@ impl RendererRhi {
             hud_pipeline: None,
             models: HashMap::new(),
             current_city_index: 0,
-            menu_state: MenuState::Loading,
             lod_manager: LodManager::new(),
             texture_streaming: TextureStreamingSystem::new(128, 10.0, 5),
             vehicle_transform: None,
@@ -262,17 +248,14 @@ impl RendererRhi {
         // Clear screen via OpenGL (fallback for now)
         // Render pass would be implemented here in full RHI backend
 
-        match self.menu_state {
-            MenuState::Loading => self.render_loading_screen()?,
-            MenuState::MainMenu => self.render_main_menu()?,
-            MenuState::CitySelection => self.render_city_selection()?,
-            MenuState::InGame | MenuState::WorldCreation => self.render_game()?,
-            MenuState::Paused => {
-                self.render_game()?;
-                self.render_pause_overlay()?;
-            }
-            MenuState::Settings => self.render_settings()?,
-            MenuState::CharacterCreation => self.render_character_creation()?,
+        // Render 3D scene - menu rendering should be handled separately
+        self.render_sky()?;
+        self.render_terrain()?;
+        self.render_vehicle()?;
+
+        // Render HUD if vehicle is loaded
+        if self.hud_data.is_some() {
+            self.render_hud()?;
         }
 
         Ok(())

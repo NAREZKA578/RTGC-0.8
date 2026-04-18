@@ -1,14 +1,14 @@
 // Audio Module - 3D Spatial Audio with Occlusion
 // Advanced audio system with positional audio and occlusion support
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use parking_lot::Mutex;
-use nalgebra::Vector3;
 use crate::config::AudioConfig;
-use tracing;
+use nalgebra::Vector3;
+use parking_lot::Mutex;
 use rodio::{OutputStream, Sink, Source};
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
+use tracing;
 
 /// Тип для 3D вектора (единый стек с nalgebra)
 pub type Vec3 = Vector3<f32>;
@@ -86,7 +86,11 @@ impl Default for AudioListener {
 }
 
 impl AudioListener {
-    pub fn new(position: nalgebra::Vector3<f32>, forward: nalgebra::Vector3<f32>, up: nalgebra::Vector3<f32>) -> Self {
+    pub fn new(
+        position: nalgebra::Vector3<f32>,
+        forward: nalgebra::Vector3<f32>,
+        up: nalgebra::Vector3<f32>,
+    ) -> Self {
         Self {
             position,
             forward: forward.normalize(),
@@ -94,7 +98,7 @@ impl AudioListener {
             ..Default::default()
         }
     }
-    
+
     /// Вычисляет матрицу 3D звука для HRTF
     pub fn get_audio_matrix(&self) -> [[f32; 4]; 4] {
         let forward = self.forward.normalize();
@@ -169,8 +173,8 @@ pub struct EnvironmentParams {
 impl Default for EnvironmentParams {
     fn default() -> Self {
         Self {
-            temperature: 20.0, // Celsius
-            humidity: 50.0,    // %
+            temperature: 20.0,  // Celsius
+            humidity: 50.0,     // %
             pressure: 101325.0, // Pascal
             wind_velocity: Vector3::zeros(),
         }
@@ -183,7 +187,7 @@ impl EnvironmentParams {
         // Формула: c = 331.3 * sqrt(1 + T/273.15)
         331.3 * (1.0 + self.temperature / 273.15).sqrt()
     }
-    
+
     /// Вычисляет коэффициент поглощения воздуха
     pub fn air_absorption(&self, frequency: f32, distance: f32) -> f32 {
         // Упрощенная модель поглощения по ISO 9613-1
@@ -208,10 +212,26 @@ pub struct AudioSystem {
     max_sources: u32,
     /// Включена ли окклюзия
     occlusion_enabled: bool,
-    /// Аудио устройство вывода
+    /// Аудио устройство вывода (not cloneable, recreated on clone)
     _stream: Option<OutputStream>,
     /// Активный sink для воспроизведения
     sink: Option<Arc<Sink>>,
+}
+
+impl Clone for AudioSystem {
+    fn clone(&self) -> Self {
+        Self {
+            sources: self.sources.clone(),
+            next_source_id: self.next_source_id,
+            listener: self.listener.clone(),
+            environment: self.environment.clone(),
+            sound_cache: self.sound_cache.clone(),
+            max_sources: self.max_sources,
+            occlusion_enabled: self.occlusion_enabled,
+            _stream: None,
+            sink: self.sink.clone(),
+        }
+    }
 }
 
 impl AudioSystem {
@@ -219,7 +239,7 @@ impl AudioSystem {
         // Инициализация аудиоустройства
         let (stream, stream_handle) = OutputStream::try_default()?;
         let sink = Sink::try_new(&stream_handle)?;
-        
+
         Ok(Self {
             sources: HashMap::new(),
             next_source_id: 1,
@@ -232,31 +252,31 @@ impl AudioSystem {
             sink: Some(Arc::new(sink)),
         })
     }
-    
+
     /// Создает новый источник звука
     pub fn create_source(&mut self, sound_path: &str) -> u32 {
         if self.sources.len() >= self.max_sources as usize {
             // Удаляем самый низкоприоритетный источник
             self.remove_lowest_priority_source();
         }
-        
+
         let id = self.next_source_id;
         self.next_source_id += 1;
-        
+
         let source = AudioSource {
             sound_path: sound_path.to_string(),
             ..Default::default()
         };
-        
+
         self.sources.insert(id, source);
         id
     }
-    
+
     /// Удаляет источник звука
     pub fn remove_source(&mut self, id: u32) {
         self.sources.remove(&id);
     }
-    
+
     /// Воспроизводит звук из файла
     pub fn play_sound(&self, sound_path: &str) {
         if let Some(sink) = &self.sink {
@@ -271,28 +291,33 @@ impl AudioSystem {
             }
         }
     }
-    
+
     /// Останавливает все звуки
     pub fn stop_all_sounds(&self) {
         if let Some(sink) = &self.sink {
             sink.stop();
         }
     }
-    
+
     /// Обновляет позицию источника
     pub fn set_source_position(&mut self, id: u32, position: nalgebra::Vector3<f32>) {
         if let Some(source) = self.sources.get_mut(&id) {
             source.position = position;
         }
     }
-    
+
     /// Обновляет позицию слушателя
-    pub fn set_listener_position(&mut self, position: nalgebra::Vector3<f32>, forward: nalgebra::Vector3<f32>, up: nalgebra::Vector3<f32>) {
+    pub fn set_listener_position(
+        &mut self,
+        position: nalgebra::Vector3<f32>,
+        forward: nalgebra::Vector3<f32>,
+        up: nalgebra::Vector3<f32>,
+    ) {
         self.listener.position = position;
         self.listener.forward = forward;
         self.listener.up = up;
     }
-    
+
     /// Вычисляет 3D параметры для источника (панорамирование, громкость, питч)
     pub fn calculate_3d_params(&self, source_id: u32) -> Option<(f32, f32, f32)> {
         let source = self.sources.get(&source_id)?;
@@ -319,7 +344,8 @@ impl AudioSystem {
 
         // Доплер эффект
         let relative_velocity = source.velocity - self.listener.velocity;
-        let doppler_shift = self.calculate_doppler(relative_velocity, to_source.normalize(), distance);
+        let doppler_shift =
+            self.calculate_doppler(relative_velocity, to_source.normalize(), distance);
 
         // Окклюзия
         let occlusion = if self.occlusion_enabled {
@@ -351,7 +377,12 @@ impl AudioSystem {
     }
 
     /// Вычисляет Doppler сдвиг
-    fn calculate_doppler(&self, relative_velocity: nalgebra::Vector3<f32>, direction: nalgebra::Vector3<f32>, distance: f32) -> f32 {
+    fn calculate_doppler(
+        &self,
+        relative_velocity: nalgebra::Vector3<f32>,
+        direction: nalgebra::Vector3<f32>,
+        distance: f32,
+    ) -> f32 {
         if distance < 0.001 {
             return 1.0;
         }
@@ -360,12 +391,17 @@ impl AudioSystem {
         let velocity_toward_listener = -relative_velocity.dot(&direction);
 
         // Формула Доплера: f' = f * (c / (c - v))
-        let doppler = speed_of_sound / (speed_of_sound - velocity_toward_listener * self.listener.doppler_factor);
+        let doppler = speed_of_sound
+            / (speed_of_sound - velocity_toward_listener * self.listener.doppler_factor);
         doppler.clamp(0.5, 2.0) // Ограничиваем эффект
     }
 
     /// Трассировка луча для проверки окклюзии
-    pub fn calculate_occlusion(&self, from: nalgebra::Vector3<f32>, to: nalgebra::Vector3<f32>) -> OcclusionResult {
+    pub fn calculate_occlusion(
+        &self,
+        from: nalgebra::Vector3<f32>,
+        to: nalgebra::Vector3<f32>,
+    ) -> OcclusionResult {
         // В реальной реализации здесь была бы трассировка луча через физический движок
         // Для примера возвращаем простую заглушку
 
@@ -374,8 +410,16 @@ impl AudioSystem {
 
         // Заглушка - проверяем "препятствия" на фиксированных позициях
         let obstacles = [
-            (nalgebra::Vector3::new(5.0, 0.0, 5.0), 2.0, OcclusionMaterial::Concrete),
-            (nalgebra::Vector3::new(-3.0, 0.0, 2.0), 1.5, OcclusionMaterial::Wood),
+            (
+                nalgebra::Vector3::new(5.0, 0.0, 5.0),
+                2.0,
+                OcclusionMaterial::Concrete,
+            ),
+            (
+                nalgebra::Vector3::new(-3.0, 0.0, 2.0),
+                1.5,
+                OcclusionMaterial::Wood,
+            ),
         ];
 
         let mut total_occlusion = 0.0;
@@ -390,7 +434,7 @@ impl AudioSystem {
             if projection > 0.0 && projection < distance {
                 let closest_point = from + direction.normalize() * projection;
                 let dist_to_line = (closest_point - *obs_pos).norm();
-                
+
                 if dist_to_line < *obs_radius {
                     total_occlusion += material.absorption_coefficient(1000.0);
                     obstacle_count += 1;
@@ -398,7 +442,7 @@ impl AudioSystem {
                 }
             }
         }
-        
+
         OcclusionResult {
             occluded: obstacle_count > 0,
             occlusion_factor: total_occlusion.min(1.0),
@@ -406,63 +450,67 @@ impl AudioSystem {
             material: last_material,
         }
     }
-    
+
     /// Применяет HRTF (Head-Related Transfer Function) для бинаурального звука
-    pub fn apply_hrtf(&self, samples: &[f32], azimuth: f32, elevation: f32) -> (Vec<f32>, Vec<f32>) {
+    pub fn apply_hrtf(
+        &self,
+        samples: &[f32],
+        azimuth: f32,
+        elevation: f32,
+    ) -> (Vec<f32>, Vec<f32>) {
         // Упрощенная HRTF модель
         // В реальной реализации использовались бы таблицы HRTF (например, CIPIC или MIT databases)
-        
+
         let left_delay = ((azimuth * 0.0005) as f32).abs();
         let right_delay = ((-azimuth * 0.0005) as f32).abs();
-        
+
         let left_attenuation = if azimuth > 0.0 { 0.8 } else { 1.0 };
         let right_attenuation = if azimuth < 0.0 { 0.8 } else { 1.0 };
-        
+
         // Применяем задержку и аттенюацию
-        let left_channel: Vec<f32> = samples.iter()
+        let left_channel: Vec<f32> = samples
+            .iter()
             .zip(samples.iter().skip((left_delay * 44100.0) as usize))
             .map(|(&s, &delayed)| s * left_attenuation + delayed * 0.3)
             .collect();
-            
-        let right_channel: Vec<f32> = samples.iter()
+
+        let right_channel: Vec<f32> = samples
+            .iter()
             .zip(samples.iter().skip((right_delay * 44100.0) as usize))
             .map(|(&s, &delayed)| s * right_attenuation + delayed * 0.3)
             .collect();
-        
+
         (left_channel, right_channel)
     }
-    
+
     /// Реверберация на основе размера помещения
     pub fn apply_reverb(&self, samples: &[f32], room_size: f32, decay: f32) -> Vec<f32> {
         // Простая реверберация с использованием линии задержки
         let delay_samples = (room_size * 100.0) as usize;
         let mut output = Vec::with_capacity(samples.len() + delay_samples);
-        
+
         let mut delay_line = vec![0.0f32; delay_samples];
         let mut write_idx = 0;
-        
+
         for &sample in samples {
             let delayed = delay_line[write_idx];
             let new_sample = sample + delayed * decay;
             delay_line[write_idx] = new_sample;
             output.push(new_sample);
-            
+
             write_idx = (write_idx + 1) % delay_samples;
         }
-        
+
         output
     }
-    
+
     /// Удаляет самый низкоприоритетный источник
     fn remove_lowest_priority_source(&mut self) {
-        if let Some((&lowest_id, _)) = self.sources
-            .iter()
-            .min_by_key(|(_, s)| s.priority)
-        {
+        if let Some((&lowest_id, _)) = self.sources.iter().min_by_key(|(_, s)| s.priority) {
             self.sources.remove(&lowest_id);
         }
     }
-    
+
     /// Обновляет все источники (вызывать каждый кадр)
     pub fn update(&mut self) {
         // Здесь должна быть логика обновления состояний источников
@@ -476,7 +524,10 @@ impl AudioSystem {
 impl Default for AudioSystem {
     fn default() -> Self {
         Self::new().unwrap_or_else(|e| {
-            tracing::warn!("Failed to initialize audio system: {}, using silent fallback", e);
+            tracing::warn!(
+                "Failed to initialize audio system: {}, using silent fallback",
+                e
+            );
             // Create a minimal silent audio system as fallback
             AudioSystem {
                 sources: HashMap::new(),

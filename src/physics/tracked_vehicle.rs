@@ -267,6 +267,7 @@ impl RoadWheelSuspension {
 }
 
 /// Гусеничное транспортное средство
+#[derive(Clone, Debug)]
 pub struct TrackedVehicle {
     /// Тип транспортного средства
     pub vehicle_type: TrackedVehicleType,
@@ -338,6 +339,30 @@ impl TrackedVehicle {
     /// Установить ID тела шасси
     pub fn set_chassis_body_id(&mut self, id: usize) {
         self.chassis_body_id = Some(id);
+    }
+
+    /// Set throttle input
+    pub fn set_throttle(&mut self, throttle: f32) {
+        self.controls.throttle = throttle.clamp(0.0, 1.0);
+    }
+
+    /// Set brake input
+    pub fn set_brake(&mut self, brake: f32) {
+        self.controls.brake = brake.clamp(0.0, 1.0);
+    }
+
+    /// Set turning (left/right track differential)
+    pub fn set_turn(&mut self, turn: f32) {
+        if turn < 0.0 {
+            self.controls.left_track = turn;
+            self.controls.right_track = 0.0;
+        } else if turn > 0.0 {
+            self.controls.left_track = 0.0;
+            self.controls.right_track = turn;
+        } else {
+            self.controls.left_track = self.controls.throttle;
+            self.controls.right_track = self.controls.throttle;
+        }
     }
 
     /// Получить ID тела шасси
@@ -609,26 +634,43 @@ impl TrackedVehicle {
 
     /// Validates that all physical quantities are finite (not NaN or Inf)
     pub fn validate_state(&self) -> bool {
-        self.position.x.is_finite() && self.position.y.is_finite() && self.position.z.is_finite()
-            && self.linear_velocity.x.is_finite() && self.linear_velocity.y.is_finite() && self.linear_velocity.z.is_finite()
-            && self.angular_velocity.x.is_finite() && self.angular_velocity.y.is_finite() && self.angular_velocity.z.is_finite()
-            && self.orientation.coords.w.is_finite() && self.orientation.coords.x.is_finite()
-            && self.orientation.coords.y.is_finite() && self.orientation.coords.z.is_finite()
-            && self.left_track_slip.is_finite() && self.right_track_slip.is_finite()
-            && self.fuel.is_finite() && self.engine_temperature.is_finite()
+        self.position.x.is_finite()
+            && self.position.y.is_finite()
+            && self.position.z.is_finite()
+            && self.linear_velocity.x.is_finite()
+            && self.linear_velocity.y.is_finite()
+            && self.linear_velocity.z.is_finite()
+            && self.angular_velocity.x.is_finite()
+            && self.angular_velocity.y.is_finite()
+            && self.angular_velocity.z.is_finite()
+            && self.orientation.coords.w.is_finite()
+            && self.orientation.coords.x.is_finite()
+            && self.orientation.coords.y.is_finite()
+            && self.orientation.coords.z.is_finite()
+            && self.left_track.slip.is_finite()
+            && self.right_track.slip.is_finite()
+            && self.fuel.is_finite()
+            && self.engine_temperature.is_finite()
     }
 
     /// Resets the vehicle to a safe state when invalid values are detected
     pub fn reset_to_safe_state(&mut self) {
         self.linear_velocity = Vector3::zeros();
         self.angular_velocity = Vector3::zeros();
-        self.left_track_slip = 0.0;
-        self.right_track_slip = 0.0;
+        self.left_track.slip = 0.0;
+        self.right_track.slip = 0.0;
         // Keep position and orientation, but ensure they are finite
-        if !self.position.is_finite() {
+        if !self.position.x.is_finite()
+            || !self.position.y.is_finite()
+            || !self.position.z.is_finite()
+        {
             self.position = Vector3::zeros();
         }
-        if !self.orientation.is_finite() {
+        if !self.orientation.coords.w.is_finite()
+            || !self.orientation.coords.x.is_finite()
+            || !self.orientation.coords.y.is_finite()
+            || !self.orientation.coords.z.is_finite()
+        {
             self.orientation = UnitQuaternion::identity();
         }
         // Reset engine parameters to safe values
@@ -636,7 +678,7 @@ impl TrackedVehicle {
             self.engine_temperature = 60.0;
         }
         if !self.fuel.is_finite() {
-            self.fuel = self.max_fuel_capacity * 0.5;
+            self.fuel = 200.0; // Default fuel amount
         }
     }
 }

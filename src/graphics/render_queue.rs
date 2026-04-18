@@ -1,10 +1,11 @@
 //! Render Queue - Manages and sorts render commands for efficient rendering
 
-use crate::graphics::render_command::RenderCommand;
 use crate::graphics::material::Material;
+use crate::graphics::render_command::RenderCommand;
 use std::collections::HashMap;
 
 /// Render queue for batching and sorting draw calls
+#[derive(Clone)]
 pub struct RenderQueue {
     /// All pending render commands
     commands: Vec<RenderCommand>,
@@ -43,8 +44,12 @@ impl RenderQueue {
         match &command {
             RenderCommand::Mesh { .. } => self.stats.mesh_commands += 1,
             RenderCommand::ParticleSystem { .. } => self.stats.particle_commands += 1,
-            RenderCommand::UIDraw { .. } | RenderCommand::UIElement { .. } => self.stats.ui_commands += 1,
-            RenderCommand::DebugLine { .. } | RenderCommand::DebugLines { .. } => self.stats.debug_commands += 1,
+            RenderCommand::UIDraw { .. } | RenderCommand::UIElement { .. } => {
+                self.stats.ui_commands += 1
+            }
+            RenderCommand::DebugLine { .. } | RenderCommand::DebugLines { .. } => {
+                self.stats.debug_commands += 1
+            }
             RenderCommand::Skybox { .. } => self.stats.skybox_commands += 1,
             RenderCommand::TerrainChunk { .. } => self.stats.terrain_commands += 1,
             RenderCommand::Vehicle { .. } => self.stats.mesh_commands += 1, // Count vehicle as mesh
@@ -172,14 +177,14 @@ mod tests {
     #[test]
     fn test_render_queue_submit() {
         let mut queue = RenderQueue::new();
-        
+
         let cmd = RenderCommand::DebugLine {
             start: Vector3::new(0.0, 0.0, 0.0),
             end: Vector3::new(1.0, 1.0, 1.0),
             color: [1.0, 0.0, 0.0, 1.0],
             sort_key: 0,
         };
-        
+
         queue.submit(cmd);
         assert_eq!(queue.len(), 1);
         assert_eq!(queue.stats().total_commands, 1);
@@ -189,7 +194,7 @@ mod tests {
     #[test]
     fn test_render_queue_sort() {
         let mut queue = RenderQueue::new();
-        
+
         // Add commands in random order
         for i in 0..5 {
             let cmd = RenderCommand::DebugLine {
@@ -200,7 +205,7 @@ mod tests {
             };
             queue.submit(cmd);
         }
-        
+
         queue.sort();
         assert_eq!(queue.commands().len(), 5);
     }
@@ -208,17 +213,17 @@ mod tests {
     #[test]
     fn test_render_queue_clear() {
         let mut queue = RenderQueue::new();
-        
+
         let cmd = RenderCommand::DebugLine {
             start: Vector3::new(0.0, 0.0, 0.0),
             end: Vector3::new(1.0, 1.0, 1.0),
             color: [1.0, 0.0, 0.0, 1.0],
             sort_key: 0,
         };
-        
+
         queue.submit(cmd);
         queue.clear();
-        
+
         assert!(queue.is_empty());
         assert_eq!(queue.stats().total_commands, 0);
     }

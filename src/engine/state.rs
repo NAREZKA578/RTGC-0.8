@@ -1,10 +1,10 @@
 //! Состояния движка - явное управление состоянием приложения
-//! 
+//!
 //! Этот модуль предоставляет типизированные состояния для управления жизненным циклом
 //! движка, устраняя дублирование состояний и обеспечивая единый источник истины.
 
 /// Основное состояние движка
-/// 
+///
 /// Это enum представляет все возможные состояния приложения в любой момент времени.
 /// Использование enum вместо разрозненных флагов обеспечивает:
 /// - Единственный источник истины для состояния
@@ -13,51 +13,51 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum EngineState {
     /// Движок инициализируется (загрузка ресурсов, создание контекста)
-    Initializing { 
+    Initializing {
         /// Прогресс инициализации (0.0 - 1.0)
         progress: f32,
         /// Сообщение о текущем этапе загрузки
         message: String,
     },
-    
+
     /// Главное меню
-    MainMenu { 
+    MainMenu {
         /// Состояние меню
         menu_state: MenuState,
     },
-    
+
     /// Создание персонажа
-    CharacterCreation { 
+    CharacterCreation {
         /// Прогресс создания персонажа
         progress: f32,
     },
-    
+
     /// Загрузка мира/уровня
-    Loading { 
+    Loading {
         /// Прогресс загрузки (0.0 - 1.0)
         progress: f32,
         /// Тип загружаемого ресурса
         resource_type: LoadingResourceType,
     },
-    
+
     /// Игра активна
-    Playing { 
+    Playing {
         /// Текущий мир/уровень
         world_id: u64,
         /// Количество игроков в сессии
         player_count: u32,
     },
-    
+
     /// Игра на паузе
-    Paused { 
+    Paused {
         /// Причина паузы
         reason: PauseReason,
         /// Наложение паузы (UI)
         overlay_visible: bool,
     },
-    
+
     /// Ошибка в работе движка
-    Error { 
+    Error {
         /// Описание ошибки
         reason: String,
         /// Критичность ошибки
@@ -118,14 +118,14 @@ impl EngineState {
             message: message.into(),
         }
     }
-    
+
     /// Создаёт состояние главного меню
     pub fn main_menu() -> Self {
         Self::MainMenu {
             menu_state: MenuState::Active,
         }
     }
-    
+
     /// Создаёт состояние загрузки
     pub fn loading(resource_type: LoadingResourceType) -> Self {
         Self::Loading {
@@ -133,7 +133,7 @@ impl EngineState {
             resource_type,
         }
     }
-    
+
     /// Создаёт состояние игры
     pub fn playing(world_id: u64) -> Self {
         Self::Playing {
@@ -141,7 +141,7 @@ impl EngineState {
             player_count: 1,
         }
     }
-    
+
     /// Создаёт состояние паузы
     pub fn paused(reason: PauseReason) -> Self {
         Self::Paused {
@@ -149,7 +149,7 @@ impl EngineState {
             overlay_visible: true,
         }
     }
-    
+
     /// Создаёт состояние ошибки
     pub fn error(reason: impl Into<String>, critical: bool) -> Self {
         Self::Error {
@@ -157,42 +157,49 @@ impl EngineState {
             critical,
         }
     }
-    
+
     /// Проверяет, находится ли движок в состоянии игры
     pub fn is_playing(&self) -> bool {
         matches!(self, EngineState::Playing { .. })
     }
-    
+
     /// Проверяет, находится ли движок в состоянии меню
     pub fn is_in_menu(&self) -> bool {
         matches!(self, EngineState::MainMenu { .. })
     }
-    
+
     /// Проверяет, находится ли движок в состоянии загрузки
     pub fn is_loading(&self) -> bool {
-        matches!(self, EngineState::Loading { .. } | EngineState::Initializing { .. })
+        matches!(
+            self,
+            EngineState::Loading { .. } | EngineState::Initializing { .. }
+        )
     }
-    
+
     /// Проверяет, находится ли движок в состоянии ошибки
     pub fn is_error(&self) -> bool {
         matches!(self, EngineState::Error { .. })
     }
-    
+
     /// Проверяет, находится ли движок на паузе
     pub fn is_paused(&self) -> bool {
         matches!(self, EngineState::Paused { .. })
     }
-    
+
     /// Переключает состояние паузы (Paused <-> Playing)
     pub fn toggle_pause(&mut self) {
         *self = match self {
-            EngineState::Playing { world_id, player_count } => {
-                EngineState::Paused {
-                    reason: PauseReason::User,
-                    overlay_visible: true,
-                }
-            }
-            EngineState::Paused { reason: _, overlay_visible: _ } => {
+            EngineState::Playing {
+                world_id,
+                player_count,
+            } => EngineState::Paused {
+                reason: PauseReason::UserRequested,
+                overlay_visible: true,
+            },
+            EngineState::Paused {
+                reason: _,
+                overlay_visible: _,
+            } => {
                 // Возвращаемся в Playing с дефолтными значениями
                 // В реальной игре нужно сохранить world_id и player_count
                 EngineState::Playing {
@@ -203,7 +210,7 @@ impl EngineState {
             _ => return, // Не переключаем в других состояниях
         };
     }
-    
+
     /// Возвращает прогресс загрузки, если применимо
     pub fn loading_progress(&self) -> Option<f32> {
         match self {
@@ -212,7 +219,7 @@ impl EngineState {
             _ => None,
         }
     }
-    
+
     /// Устанавливает прогресс загрузки
     pub fn set_loading_progress(&mut self, progress: f32) {
         let progress = progress.clamp(0.0, 1.0);
@@ -233,35 +240,35 @@ impl Default for EngineState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_engine_state_initialization() {
         let state = EngineState::initializing("Loading assets...");
         assert!(state.is_loading());
         assert_eq!(state.loading_progress(), Some(0.0));
     }
-    
+
     #[test]
     fn test_engine_state_transitions() {
         let mut state = EngineState::default();
         assert!(state.is_loading());
-        
+
         state = EngineState::main_menu();
         assert!(state.is_in_menu());
-        
+
         state = EngineState::playing(42);
         assert!(state.is_playing());
-        
+
         state = EngineState::paused(PauseReason::UserRequested);
         assert!(!state.is_playing());
     }
-    
+
     #[test]
     fn test_loading_progress_clamping() {
         let mut state = EngineState::loading(LoadingResourceType::World);
         state.set_loading_progress(1.5);
         assert_eq!(state.loading_progress(), Some(1.0));
-        
+
         state.set_loading_progress(-0.5);
         assert_eq!(state.loading_progress(), Some(0.0));
     }

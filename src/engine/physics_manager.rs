@@ -1,10 +1,10 @@
 //! Менеджер физики - инкапсуляция физической подсистемы
-//! 
+//!
 //! Этот модуль управляет всеми физическими объектами и симуляцией,
 //! предоставляя контролируемый интерфейс для взаимодействия с физическим миром.
 
-use crate::physics::{PhysicsWorld, Vehicle, Helicopter, TrackedVehicle};
 use crate::error::EngineError;
+use crate::physics::{Helicopter, PhysicsWorld, TrackedVehicle, Vehicle};
 use nalgebra::Vector3;
 use tracing::{error, warn};
 
@@ -12,19 +12,19 @@ use tracing::{error, warn};
 pub struct PhysicsManager {
     /// Физический мир
     pub physics_world: PhysicsWorld,
-    
+
     /// Активное транспортное средство (колёсное)
     vehicle: Option<Vehicle>,
-    
+
     /// Активный вертолёт
     helicopter: Option<Helicopter>,
-    
+
     /// Активная гусеничная машина
     tracked_vehicle: Option<TrackedVehicle>,
-    
+
     /// Входы управления для транспортного средства
     vehicle_inputs: VehicleInputs,
-    
+
     /// Входы управления для гусеничной машины
     tracked_inputs: TrackedVehicleInputs,
 }
@@ -77,7 +77,7 @@ impl PhysicsManager {
             tracked_inputs: TrackedVehicleInputs::default(),
         }
     }
-    
+
     /// Обновляет физику с фиксированным шагом
     pub fn step(&mut self, dt: f32) -> Result<(), EngineError> {
         // Проверка на NaN/Inf перед шагом симуляции
@@ -85,98 +85,98 @@ impl PhysicsManager {
             warn!(target: "physics", "Invalid dt value: {}, skipping physics step", dt);
             return Ok(());
         }
-        
+
         // Обновление транспортного средства
         if let Some(ref mut vehicle) = self.vehicle {
             let inputs = &self.vehicle_inputs;
             vehicle.set_throttle(inputs.throttle);
             vehicle.set_steering(inputs.steering);
             vehicle.set_brake(inputs.brake);
-            
-            // Проверка состояния перед обновлением
+
             if !vehicle.validate_state() {
                 warn!(target: "physics", "Vehicle state invalid, resetting");
                 vehicle.reset_to_safe_state();
             } else {
-                // Вызываем update для применения физики колёс, подвески и аэродинамики
-                vehicle.update(dt, |x, z| 0.0, |x, z| crate::physics::SurfaceType::default());
+                vehicle.update(
+                    dt,
+                    |_x, _z| 0.0,
+                    |_x, _z| crate::physics::SurfaceType::default(),
+                );
             }
         }
-        
+
         // Обновление вертолёта
         if let Some(ref mut heli) = self.helicopter {
-            // Проверка состояния перед обновлением
             if !heli.validate_state() {
                 warn!(target: "physics", "Helicopter state invalid, resetting");
                 heli.reset_to_safe_state();
             } else {
-                heli.physics_update(dt, &mut self.physics_world);
+                heli.update(dt); // Используем базовый update
             }
         }
-        
+
         // Обновление гусеничной машины
         if let Some(ref mut tracked) = self.tracked_vehicle {
             let inputs = &self.tracked_inputs;
             tracked.set_throttle(inputs.throttle);
             tracked.set_brake(inputs.brake);
             tracked.set_turn(inputs.turn);
-            
-            // Проверка состояния перед обновлением
+
             if !tracked.validate_state() {
                 warn!(target: "physics", "TrackedVehicle state invalid, resetting");
                 tracked.reset_to_safe_state();
             }
         }
-        
+
         // Шаг физического мира
         self.physics_world.step(dt);
-        
-        // Обновляем глобальный указатель на физический мир для raycast
+
+        // Обновляем глобальный physics_world для raycast
         crate::physics::set_global_physics_world(&self.physics_world);
-        
+
         Ok(())
     }
-    
+
     /// Устанавливает транспортное средство
     pub fn set_vehicle(&mut self, vehicle: Vehicle) {
         self.vehicle = Some(vehicle);
     }
-    
+
     /// Устанавливает вертолёт
     pub fn set_helicopter(&mut self, helicopter: Helicopter) {
         self.helicopter = Some(helicopter);
     }
-    
+
     /// Устанавливает гусеничную машину
     pub fn set_tracked_vehicle(&mut self, tracked: TrackedVehicle) {
         self.tracked_vehicle = Some(tracked);
     }
-    
+
     /// Получает ссылку на транспортное средство
     pub fn get_vehicle(&self) -> Option<&Vehicle> {
         self.vehicle.as_ref()
     }
-    
+
     /// Получает мутабельную ссылку на транспортное средство
     pub fn get_vehicle_mut(&mut self) -> Option<&mut Vehicle> {
         self.vehicle.as_mut()
     }
-    
+
     /// Получает ссылку на вертолёт
     pub fn get_helicopter(&self) -> Option<&Helicopter> {
         self.helicopter.as_ref()
     }
-    
+
     /// Получает мутабельную ссылку на вертолёт
     pub fn get_helicopter_mut(&mut self) -> Option<&mut Helicopter> {
         self.helicopter.as_mut()
     }
-    
+
     /// Получает ссылку на гусеничную машину
     pub fn get_tracked_vehicle(&self) -> Option<&TrackedVehicle> {
         self.tracked_vehicle.as_ref()
     }
-    
+
     /// Устанавливает входы управления транспортным средством
     pub fn set_vehicle_inputs(&mut self, throttle: f32, steering: f32, brake: f32) {
         self.vehicle_inputs = VehicleInputs {
@@ -185,7 +185,7 @@ impl PhysicsManager {
             brake: brake.clamp(0.0, 1.0),
         };
     }
-    
+
     /// Устанавливает входы управления гусеничной машиной
     pub fn set_tracked_inputs(&mut self, throttle: f32, brake: f32, turn: f32) {
         self.tracked_inputs = TrackedVehicleInputs {
@@ -194,12 +194,12 @@ impl PhysicsManager {
             turn: turn.clamp(-1.0, 1.0),
         };
     }
-    
+
     /// Проверяет наличие активного физического объекта
     pub fn has_active_vehicle(&self) -> bool {
         self.vehicle.is_some() || self.helicopter.is_some() || self.tracked_vehicle.is_some()
     }
-    
+
     /// Сбрасывает все физические объекты
     pub fn clear_all(&mut self) {
         self.vehicle = None;
@@ -213,44 +213,44 @@ impl PhysicsManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_physics_manager_creation() {
         let physics_world = PhysicsWorld::new();
         let manager = PhysicsManager::new(physics_world);
-        
+
         assert!(!manager.has_active_vehicle());
         assert!(manager.get_vehicle().is_none());
         assert!(manager.get_helicopter().is_none());
     }
-    
+
     #[test]
     fn test_vehicle_inputs_clamping() {
         let physics_world = PhysicsWorld::new();
         let mut manager = PhysicsManager::new(physics_world);
-        
+
         // Установка значений за пределами диапазона
         manager.set_vehicle_inputs(2.0, -5.0, 10.0);
-        
+
         // Проверка клamping
         assert_eq!(manager.vehicle_inputs.throttle, 1.0);
         assert_eq!(manager.vehicle_inputs.steering, -1.0);
         assert_eq!(manager.vehicle_inputs.brake, 1.0);
     }
-    
+
     #[test]
     fn test_physics_step_with_invalid_dt() {
         let physics_world = PhysicsWorld::new();
         let mut manager = PhysicsManager::new(physics_world);
-        
+
         // Шаг с NaN должен быть пропущен без ошибки
         let result = manager.step(f32::NAN);
         assert!(result.is_ok());
-        
+
         // Шаг с отрицательным dt должен быть пропущен
         let result = manager.step(-1.0);
         assert!(result.is_ok());
-        
+
         // Шаг с inf должен быть пропущен
         let result = manager.step(f32::INFINITY);
         assert!(result.is_ok());

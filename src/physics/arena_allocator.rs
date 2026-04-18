@@ -11,7 +11,7 @@ pub struct ArenaAllocator<T: Clone> {
     count: usize,
 }
 
-impl<T> ArenaAllocator<T> {
+impl<T: Clone> ArenaAllocator<T> {
     /// Creates a new arena allocator with initial capacity
     pub fn new() -> Self {
         Self {
@@ -180,13 +180,13 @@ impl<T> ArenaAllocator<T> {
     }
 }
 
-impl<T> Default for ArenaAllocator<T> {
+impl<T: Clone> Default for ArenaAllocator<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> Index<usize> for ArenaAllocator<T> {
+impl<T: Clone> Index<usize> for ArenaAllocator<T> {
     type Output = T;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -198,7 +198,7 @@ impl<T> Index<usize> for ArenaAllocator<T> {
     }
 }
 
-impl<T> IndexMut<usize> for ArenaAllocator<T> {
+impl<T: Clone> IndexMut<usize> for ArenaAllocator<T> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         // SAFETY: This will panic if index is out of bounds or not allocated.
         // Prefer using get_mut() or get_mut_unchecked() for safer access patterns.

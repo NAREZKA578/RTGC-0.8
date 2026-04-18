@@ -218,6 +218,38 @@ impl CraneArm {
         }
     }
 
+    /// Validates that all physical quantities are finite (not NaN or Inf)
+    pub fn validate_state(&self) -> bool {
+        self.config.base_position.x.is_finite()
+            && self.config.base_position.y.is_finite()
+            && self.config.base_position.z.is_finite()
+            && self.boom.slew_angle.is_finite()
+            && self.boom.elevation_angle.is_finite()
+            && self.boom.length.is_finite()
+            && self.boom.cable_length.is_finite()
+            && self.controls.slew.is_finite()
+            && self.controls.boom_elevation.is_finite()
+            && self.controls.boom_extension.is_finite()
+            && self.controls.hoist.is_finite()
+    }
+
+    /// Resets the crane to a safe state when invalid values are detected
+    pub fn reset_to_safe_state(&mut self) {
+        self.boom.slew_angle = 0.0;
+        self.boom.elevation_angle = self.config.min_elevation_angle;
+        self.boom.cable_length = 1.0;
+        self.controls.slew = 0.0;
+        self.controls.boom_elevation = 0.0;
+        self.controls.boom_extension = 0.0;
+        self.controls.hoist = 0.0;
+        if !self.config.base_position.x.is_finite()
+            || !self.config.base_position.y.is_finite()
+            || !self.config.base_position.z.is_finite()
+        {
+            self.config.base_position = Vector3::zeros();
+        }
+    }
+
     /// Прицепить груз
     pub fn attach_load(&mut self, mass: f32, position: Vector3<f32>) -> Result<(), String> {
         let capacity = self.config.crane_type.max_load_capacity();
@@ -578,10 +610,10 @@ mod tests {
     #[test]
     fn test_crane_physics_handles_nan() {
         let mut crane = CraneArm::new(CraneType::TruckCrane_25t, Vector3::zeros());
-        
+
         // Test that NaN in state is detected
         assert!(crane.validate_state());
-        
+
         // Simulate invalid dt
         crane.update(f32::NAN, &|_, _| 0.0);
         // Should not panic and should reset to safe state
@@ -590,7 +622,9 @@ mod tests {
 
     /// Validates that all physical quantities are finite (not NaN or Inf)
     pub fn validate_state(&self) -> bool {
-        self.position.x.is_finite() && self.position.y.is_finite() && self.position.z.is_finite()
+        self.position.x.is_finite()
+            && self.position.y.is_finite()
+            && self.position.z.is_finite()
             && self.boom.slew_angle.is_finite()
             && self.boom.elevation_angle.is_finite()
             && self.boom.length.is_finite()

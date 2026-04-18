@@ -7,7 +7,3 @@
 //! - Precipitation particles
 //! - Lightning effects
 //! - Atmospheric conditions (temperature, humidity, pressure)
-
-pub mod dynamic_weather;
-
-pub use dynamic_weather::*;

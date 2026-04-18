@@ -55,7 +55,7 @@ impl ThreadPool {
             f();
             let _ = job_sender.send(());
         });
-        
+
         if let Some(sender) = self.sender.as_ref() {
             if let Err(e) = sender.send(job) {
                 tracing::error!("Failed to send job to thread pool: {}", e);
@@ -73,7 +73,7 @@ impl ThreadPool {
                 active_jobs: None,
             };
         }
-        
+
         JoinHandle {
             receiver: job_receiver,
             active_jobs: Some(Arc::downgrade(&self.active_jobs)),
@@ -102,6 +102,12 @@ struct Worker {
     thread: Option<thread::JoinHandle<()>>,
 }
 
+impl Clone for Worker {
+    fn clone(&self) -> Self {
+        Self { thread: None }
+    }
+}
+
 impl Worker {
     fn new(
         id: usize,
@@ -116,9 +122,11 @@ impl Worker {
                 if shutdown.load(Ordering::SeqCst) {
                     break;
                 }
-                
+
                 // Пробуем получить задачу с таймаутом, чтобы периодически проверять shutdown
-                let job = receiver.lock().recv_timeout(std::time::Duration::from_millis(100));
+                let job = receiver
+                    .lock()
+                    .recv_timeout(std::time::Duration::from_millis(100));
 
                 match job {
                     Ok(job) => {
@@ -133,7 +141,9 @@ impl Worker {
             })
             .expect("Failed to spawn worker thread");
 
-        Worker { thread: Some(thread) }
+        Worker {
+            thread: Some(thread),
+        }
     }
 }
 
@@ -141,30 +151,33 @@ impl Drop for ThreadPool {
     fn drop(&mut self) {
         // Устанавливаем флаг shutdown
         self.shutdown.store(true, Ordering::SeqCst);
-        
+
         // Закрываем sender, чтобы все recv() вернули ошибку
         self.sender.take();
-        
+
         // Ждём завершения всех активных задач с таймаутом
         let timeout = std::time::Duration::from_secs(5);
         let start = std::time::Instant::now();
         while self.active_jobs.load(Ordering::SeqCst) > 0 && start.elapsed() < timeout {
             thread::yield_now();
         }
-        
+
         // Если задачи всё ещё есть, логируем предупреждение
         let remaining = self.active_jobs.load(Ordering::SeqCst);
         if remaining > 0 {
-            tracing::warn!("ThreadPool dropping with {} active jobs remaining (timeout)", remaining);
+            tracing::warn!(
+                "ThreadPool dropping with {} active jobs remaining (timeout)",
+                remaining
+            );
         }
-        
+
         // Соединяем все worker потоки
         for worker in &mut self.workers {
             if let Some(handle) = worker.thread.take() {
                 let _ = handle.join();
             }
         }
-        
+
         tracing::info!("ThreadPool shut down gracefully");
     }
 }

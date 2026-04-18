@@ -7,7 +7,9 @@
 //! - Temperature and humidity cycles
 //! - Weather transitions and forecasting
 
-use nalgebra::{Vector3, Vector2};
+use nalgebra::Vector2 as V2;
+use nalgebra::Vector3 as V3;
+use nalgebra::{Vector2, Vector3};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::f32::consts::PI;
@@ -34,8 +36,12 @@ impl WeatherType {
     /// Get precipitation intensity (0.0 = none, 1.0 = maximum)
     pub fn precipitation_intensity(&self) -> f32 {
         match self {
-            WeatherType::Clear | WeatherType::PartlyCloudy | WeatherType::Cloudy |
-            WeatherType::Overcast | WeatherType::Fog | WeatherType::Mist => 0.0,
+            WeatherType::Clear
+            | WeatherType::PartlyCloudy
+            | WeatherType::Cloudy
+            | WeatherType::Overcast
+            | WeatherType::Fog
+            | WeatherType::Mist => 0.0,
             WeatherType::LightRain | WeatherType::LightSnow => 0.3,
             WeatherType::HeavyRain | WeatherType::HeavySnow => 0.7,
             WeatherType::Thunderstorm => 0.9,
@@ -75,7 +81,7 @@ pub struct CloudLayer {
     /// Cloud type (cumulus, stratus, cirrus, etc.)
     pub cloud_type: CloudType,
     /// Movement velocity (m/s)
-    pub velocity: Vector2,
+    pub velocity: V2<f32>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -91,7 +97,7 @@ pub enum CloudType {
 #[derive(Debug, Clone)]
 pub struct Wind {
     /// Direction (normalized 3D vector)
-    pub direction: Vector3,
+    pub direction: V3<f32>,
     /// Speed at ground level (m/s)
     pub ground_speed: f32,
     /// Speed at altitude (m/s)
@@ -105,7 +111,7 @@ pub struct Wind {
 }
 
 impl Wind {
-    pub fn new(direction: Vector3, speed: f32) -> Self {
+    pub fn new(direction: V3<f32>, speed: f32) -> Self {
         let mut rng = ChaCha8Rng::from_entropy();
         Self {
             direction: direction.normalize(),
@@ -118,27 +124,30 @@ impl Wind {
     }
 
     /// Get wind speed at given altitude with gusts
-    pub fn get_wind_at_altitude(&self, altitude: f32, time: f32) -> Vector3 {
+    pub fn get_wind_at_altitude(&self, altitude: f32, time: f32) -> V3<f32> {
         // Wind shear: wind speed increases with altitude
         let shear_factor = 1.0 + (altitude / 1000.0).min(1.0) * 0.5;
-        
+
         // Add gusts using simple noise
         let gust = self.gust_factor(time);
-        
-        let speed = ((self.ground_speed + (self.altitude_speed - self.ground_speed) * (altitude / 1000.0).min(1.0)) 
-            * shear_factor * gust).max(0.0);
-        
+
+        let speed = ((self.ground_speed
+            + (self.altitude_speed - self.ground_speed) * (altitude / 1000.0).min(1.0))
+            * shear_factor
+            * gust)
+            .max(0.0);
+
         self.direction * speed
     }
 
     /// Calculate current gust factor using pseudo-noise
     fn gust_factor(&self, time: f32) -> f32 {
         let mut rng = ChaCha8Rng::seed_from_u64(self.turbulence_seed);
-        
+
         // Simple periodic gust pattern with randomness
         let base_gust = 1.0 + self.gustiness * 0.5 * (time * 0.5).sin();
         let random_variation = rng.gen_range(-0.2..0.2) * self.gustiness;
-        
+
         (base_gust + random_variation).clamp(0.5, 2.0)
     }
 
@@ -168,7 +177,7 @@ impl Default for Atmosphere {
         Self {
             temperature: 20.0,
             humidity: 0.5,
-            pressure: 1013.25, // Standard sea level pressure
+            pressure: 1013.25,   // Standard sea level pressure
             visibility: 10000.0, // 10 km
             uv_index: 5.0,
         }
@@ -209,15 +218,15 @@ impl Atmosphere {
 /// Precipitation particle
 #[derive(Debug, Clone, Copy)]
 pub struct PrecipitationParticle {
-    pub position: Vector3,
-    pub velocity: Vector3,
+    pub position: V3<f32>,
+    pub velocity: V3<f32>,
     pub size: f32,
     pub lifetime: f32,
     pub max_lifetime: f32,
 }
 
 impl PrecipitationParticle {
-    pub fn new(position: Vector3, velocity: Vector3, size: f32, lifetime: f32) -> Self {
+    pub fn new(position: V3<f32>, velocity: V3<f32>, size: f32, lifetime: f32) -> Self {
         Self {
             position,
             velocity,
@@ -227,7 +236,7 @@ impl PrecipitationParticle {
         }
     }
 
-    pub fn update(&mut self, dt: f32, wind: Vector3) {
+    pub fn update(&mut self, dt: f32, wind: V3<f32>) {
         self.position += (self.velocity + wind) * dt;
         self.lifetime -= dt;
     }
@@ -272,13 +281,13 @@ pub struct WeatherSystem {
 impl WeatherSystem {
     pub fn new(seed: u64) -> Self {
         let initial_weather = WeatherType::Clear;
-        
+
         Self {
             current_weather: initial_weather,
             target_weather: initial_weather,
             transition_progress: 1.0,
             weather_timer: 0.0,
-            min_weather_duration: 300.0, // 5 minutes minimum
+            min_weather_duration: 300.0,  // 5 minutes minimum
             max_weather_duration: 1800.0, // 30 minutes maximum
             cloud_layers: Vec::new(),
             wind: Wind::new(Vector3::new(1.0, 0.0, 0.0), 5.0),
@@ -294,7 +303,7 @@ impl WeatherSystem {
     /// Initialize cloud layers based on weather
     fn initialize_clouds(&mut self, weather: WeatherType) {
         self.cloud_layers.clear();
-        
+
         let coverage = weather.cloud_coverage();
         if coverage < 0.1 {
             return; // No clouds needed
@@ -365,32 +374,35 @@ impl WeatherSystem {
         if self.current_weather == new_weather {
             return;
         }
-        
+
         self.target_weather = new_weather;
         self.transition_progress = 0.0;
         self.weather_timer = 0.0;
-        
-        info!("Weather transitioning from {:?} to {:?}", self.current_weather, new_weather);
+
+        info!(
+            "Weather transitioning from {:?} to {:?}",
+            self.current_weather, new_weather
+        );
     }
 
     /// Random weather transition based on probabilities
     pub fn update_weather_transition(&mut self, dt: f32, rng: &mut ChaCha8Rng) {
         self.weather_timer += dt;
-        
+
         // Only consider transition after minimum duration
         if self.weather_timer < self.min_weather_duration {
             return;
         }
-        
+
         // Force transition after maximum duration
-        let should_transition = self.weather_timer >= self.max_weather_duration 
+        let should_transition = self.weather_timer >= self.max_weather_duration
             || (self.weather_timer >= self.min_weather_duration && rng.gen_bool(0.001));
-        
+
         if should_transition {
             // Choose new weather based on current weather (weighted probabilities)
             let new_weather = self.choose_next_weather(rng);
             self.transition_to(new_weather);
-            
+
             // Reset timer with random duration
             self.min_weather_duration = rng.gen_range(300.0..600.0);
             self.max_weather_duration = rng.gen_range(1200.0..2400.0);
@@ -400,43 +412,78 @@ impl WeatherSystem {
     /// Choose next weather type based on weighted probabilities
     fn choose_next_weather(&self, rng: &mut ChaCha8Rng) -> WeatherType {
         use WeatherType::*;
-        
+
         let weights: Vec<(WeatherType, f32)> = match self.current_weather {
             Clear => vec![(Clear, 0.6), (PartlyCloudy, 0.3), (Cloudy, 0.1)],
-            PartlyCloudy => vec![(Clear, 0.3), (PartlyCloudy, 0.4), (Cloudy, 0.2), (LightRain, 0.1)],
-            Cloudy => vec![(PartlyCloudy, 0.3), (Cloudy, 0.3), (Overcast, 0.3), (LightRain, 0.1)],
-            Overcast => vec![(Cloudy, 0.3), (Overcast, 0.3), (LightRain, 0.3), (HeavyRain, 0.1)],
-            LightRain => vec![(Cloudy, 0.3), (LightRain, 0.4), (HeavyRain, 0.2), (Clear, 0.1)],
-            HeavyRain => vec![(LightRain, 0.4), (HeavyRain, 0.3), (Thunderstorm, 0.2), (Overcast, 0.1)],
+            PartlyCloudy => vec![
+                (Clear, 0.3),
+                (PartlyCloudy, 0.4),
+                (Cloudy, 0.2),
+                (LightRain, 0.1),
+            ],
+            Cloudy => vec![
+                (PartlyCloudy, 0.3),
+                (Cloudy, 0.3),
+                (Overcast, 0.3),
+                (LightRain, 0.1),
+            ],
+            Overcast => vec![
+                (Cloudy, 0.3),
+                (Overcast, 0.3),
+                (LightRain, 0.3),
+                (HeavyRain, 0.1),
+            ],
+            LightRain => vec![
+                (Cloudy, 0.3),
+                (LightRain, 0.4),
+                (HeavyRain, 0.2),
+                (Clear, 0.1),
+            ],
+            HeavyRain => vec![
+                (LightRain, 0.4),
+                (HeavyRain, 0.3),
+                (Thunderstorm, 0.2),
+                (Overcast, 0.1),
+            ],
             Thunderstorm => vec![(HeavyRain, 0.5), (Thunderstorm, 0.3), (LightRain, 0.2)],
-            LightSnow => vec![(Cloudy, 0.3), (LightSnow, 0.4), (HeavySnow, 0.2), (Overcast, 0.1)],
-            HeavySnow => vec![(LightSnow, 0.4), (HeavySnow, 0.3), (Blizzard, 0.2), (Overcast, 0.1)],
+            LightSnow => vec![
+                (Cloudy, 0.3),
+                (LightSnow, 0.4),
+                (HeavySnow, 0.2),
+                (Overcast, 0.1),
+            ],
+            HeavySnow => vec![
+                (LightSnow, 0.4),
+                (HeavySnow, 0.3),
+                (Blizzard, 0.2),
+                (Overcast, 0.1),
+            ],
             Blizzard => vec![(HeavySnow, 0.6), (Blizzard, 0.3), (LightSnow, 0.1)],
             Fog => vec![(Mist, 0.4), (Fog, 0.4), (Overcast, 0.2)],
             Mist => vec![(Fog, 0.3), (Mist, 0.4), (Cloudy, 0.3)],
         };
-        
+
         let total_weight: f32 = weights.iter().map(|(_, w)| w).sum();
         let mut random = rng.gen_range(0.0..total_weight);
-        
+
         for (weather, weight) in weights {
             if random < weight {
                 return weather;
             }
             random -= weight;
         }
-        
+
         self.current_weather
     }
 
     /// Update weather system
     pub fn update(&mut self, dt: f32, total_time: f32) {
         let mut rng = ChaCha8Rng::seed_from_u64(self.seed.wrapping_add(total_time as u64));
-        
+
         // Update weather transition
         if self.transition_progress < 1.0 {
             self.transition_progress = (self.transition_progress + dt / 60.0).min(1.0);
-            
+
             if self.transition_progress >= 1.0 {
                 self.current_weather = self.target_weather;
                 self.initialize_clouds(self.current_weather);
@@ -445,16 +492,16 @@ impl WeatherSystem {
         } else {
             self.update_weather_transition(dt, &mut rng);
         }
-        
+
         // Update wind
         self.wind.update(dt, total_time);
-        
+
         // Update atmospheric conditions
         self.update_atmosphere(dt, total_time, &mut rng);
-        
+
         // Update precipitation particles
         self.update_precipitation(dt, &mut rng);
-        
+
         // Update lightning
         self.update_lightning(dt, &mut rng);
     }
@@ -467,10 +514,10 @@ impl WeatherSystem {
         let temp_amplitude = 8.0; // Daily variation
         let diurnal_factor = (-(hour - 14.0) / 24.0 * 2.0 * PI).cos(); // Peak at 2 PM
         let target_temp = base_temp + temp_amplitude * diurnal_factor;
-        
+
         // Slowly approach target temperature
         self.atmosphere.temperature += (target_temp - self.atmosphere.temperature) * dt * 0.001;
-        
+
         // Humidity based on weather
         let target_humidity = match self.current_weather {
             WeatherType::Clear => 0.4,
@@ -481,12 +528,12 @@ impl WeatherSystem {
             WeatherType::Fog | WeatherType::Mist => 0.95,
         };
         self.atmosphere.humidity += (target_humidity - self.atmosphere.humidity) * dt * 0.01;
-        
+
         // UV index based on time and clouds
         let day_factor = (-(hour - 12.0) / 12.0 * PI).sin().max(0.0);
         let cloud_factor = 1.0 - self.current_weather.cloud_coverage() * 0.7;
         self.atmosphere.uv_index = day_factor * cloud_factor * 10.0;
-        
+
         // Pressure variations
         let pressure_variation = rng.gen_range(-5.0..5.0);
         self.atmosphere.pressure = 1013.25 + pressure_variation;
@@ -495,36 +542,37 @@ impl WeatherSystem {
     /// Update precipitation particles
     fn update_precipitation(&mut self, dt: f32, rng: &mut ChaCha8Rng) {
         let intensity = self.current_weather.precipitation_intensity();
-        
+
         // Remove dead particles
         self.precipitation_particles.retain(|p| p.is_alive());
-        
+
         // Spawn new particles
         let spawn_rate = (intensity * 100.0) as usize;
         let current_count = self.precipitation_particles.len();
-        
+
         for i in 0..spawn_rate {
             if current_count + i >= self.max_precipitation_particles {
                 break;
             }
-            
+
             let is_snow = self.atmosphere.is_snowing();
             let x = rng.gen_range(-100.0..100.0);
             let z = rng.gen_range(-100.0..100.0);
             let y = rng.gen_range(50.0..200.0);
-            
+
             let fall_speed = if is_snow { 2.0 } else { 15.0 };
             let size = if is_snow { 0.05 } else { 0.02 };
             let lifetime = y / fall_speed;
-            
-            self.precipitation_particles.push(PrecipitationParticle::new(
-                Vector3::new(x, y, z),
-                Vector3::new(0.0, -fall_speed, 0.0),
-                size,
-                lifetime,
-            ));
+
+            self.precipitation_particles
+                .push(PrecipitationParticle::new(
+                    Vector3::new(x, y, z),
+                    Vector3::new(0.0, -fall_speed, 0.0),
+                    size,
+                    lifetime,
+                ));
         }
-        
+
         // Update existing particles
         let wind = self.wind.get_wind_at_altitude(10.0, 0.0);
         for particle in &mut self.precipitation_particles {
@@ -538,10 +586,10 @@ impl WeatherSystem {
             self.lightning_flash = 0.0;
             return;
         }
-        
+
         // Decay flash
         self.lightning_flash = (self.lightning_flash - dt * 5.0).max(0.0);
-        
+
         // Random lightning strikes
         self.lightning_timer -= dt;
         if self.lightning_timer <= 0.0 && rng.gen_bool(0.02) {
@@ -558,7 +606,7 @@ impl WeatherSystem {
     }
 
     /// Get sky color based on weather and time
-    pub fn get_sky_color(&self, sun_height: f32) -> Vector3 {
+    pub fn get_sky_color(&self, sun_height: f32) -> V3<f32> {
         let base_color = match self.current_weather {
             WeatherType::Clear => Vector3::new(0.4, 0.6, 0.9),
             WeatherType::PartlyCloudy => Vector3::new(0.5, 0.65, 0.85),
@@ -570,7 +618,7 @@ impl WeatherSystem {
             WeatherType::Blizzard => Vector3::new(0.8, 0.8, 0.85),
             WeatherType::Fog | WeatherType::Mist => Vector3::new(0.7, 0.7, 0.7),
         };
-        
+
         // Apply interpolation during transition
         let target_color = match self.target_weather {
             WeatherType::Clear => Vector3::new(0.4, 0.6, 0.9),
@@ -583,9 +631,9 @@ impl WeatherSystem {
             WeatherType::Blizzard => Vector3::new(0.8, 0.8, 0.85),
             WeatherType::Fog | WeatherType::Mist => Vector3::new(0.7, 0.7, 0.7),
         };
-        
+
         let mut color = base_color + (target_color - base_color) * self.transition_progress;
-        
+
         // Adjust for sun height (sunrise/sunset colors)
         if sun_height < 0.0 {
             // Night
@@ -596,7 +644,7 @@ impl WeatherSystem {
             let sunset_color = Vector3::new(0.9, 0.5, 0.3);
             color = color * (1.0 - t) + sunset_color * t;
         }
-        
+
         color
     }
 
@@ -620,7 +668,10 @@ mod tests {
     fn test_weather_precipitation_intensity() {
         assert_eq!(WeatherType::Clear.precipitation_intensity(), 0.0);
         assert!(WeatherType::LightRain.precipitation_intensity() > 0.0);
-        assert!(WeatherType::HeavyRain.precipitation_intensity() > WeatherType::LightRain.precipitation_intensity());
+        assert!(
+            WeatherType::HeavyRain.precipitation_intensity()
+                > WeatherType::LightRain.precipitation_intensity()
+        );
     }
 
     #[test]
@@ -636,7 +687,7 @@ mod tests {
             humidity: 0.6,
             ..Default::default()
         };
-        
+
         let dew_point = atmosphere.dew_point();
         assert!(dew_point < atmosphere.temperature);
         assert!(dew_point > 0.0);
@@ -652,10 +703,10 @@ mod tests {
     #[test]
     fn test_wind_at_altitude() {
         let wind = Wind::new(Vector3::new(1.0, 0.0, 0.0), 10.0);
-        
+
         let ground_wind = wind.get_wind_at_altitude(0.0, 0.0);
         let high_wind = wind.get_wind_at_altitude(1000.0, 0.0);
-        
+
         assert!(high_wind.norm() >= ground_wind.norm());
     }
 }

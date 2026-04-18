@@ -217,8 +217,19 @@ impl MainMenu {
         let w = renderer.width as f32;
         let h = renderer.height as f32;
 
+        // ТЕСТ: Рисуем красный прямоугольник на весь экран для проверки
+        tracing::info!("[MainMenu] render_ui called: {}x{}", w, h);
+
+        unsafe {
+            // Полный экран красный - тест
+            renderer.draw_rect(0.0, 0.0, w, h, [1.0, 0.0, 0.0, 1.0]);
+            tracing::info!("[MainMenu] Drew RED fullscreen rect");
+        }
+
         match self.state {
             MenuState::MainMenu => {
+                tracing::info!("[MainMenu] Rendering main menu");
+
                 // Центральная панель
                 unsafe {
                     renderer.draw_rect(
@@ -297,14 +308,17 @@ impl MainMenu {
                         );
                     }
                 }
+                tracing::info!("[MainMenu] Menu rendered, {} buttons", buttons.len());
             }
             MenuState::CharacterCreation => {
+                tracing::info!("[MainMenu] Rendering character creation");
                 // Character creation UI handled separately
                 if let Some(cc) = &self.character_creation {
                     cc.render_ui(renderer);
                 }
             }
             MenuState::Loading => {
+                tracing::info!("[MainMenu] Rendering loading screen");
                 // Loading screen
                 unsafe {
                     renderer.draw_rect(0.0, 0.0, w, h, [0.0, 0.0, 0.0, 1.0]);
@@ -318,6 +332,7 @@ impl MainMenu {
                 }
             }
             MenuState::Paused => {
+                tracing::info!("[MainMenu] Rendering pause menu");
                 // Pause menu
                 unsafe {
                     renderer.draw_rect(

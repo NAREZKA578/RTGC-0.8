@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use glow::{Context, HasContext};
+use std::sync::Arc;
 
 pub struct TextureInner {
     texture: glow::Texture,
@@ -21,7 +21,9 @@ impl std::fmt::Debug for Texture {
 impl Texture {
     pub fn new(gl: &Context, data: &[u8], width: u32, height: u32) -> Result<Self, String> {
         unsafe {
-            let texture = gl.create_texture().map_err(|e| format!("Failed to create texture: {}", e))?;
+            let texture = gl
+                .create_texture()
+                .map_err(|e| format!("Failed to create texture: {}", e))?;
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
 
             gl.tex_image_2d(
@@ -37,21 +39,29 @@ impl Texture {
             );
 
             gl.generate_mipmap(glow::TEXTURE_2D);
-            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::LINEAR as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::LINEAR as i32,
+            );
             gl.bind_texture(glow::TEXTURE_2D, None);
 
-            Ok(Texture { 
-                inner: Arc::new(TextureInner { texture }) 
+            Ok(Texture {
+                inner: Arc::new(TextureInner { texture }),
             })
         }
     }
-    
+
     /// Create a placeholder texture (for async loading)
+    /// SAFETY: Uses NonZero with value 1 as dummy handle - caller must replace with real texture
+    #[deprecated(note = "Placeholder texture will be replaced by async loader")]
     pub fn new_placeholder() -> Result<Self, String> {
         use std::num::NonZero;
-        // Используем unsafe new_unchecked с валидным non-zero значением
-        // Placeholder texture используется как временная заглушка до загрузки реальной текстуры
         Ok(Self {
             inner: Arc::new(TextureInner {
                 texture: glow::NativeTexture(unsafe { NonZero::new_unchecked(1) }),
@@ -61,7 +71,9 @@ impl Texture {
 
     pub fn from_rgba8(gl: &Context, width: u32, height: u32, data: &[u8]) -> Result<Self, String> {
         unsafe {
-            let texture = gl.create_texture().map_err(|e| format!("Failed to create texture: {}", e))?;
+            let texture = gl
+                .create_texture()
+                .map_err(|e| format!("Failed to create texture: {}", e))?;
             gl.bind_texture(glow::TEXTURE_2D, Some(texture));
 
             gl.tex_image_2d(
@@ -77,12 +89,20 @@ impl Texture {
             );
 
             gl.generate_mipmap(glow::TEXTURE_2D);
-            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::LINEAR as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::LINEAR as i32,
+            );
             gl.bind_texture(glow::TEXTURE_2D, None);
 
-            Ok(Texture { 
-                inner: Arc::new(TextureInner { texture }) 
+            Ok(Texture {
+                inner: Arc::new(TextureInner { texture }),
             })
         }
     }

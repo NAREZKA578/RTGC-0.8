@@ -1,11 +1,13 @@
 //! Configuration module for RTGC engine
 //! Provides centralized configuration for all engine subsystems
 
-use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf, Component};
-use tracing::{warn, info};
-use crate::error::{ConfigError, Result};
+use crate::error::{ConfigError, EngineError, Result};
 use crate::utils::sanitize_path as utils_sanitize_path;
+use serde::{Deserialize, Serialize};
+use std::path::{Component, Path, PathBuf};
+use tracing::{info, warn};
+
+type ConfigResult = std::result::Result<(), ConfigError>;
 
 /// Main configuration structure containing all subsystem configs
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,20 +34,21 @@ impl Default for Config {
 impl Config {
     /// Load configuration from a JSON file with validation
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(path.as_ref())
-            .map_err(|e| ConfigError::FileReadError(format!("Failed to read config file: {}", e)))?;
+        let content = std::fs::read_to_string(path.as_ref()).map_err(|e| {
+            ConfigError::FileReadError(format!("Failed to read config file: {}", e))
+        })?;
         let config: Config = serde_json::from_str(&content)
             .map_err(|e| ConfigError::ParseError(format!("Invalid JSON format: {}", e)))?;
-        
+
         // Validate all sections
         config.validate()?;
-        
+
         info!("Configuration loaded and validated successfully");
         Ok(config)
     }
 
     /// Validate all configuration sections
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ConfigResult {
         self.graphics.validate()?;
         self.physics.validate()?;
         self.world.validate()?;
@@ -55,15 +58,17 @@ impl Config {
     }
 
     /// Save configuration to a JSON file
-    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> ConfigResult {
         // Validate before saving
         self.validate()?;
-        
-        let content = serde_json::to_string_pretty(self)
-            .map_err(|e| ConfigError::SerializationError(format!("Failed to serialize config: {}", e)))?;
+
+        let content = serde_json::to_string_pretty(self).map_err(|e| {
+            ConfigError::SerializationError(format!("Failed to serialize config: {}", e))
+        })?;
         let path_ref = path.as_ref();
-        std::fs::write(path_ref, content)
-            .map_err(|e| ConfigError::FileWriteError(format!("Failed to write config file: {}", e)))?;
+        std::fs::write(path_ref, content).map_err(|e| {
+            ConfigError::FileWriteError(format!("Failed to write config file: {}", e))
+        })?;
         info!("Configuration saved to {:?}", path_ref);
         Ok(())
     }
@@ -88,7 +93,7 @@ pub struct GraphicsConfig {
 
 impl GraphicsConfig {
     /// Validate graphics configuration values
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ConfigResult {
         // Validate window dimensions
         if self.window_width == 0 || self.window_width > 7680 {
             return Err(ConfigError::InvalidValue(format!(
@@ -111,8 +116,12 @@ impl GraphicsConfig {
         }
 
         // Validate MSAA
-        if self.msaa_samples != 0 && self.msaa_samples != 1 && self.msaa_samples != 2 
-            && self.msaa_samples != 4 && self.msaa_samples != 8 {
+        if self.msaa_samples != 0
+            && self.msaa_samples != 1
+            && self.msaa_samples != 2
+            && self.msaa_samples != 4
+            && self.msaa_samples != 8
+        {
             return Err(ConfigError::InvalidValue(format!(
                 "msaa_samples must be 0, 1, 2, 4, or 8, got {}",
                 self.msaa_samples
@@ -137,7 +146,9 @@ impl GraphicsConfig {
 
         // Validate texture streaming budget (max 4GB)
         if self.texture_streaming_budget_mb > 4096 {
-            return Err(ConfigError::MemoryBudgetExceeded(self.texture_streaming_budget_mb));
+            return Err(ConfigError::MemoryBudgetExceeded(
+                self.texture_streaming_budget_mb,
+            ));
         }
 
         // Validate backend
@@ -185,7 +196,7 @@ pub struct PhysicsConfig {
 
 impl PhysicsConfig {
     /// Validate physics configuration values
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ConfigResult {
         // Validate substeps (must be >= 1 to avoid division by zero)
         if self.substeps == 0 || self.substeps > 64 {
             return Err(ConfigError::InvalidValue(format!(
@@ -244,7 +255,7 @@ impl Default for PhysicsConfig {
         let thread_count = std::thread::available_parallelism()
             .map(|n| n.get() as u32)
             .unwrap_or(1);
-        
+
         Self {
             substeps: 4,
             gravity: [0.0, -9.81, 0.0],
@@ -272,7 +283,7 @@ pub struct WorldConfig {
 
 impl WorldConfig {
     /// Validate world configuration values and sanitize paths
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ConfigResult {
         // Validate chunk size
         if self.chunk_size < 8 || self.chunk_size > 512 {
             return Err(ConfigError::InvalidValue(format!(
@@ -308,8 +319,7 @@ impl WorldConfig {
         }
 
         // Sanitize and validate save directory path using centralized utility
-        utils_sanitize_path(&self.save_directory)
-            .map_err(|e| ConfigError::PathTraversal(format!("Invalid save directory: {}", e)))?;
+        utils_sanitize_path(&self.save_directory).map_err(|_| ConfigError::PathTraversal)?;
 
         Ok(())
     }
@@ -338,9 +348,21 @@ pub struct InputConfig {
     pub vibration_strength: f32,
 }
 
+impl Default for InputConfig {
+    fn default() -> Self {
+        Self {
+            mouse_sensitivity: 1.0,
+            invert_y: false,
+            gamepad_enabled: true,
+            vibration_enabled: true,
+            vibration_strength: 0.5,
+        }
+    }
+}
+
 impl InputConfig {
     /// Validate input configuration values
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ConfigResult {
         // Validate mouse sensitivity
         if self.mouse_sensitivity < 0.0 || self.mouse_sensitivity > 10.0 {
             return Err(ConfigError::InvalidValue(format!(
@@ -373,9 +395,23 @@ pub struct AudioConfig {
     pub max_audio_sources: u32,
 }
 
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            master_volume: 1.0,
+            music_volume: 0.8,
+            sfx_volume: 1.0,
+            voice_volume: 1.0,
+            environmental_audio: true,
+            doppler_effect: true,
+            max_audio_sources: 32,
+        }
+    }
+}
+
 impl AudioConfig {
     /// Validate audio configuration values
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ConfigResult {
         // Validate volume levels (0.0 to 1.0, but allow slightly above for headroom)
         let volumes = [
             ("master_volume", self.master_volume),

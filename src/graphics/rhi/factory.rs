@@ -9,6 +9,9 @@ use tracing;
 #[cfg(feature = "dx12")]
 use crate::graphics::rhi::dx12_module::Dx12Device;
 
+#[cfg(feature = "dx11")]
+use crate::graphics::rhi::dx11::Dx11Device;
+
 #[cfg(feature = "vulkan")]
 use crate::graphics::rhi::vulkan_module::VkDevice;
 
@@ -19,6 +22,8 @@ use crate::graphics::rhi::gl::GlDevice;
 pub enum RhiBackend {
     /// Auto-select best available backend
     Auto,
+    /// DirectX 11 (Windows only, for older hardware)
+    Dx11,
     /// DirectX 12 (Windows only)
     Dx12,
     /// Vulkan (Cross-platform)
@@ -54,15 +59,39 @@ impl RhiFactory {
     /// Create a new RHI device with the specified configuration
     pub fn create_device(config: &RhiConfig) -> RhiResult<Arc<dyn IDevice>> {
         let selected_backend = Self::select_backend(config.backend)?;
-        
-        tracing::info!("Creating RHI device with backend: {:?}", selected_backend);
-        
+
+        tracing::info!(target: "rhi", "=== RHI Factory: Creating device ===");
+        tracing::info!(target: "rhi", "Requested backend: {:?}", config.backend);
+        tracing::info!(target: "rhi", "Selected backend: {:?}", selected_backend);
+        tracing::info!(target: "rhi", "Debug: {}, Validation: {}", config.debug_enabled, config.validation_enabled);
+
         match selected_backend {
+            #[cfg(feature = "dx11")]
+            RhiBackend::Dx11 => {
+                #[cfg(target_os = "windows")]
+                {
+                    tracing::info!(target: "rhi", ">>> Using DX11 backend");
+                    use crate::graphics::rhi::dx11::device_dx11::Dx11Device;
+                    let device = Dx11Device::new(config.debug_enabled, config.validation_enabled)?;
+                    tracing::info!(target: "rhi", "<<< DX11 device created: {}", device.get_device_name());
+                    Ok(Arc::new(device))
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    Err(crate::graphics::rhi::types::RhiError::Unsupported(
+                        "DirectX 11 is only available on Windows".to_string(),
+                    ))
+                }
+            }
+
             #[cfg(feature = "dx12")]
             RhiBackend::Dx12 => {
                 #[cfg(target_os = "windows")]
                 {
+                    tracing::info!(target: "rhi", ">>> Using DX12 backend");
+                    use crate::graphics::rhi::dx12::device_dx12::Dx12Device;
                     let device = Dx12Device::new(config.debug_enabled, config.validation_enabled)?;
+                    tracing::info!(target: "rhi", "<<< DX12 device created: {}", device.get_device_name());
                     Ok(Arc::new(device))
                 }
                 #[cfg(not(target_os = "windows"))]
@@ -72,13 +101,13 @@ impl RhiFactory {
                     ))
                 }
             }
-            
+
             #[cfg(feature = "vulkan")]
             RhiBackend::Vulkan => {
                 let device = VkDevice::new(config.debug_enabled, config.validation_enabled)?;
                 Ok(Arc::new(device))
             }
-            
+
             // OpenGL fallback - always available
             RhiBackend::OpenGL => {
                 // OpenGL device requires an active GL context from glutin/winit
@@ -87,17 +116,29 @@ impl RhiFactory {
                     "OpenGL device must be created via GlContext with active GL context. Use GlContext::new() to create a window and context, then access GlContext.rhi_device.".to_string(),
                 ))
             }
-            
+
             _ => Err(crate::graphics::rhi::types::RhiError::Unsupported(
                 "No suitable RHI backend available".to_string(),
             )),
         }
     }
-    
+
     /// Select the best available backend based on configuration and platform
     fn select_backend(requested: RhiBackend) -> RhiResult<RhiBackend> {
         match requested {
             RhiBackend::Auto => Self::detect_best_backend(),
+            RhiBackend::Dx11 => {
+                #[cfg(all(feature = "dx11", target_os = "windows"))]
+                {
+                    Ok(RhiBackend::Dx11)
+                }
+                #[cfg(not(all(feature = "dx11", target_os = "windows")))]
+                {
+                    Err(crate::graphics::rhi::types::RhiError::Unsupported(
+                        "DirectX 11 is not available on this platform".to_string(),
+                    ))
+                }
+            }
             RhiBackend::Dx12 => {
                 #[cfg(all(feature = "dx12", target_os = "windows"))]
                 {
@@ -128,20 +169,12 @@ impl RhiFactory {
             }
         }
     }
-    
+
     /// Detect the best available backend for the current platform
     fn detect_best_backend() -> RhiResult<RhiBackend> {
-        // Priority order: Vulkan > DX12 > OpenGL
-        // Vulkan is preferred due to cross-platform support and performance
-        
-        #[cfg(feature = "vulkan")]
-        {
-            if Self::is_vulkan_available() {
-                tracing::info!("Vulkan backend detected as available");
-                return Ok(RhiBackend::Vulkan);
-            }
-        }
-        
+        // Priority order: DX12 > DX11 > Vulkan > OpenGL
+        // Use best available Windows graphics API
+
         #[cfg(all(feature = "dx12", target_os = "windows"))]
         {
             if Self::is_dx12_available() {
@@ -149,34 +182,54 @@ impl RhiFactory {
                 return Ok(RhiBackend::Dx12);
             }
         }
-        
+
+        #[cfg(all(feature = "dx11", target_os = "windows"))]
+        {
+            if Self::is_dx11_available() {
+                tracing::info!("DirectX 11 backend detected as available");
+                return Ok(RhiBackend::Dx11);
+            }
+        }
+
+        #[cfg(feature = "vulkan")]
+        {
+            if Self::is_vulkan_available() {
+                tracing::info!("Vulkan backend detected as available");
+                return Ok(RhiBackend::Vulkan);
+            }
+        }
+
         // Fallback to OpenGL (always available)
         tracing::info!("Falling back to OpenGL backend");
         Ok(RhiBackend::OpenGL)
     }
-    
+
+    /// Check if DX11 is available on the system
+    #[cfg(all(feature = "dx11", target_os = "windows"))]
+    fn is_dx11_available() -> bool {
+        true
+    }
+
     /// Check if Vulkan is available on the system
     #[cfg(feature = "vulkan")]
     fn is_vulkan_available() -> bool {
         use ash::vk;
         use ash::Entry;
-        
+
         let entry = match Entry::new() {
             Ok(e) => e,
             Err(_) => return false,
         };
-        
+
         match entry.enumerate_instance_extension_properties(None) {
-            Ok(extensions) => {
-                extensions.iter().any(|ext| {
-                    let name = unsafe { std::ffi::CStr::from_ptr(ext.extension_name.as_ptr()) };
-                    name.to_str().unwrap_or("").contains("VK_KHR_surface")
-                })
-            }
+            Ok(extensions) => extensions.iter().any(|ext| {
+                let name = unsafe { std::ffi::CStr::from_ptr(ext.extension_name.as_ptr()) };
+                name.to_str().unwrap_or("").contains("VK_KHR_surface")
+            }),
             Err(_) => false,
         }
     }
-    
+
     /// Check if DX12 is available on the system
     #[cfg(all(feature = "dx12", target_os = "windows"))]
     fn is_dx12_available() -> bool {
@@ -184,24 +237,29 @@ impl RhiFactory {
         // For now, assume it's available if we're on Windows
         true
     }
-    
+
     /// Get list of available backends for this platform
     pub fn get_available_backends() -> Vec<RhiBackend> {
         let mut backends = Vec::new();
-        
-        #[cfg(feature = "vulkan")]
-        {
-            backends.push(RhiBackend::Vulkan);
-        }
-        
+
         #[cfg(all(feature = "dx12", target_os = "windows"))]
         {
             backends.push(RhiBackend::Dx12);
         }
-        
+
+        #[cfg(all(feature = "dx11", target_os = "windows"))]
+        {
+            backends.push(RhiBackend::Dx11);
+        }
+
+        #[cfg(feature = "vulkan")]
+        {
+            backends.push(RhiBackend::Vulkan);
+        }
+
         // OpenGL is always available
         backends.push(RhiBackend::OpenGL);
-        
+
         backends
     }
 }

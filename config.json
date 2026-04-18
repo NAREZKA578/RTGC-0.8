@@ -1,0 +1,30 @@
+{
+  "graphics": {
+    "window_width": 1280,
+    "window_height": 720,
+    "fullscreen": false,
+    "vsync": true,
+    "max_fps": 60,
+    "msaa_samples": 4,
+    "shadow_resolution": 2048,
+    "max_anisotropy": 16.0,
+    "lod_bias": 0.0,
+    "texture_streaming_budget_mb": 512,
+    "backend": "dx11",
+    "enable_validation": false
+  },
+  "physics": {
+    "substeps": 2,
+    "gravity": [0.0, -9.81, 0.0],
+    "solver_iterations": 10,
+    "contact_offset": 0.01,
+    "restitution_threshold": 0.5,
+    "friction_threshold": 0.4,
+    "linear_damping": 0.05,
+    "angular_damping": 0.05,
+    "max_linear_velocity": 150.0,
+    "max_angular_velocity": 15.0,
+    "sleep_threshold": 0.1,
+    "sleep_delay": 1.0
+  }
+}

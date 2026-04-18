@@ -69,8 +69,8 @@ impl DeformableTerrainComponent {
         }
 
         // Check deformation properties
-        if !self.deformation_properties.max_depth.is_finite()
-            || !self.deformation_properties.max_depth.is_finite()
+        if !self.deformation_properties.max_dig_depth.is_finite()
+            || !self.deformation_properties.max_build_height.is_finite()
         {
             return false;
         }

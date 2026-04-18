@@ -2,7 +2,7 @@
 //! Provides rendering, camera, shaders, meshes, textures, and RHI abstraction
 
 pub mod renderer;
-pub mod renderer_rhi;  // RHI-based renderer (future backend-agnostic)
+// pub mod renderer_rhi; // Дублирует функциональность renderer.rs
 pub mod camera;
 pub mod shader;
 pub mod mesh;
@@ -16,11 +16,12 @@ pub mod material;
 pub mod particles;
 pub mod debug_renderer;
 pub mod gl_context;
+// pub mod dx11_context; // DX11 has API issues - use through rhi instead
 pub mod render_command;
 pub mod render_queue;
 
-pub use renderer::{Renderer, MenuState};
-pub use renderer_rhi::RendererRhi;  // New RHI-based renderer
+pub use renderer::Renderer;
+// pub use renderer_rhi::RendererRhi; // Дублирует функциональность
 pub use camera::Camera;
 pub use shader::Shader;
 pub use mesh::{Mesh, MeshHandle};

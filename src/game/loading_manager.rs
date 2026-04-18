@@ -114,6 +114,7 @@ pub struct LoadingStateDetailed {
 }
 
 /// Менеджер загрузки - проверяет и отслеживает все ресурсы
+#[derive()]
 pub struct LoadingManager {
     /// Список всех ресурсов
     resources: HashMap<String, LoadableResource>,
@@ -133,6 +134,22 @@ pub struct LoadingManager {
     stats: LoadingStats,
     /// Callback для обновления прогресса
     progress_callback: Option<Box<dyn Fn(LoadingProgress) + Send + Sync>>,
+}
+
+impl Clone for LoadingManager {
+    fn clone(&self) -> Self {
+        Self {
+            resources: self.resources.clone(),
+            load_queue: self.load_queue.clone(),
+            state: self.state.clone(),
+            detailed_state: self.detailed_state.clone(),
+            start_time: self.start_time,
+            end_time: self.end_time,
+            asset_root: self.asset_root.clone(),
+            stats: self.stats.clone(),
+            progress_callback: None,
+        }
+    }
 }
 
 /// Статистика загрузки
@@ -226,7 +243,7 @@ impl LoadingManager {
         self.detailed_state.stage = stage;
         self.detailed_state.progress = progress;
         self.detailed_state.status_text = status_text;
-        
+
         // Вызываем callback если есть
         if let Some(ref callback) = self.progress_callback {
             let loading_progress = self.get_progress();

@@ -281,6 +281,7 @@ pub struct MainRotor {
     pub flapping_hinge_offset: f32,     // Смещение горизонтального шарнира (м)
     pub current_rpm: f32,               // Текущие обороты (об/мин)
     pub target_rpm: f32,                // Целевые обороты (об/мин)
+    pub idle_rpm: f32,                  // Обороты холостого хода (об/мин)
     pub rotor_tilt_x: f32,              // Наклон ротора вперёд/назад (рад)
     pub rotor_tilt_y: f32,              // Наклон ротора влево/вправо (рад)
 }
@@ -302,6 +303,7 @@ impl MainRotor {
             flapping_hinge_offset: 0.1,
             current_rpm: 0.0,
             target_rpm: 400.0,
+            idle_rpm: 200.0, // Idle RPM
             rotor_tilt_x: 0.0,
             rotor_tilt_y: 0.0,
         }
@@ -696,7 +698,7 @@ impl HelicopterControls {
 }
 
 /// Полная модель вертолёта
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Helicopter {
     // Основные параметры
     pub mass: f32,                      // Масса (кг)
@@ -943,10 +945,19 @@ impl Helicopter {
 
     /// Validate that all physics state values are finite (not NaN or Inf)
     pub fn validate_state(&self) -> bool {
-        self.position.x.is_finite() && self.position.y.is_finite() && self.position.z.is_finite()
-            && self.velocity.x.is_finite() && self.velocity.y.is_finite() && self.velocity.z.is_finite()
-            && self.angular_velocity.x.is_finite() && self.angular_velocity.y.is_finite() && self.angular_velocity.z.is_finite()
-            && self.rotation.is_finite()
+        self.position.x.is_finite()
+            && self.position.y.is_finite()
+            && self.position.z.is_finite()
+            && self.velocity.x.is_finite()
+            && self.velocity.y.is_finite()
+            && self.velocity.z.is_finite()
+            && self.angular_velocity.x.is_finite()
+            && self.angular_velocity.y.is_finite()
+            && self.angular_velocity.z.is_finite()
+            && self.rotation.i.is_finite()
+            && self.rotation.j.is_finite()
+            && self.rotation.k.is_finite()
+            && self.rotation.w.is_finite()
             && self.main_rotor.current_rpm.is_finite()
             && self.tail_rotor.current_rpm.is_finite()
     }

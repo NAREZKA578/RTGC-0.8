@@ -11,6 +11,9 @@ pub mod resource_manager;
 #[cfg(feature = "dx12")]
 pub mod dx12;
 
+#[cfg(feature = "dx11")]
+pub mod dx11;
+
 #[cfg(feature = "vulkan")]
 pub mod vulkan;
 

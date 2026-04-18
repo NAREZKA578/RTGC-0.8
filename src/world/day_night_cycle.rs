@@ -7,7 +7,7 @@
 //! - Lunar phases
 //! - Star field visibility
 
-use nalgebra::{Vector3, Matrix4, UnitQuaternion};
+use nalgebra::{Matrix4, UnitQuaternion, Vector3};
 use std::f32::consts::PI;
 
 /// Celestial body type
@@ -47,7 +47,7 @@ impl CelestialState {
     pub fn update_position(&mut self, azimuth: f32, altitude: f32, distance: f32) {
         self.azimuth = azimuth;
         self.altitude = altitude;
-        
+
         self.position = Vector3::new(
             distance * altitude.cos() * azimuth.sin(),
             distance * altitude.sin(),
@@ -96,6 +96,7 @@ pub enum TimeOfDay {
 }
 
 /// Main day/night cycle manager
+#[derive(Clone)]
 pub struct DayNightCycle {
     /// Current time of day in seconds (0-86400)
     pub current_time: f32,
@@ -135,8 +136,8 @@ impl DayNightCycle {
     pub fn new(latitude: f32, longitude: f32) -> Self {
         let mut cycle = Self {
             current_time: 12.0 * 3600.0, // Start at noon
-            day_duration: 14400.0, // 4 real hours = 1 game day (per GDD)
-            year_day: 172, // Summer solstice (approx)
+            day_duration: 14400.0,       // 4 real hours = 1 game day (per GDD)
+            year_day: 172,               // Summer solstice (approx)
             latitude,
             longitude,
             sun: CelestialState::new(),
@@ -148,7 +149,7 @@ impl DayNightCycle {
             sky_color_bottom: Vector3::new(0.6, 0.7, 0.9),
             stars_visibility: 0.0,
         };
-        
+
         cycle.update_celestial_bodies();
         cycle
     }
@@ -161,7 +162,7 @@ impl DayNightCycle {
     /// Get time of day classification
     pub fn get_time_of_day(&self) -> TimeOfDay {
         let hour = self.get_hour();
-        
+
         if hour >= 21.0 || hour < 5.0 {
             TimeOfDay::Night
         } else if hour >= 5.0 && hour < 6.0 {
@@ -189,26 +190,26 @@ impl DayNightCycle {
     /// Calculate sun position based on time and location
     fn calculate_sun_position(&self) -> (f32, f32) {
         let hour_angle = (self.current_time / self.day_duration) * 2.0 * PI - PI / 2.0;
-        
+
         // Simplified declination based on year day
         let declination = 0.409 * ((2.0 * PI / 365.0) * (self.year_day as f32 - 81.0)).sin();
-        
+
         let lat_rad = self.latitude.to_radians();
-        
+
         // Solar altitude
-        let sin_altitude = lat_rad.sin() * declination.sin() 
+        let sin_altitude = lat_rad.sin() * declination.sin()
             + lat_rad.cos() * declination.cos() * hour_angle.cos();
         let altitude = sin_altitude.asin().clamp(-PI / 2.0, PI / 2.0);
-        
+
         // Solar azimuth
-        let cos_azimuth = (declination.sin() - lat_rad.sin() * sin_altitude) 
-            / (lat_rad.cos() * altitude.cos());
+        let cos_azimuth =
+            (declination.sin() - lat_rad.sin() * sin_altitude) / (lat_rad.cos() * altitude.cos());
         let mut azimuth = cos_azimuth.acos().clamp(0.0, PI);
-        
+
         if hour_angle.sin() > 0.0 {
             azimuth = 2.0 * PI - azimuth;
         }
-        
+
         (azimuth, altitude)
     }
 
@@ -217,26 +218,26 @@ impl DayNightCycle {
         // Moon rises about 50 minutes later each day
         let moon_offset = self.lunar_day * 50.0 * 60.0; // seconds
         let moon_time = (self.current_time + moon_offset) % self.day_duration;
-        
+
         let hour_angle = (moon_time / self.day_duration) * 2.0 * PI - PI / 2.0;
-        
+
         // Moon's declination varies more than sun's
         let moon_declination = 0.45 * ((2.0 * PI / 27.3) * self.lunar_day).sin();
-        
+
         let lat_rad = self.latitude.to_radians();
-        
-        let sin_altitude = lat_rad.sin() * moon_declination.sin() 
+
+        let sin_altitude = lat_rad.sin() * moon_declination.sin()
             + lat_rad.cos() * moon_declination.cos() * hour_angle.cos();
         let altitude = sin_altitude.asin().clamp(-PI / 2.0, PI / 2.0);
-        
-        let cos_azimuth = (moon_declination.sin() - lat_rad.sin() * sin_altitude) 
+
+        let cos_azimuth = (moon_declination.sin() - lat_rad.sin() * sin_altitude)
             / (lat_rad.cos() * altitude.cos());
         let mut azimuth = cos_azimuth.acos().clamp(0.0, PI);
-        
+
         if hour_angle.sin() > 0.0 {
             azimuth = 2.0 * PI - azimuth;
         }
-        
+
         // Determine moon phase
         let phase = if self.lunar_day < 1.84 {
             MoonPhase::NewMoon
@@ -255,7 +256,7 @@ impl DayNightCycle {
         } else {
             MoonPhase::WaningCrescent
         };
-        
+
         (azimuth, altitude, phase, self.lunar_day)
     }
 
@@ -265,11 +266,11 @@ impl DayNightCycle {
         let (sun_azimuth, sun_altitude) = self.calculate_sun_position();
         let sun_intensity = sun_altitude.max(0.0).sin().clamp(0.0, 1.0);
         let sun_color_temp = self.calculate_sun_color_temperature(sun_altitude);
-        
+
         self.sun.update_position(sun_azimuth, sun_altitude, 1000.0);
         self.sun.intensity = sun_intensity;
         self.sun.color_temperature = sun_color_temp;
-        
+
         // Update moon
         let (moon_azimuth, moon_altitude, moon_phase, _) = self.calculate_moon_position();
         let moon_intensity = if moon_altitude > 0.0 {
@@ -277,12 +278,13 @@ impl DayNightCycle {
         } else {
             0.0
         };
-        
-        self.moon.update_position(moon_azimuth, moon_altitude, 1000.0);
+
+        self.moon
+            .update_position(moon_azimuth, moon_altitude, 1000.0);
         self.moon.intensity = moon_intensity;
         self.moon.color_temperature = 4100.0; // Moonlight color temp
         self.moon_phase = moon_phase;
-        
+
         // Update sky colors and stars
         self.update_sky_appearance(sun_altitude);
     }
@@ -313,22 +315,27 @@ impl DayNightCycle {
         } else if sun_altitude > 0.0 {
             // Sunrise/sunset
             let t = sun_altitude / 0.5;
-            self.sky_color_top = Vector3::new(0.4, 0.6, 0.9) * t + Vector3::new(0.9, 0.5, 0.3) * (1.0 - t);
-            self.sky_color_bottom = Vector3::new(0.6, 0.7, 0.9) * t + Vector3::new(0.9, 0.6, 0.4) * (1.0 - t);
+            self.sky_color_top =
+                Vector3::new(0.4, 0.6, 0.9) * t + Vector3::new(0.9, 0.5, 0.3) * (1.0 - t);
+            self.sky_color_bottom =
+                Vector3::new(0.6, 0.7, 0.9) * t + Vector3::new(0.9, 0.6, 0.4) * (1.0 - t);
             self.stars_visibility = 0.0;
             self.ambient_multiplier = 0.5 + 0.5 * t;
         } else if sun_altitude > -0.1 {
             // Civil twilight
             let t = (sun_altitude + 0.1) / 0.1;
-            self.sky_color_top = Vector3::new(0.9, 0.5, 0.3) * t + Vector3::new(0.1, 0.1, 0.2) * (1.0 - t);
-            self.sky_color_bottom = Vector3::new(0.9, 0.6, 0.4) * t + Vector3::new(0.15, 0.15, 0.25) * (1.0 - t);
+            self.sky_color_top =
+                Vector3::new(0.9, 0.5, 0.3) * t + Vector3::new(0.1, 0.1, 0.2) * (1.0 - t);
+            self.sky_color_bottom =
+                Vector3::new(0.9, 0.6, 0.4) * t + Vector3::new(0.15, 0.15, 0.25) * (1.0 - t);
             self.stars_visibility = (1.0 - t) * 0.5;
             self.ambient_multiplier = 0.2 + 0.3 * t;
         } else if sun_altitude > -0.3 {
             // Nautical twilight
             let t = (sun_altitude + 0.3) / 0.2;
             self.sky_color_top = Vector3::new(0.1, 0.1, 0.2);
-            self.sky_color_bottom = Vector3::new(0.15, 0.15, 0.25) * t + Vector3::new(0.05, 0.05, 0.1) * (1.0 - t);
+            self.sky_color_bottom =
+                Vector3::new(0.15, 0.15, 0.25) * t + Vector3::new(0.05, 0.05, 0.1) * (1.0 - t);
             self.stars_visibility = 0.5 + 0.5 * (1.0 - t);
             self.ambient_multiplier = 0.1 + 0.1 * t;
         } else {
@@ -343,13 +350,13 @@ impl DayNightCycle {
     /// Advance time by delta
     pub fn advance_time(&mut self, dt: f32) {
         self.current_time = (self.current_time + dt) % self.day_duration;
-        
+
         // Advance lunar cycle (29.5 days)
         self.lunar_day = (self.lunar_day + dt / self.day_duration) % 29.5;
-        
+
         // Advance year day (optional, for seasonal changes)
         // self.year_day = (self.year_day + 1) % 366;
-        
+
         self.update_celestial_bodies();
     }
 
@@ -410,16 +417,16 @@ mod tests {
     #[test]
     fn test_time_of_day_classification() {
         let mut cycle = DayNightCycle::new(45.0, 0.0);
-        
+
         cycle.set_time(3.0, 0.0);
         assert_eq!(cycle.get_time_of_day(), TimeOfDay::Night);
-        
+
         cycle.set_time(6.0, 0.0);
         assert_eq!(cycle.get_time_of_day(), TimeOfDay::Sunrise);
-        
+
         cycle.set_time(12.0, 0.0);
         assert_eq!(cycle.get_time_of_day(), TimeOfDay::Noon);
-        
+
         cycle.set_time(18.0, 0.0);
         assert_eq!(cycle.get_time_of_day(), TimeOfDay::Sunset);
     }
@@ -435,9 +442,9 @@ mod tests {
     fn test_advance_time() {
         let mut cycle = DayNightCycle::new(45.0, 0.0);
         let initial_hour = cycle.get_hour();
-        
+
         cycle.advance_time(3600.0); // Advance 1 hour
-        
+
         let new_hour = cycle.get_hour();
         assert!((new_hour - initial_hour - 1.0).abs() < 0.01);
     }
@@ -445,12 +452,12 @@ mod tests {
     #[test]
     fn test_sky_colors() {
         let mut cycle = DayNightCycle::new(45.0, 0.0);
-        
+
         // Noon - bright blue sky
         cycle.set_time(12.0, 0.0);
         assert!(cycle.sky_color_top.y > 0.5); // Green component high
         assert!(cycle.stars_visibility == 0.0);
-        
+
         // Midnight - dark sky with stars
         cycle.set_time(0.0, 0.0);
         assert!(cycle.sky_color_top.x < 0.1);

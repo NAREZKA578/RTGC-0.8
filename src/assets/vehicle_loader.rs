@@ -264,8 +264,13 @@ impl VehicleLoader {
 
         let is_glb = path.ends_with(".glb") || path.ends_with(".GLB");
 
-        let (document, buffers, _images) =
-            gltf::import(path).map_err(|e| format!("Failed to import GLTF: {}", e))?;
+        let (document, buffers, _images) = match gltf::import(path) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("GLTF import failed (non-critical): {}", e);
+                return Err(format!("GLTF import failed: {}", e));
+            }
+        };
 
         let mut vertices: Vec<Vertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
