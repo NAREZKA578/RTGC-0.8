@@ -236,9 +236,42 @@ impl Clone for AudioSystem {
 
 impl AudioSystem {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        // Инициализация аудиоустройства
-        let (stream, stream_handle) = OutputStream::try_default()?;
-        let sink = Sink::try_new(&stream_handle)?;
+        // Инициализация аудиоустройства - не падаем если нет аудио
+        let (stream, stream_handle) = match OutputStream::try_default() {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!("No audio device available: {}, running without audio", e);
+                return Ok(Self {
+                    sources: HashMap::new(),
+                    next_source_id: 1,
+                    listener: AudioListener::default(),
+                    environment: EnvironmentParams::default(),
+                    sound_cache: Arc::new(Mutex::new(HashMap::new())),
+                    max_sources: 64,
+                    occlusion_enabled: true,
+                    _stream: None,
+                    sink: None,
+                });
+            }
+        };
+
+        let sink = match Sink::try_new(&stream_handle) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!("Could not create audio sink: {}, running without audio", e);
+                return Ok(Self {
+                    sources: HashMap::new(),
+                    next_source_id: 1,
+                    listener: AudioListener::default(),
+                    environment: EnvironmentParams::default(),
+                    sound_cache: Arc::new(Mutex::new(HashMap::new())),
+                    max_sources: 64,
+                    occlusion_enabled: true,
+                    _stream: Some(stream),
+                    sink: None,
+                });
+            }
+        };
 
         Ok(Self {
             sources: HashMap::new(),

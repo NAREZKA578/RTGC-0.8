@@ -70,7 +70,7 @@ impl RhiFactory {
             RhiBackend::Dx11 => {
                 #[cfg(target_os = "windows")]
                 {
-                    tracing::info!(target: "rhi", ">>> Using DX11 backend");
+                    tracing::info!(target: "rhi", ">>> Using DX11 backend via RHI");
                     use crate::graphics::rhi::dx11::device_dx11::Dx11Device;
                     let device = Dx11Device::new(config.debug_enabled, config.validation_enabled)?;
                     tracing::info!(target: "rhi", "<<< DX11 device created: {}", device.get_device_name());

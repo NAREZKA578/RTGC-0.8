@@ -1220,7 +1220,8 @@ impl Renderer {
         match self.menu_state {
             MenuState::Loading => self.render_loading_screen()?,
             MenuState::MainMenu => {
-                info!(target: "render", "Rendering MainMenu state - UI rendered via MainMenu");
+                info!(target: "render", "Rendering MainMenu state - calling render_main_menu()");
+                self.render_main_menu()?;
             }
             MenuState::CitySelection => self.render_city_selection()?,
             MenuState::InGame => {
@@ -2248,6 +2249,12 @@ impl Renderer {
 
     /// Draw a 2D rectangle (simple quad) with proper VAO/VBO implementation
     pub unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
+        // Disable depth test and enable blending for UI
+        self.gl.disable(glow::DEPTH_TEST);
+        self.gl.enable(glow::BLEND);
+        self.gl
+            .blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+
         // Use UI shader if available, otherwise fall back to main shader
         let shader = self.ui_shader.as_ref().unwrap_or(&self.shader);
 
@@ -2380,6 +2387,10 @@ impl Renderer {
 
         // Flush OpenGL commands immediately
         self.gl.flush();
+
+        // Restore OpenGL state
+        self.gl.disable(glow::BLEND);
+        self.gl.enable(glow::DEPTH_TEST);
 
         // Cleanup
         self.gl.delete_vertex_array(vao);

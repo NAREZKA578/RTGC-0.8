@@ -1,5 +1,4 @@
-//! DirectX 11 Backend - Stubs for compilation
-//! Full implementation requires windows crate API work
+//! DirectX 11 Backend - Stubs (DX11 реально не работает без переписывания RHI)
 
 pub mod buffer_dx11;
 pub mod context_dx11;
@@ -9,6 +8,4 @@ pub mod shader_dx11;
 pub mod swapchain_dx11;
 pub mod texture_dx11;
 
-pub use context_dx11::Dx11Context;
 pub use device_dx11::Dx11Device;
-pub use swapchain_dx11::Dx11SwapChain;

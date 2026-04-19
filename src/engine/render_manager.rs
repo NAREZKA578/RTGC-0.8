@@ -8,7 +8,7 @@ use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::renderer::{MenuState, Renderer};
-use crate::graphics::GlContext;
+use crate::graphics::GraphicsContext;
 use crate::ui::HudManager;
 use nalgebra::Matrix4;
 use tracing::{error, info, warn};
@@ -18,7 +18,7 @@ pub struct RenderManager {
     /// Рендерер сцены
     renderer: Option<Renderer>,
     /// Графический контекст
-    graphics_context: GlContext,
+    graphics_context: GraphicsContext,
     /// Менеджер материалов
     material_manager: MaterialManager,
     /// Система частиц
@@ -40,7 +40,7 @@ pub struct RenderManager {
 impl RenderManager {
     /// Создаёт новый менеджер рендеринга
     pub fn new(
-        graphics_context: GlContext,
+        mut graphics_context: GraphicsContext,
         material_manager: MaterialManager,
         particle_system: ParticleSystem,
         debug_renderer: DebugRenderer,
@@ -62,26 +62,35 @@ impl RenderManager {
 
     /// Инициализирует рендерер
     pub fn initialize_renderer(&mut self) -> Result<(), String> {
-        if let Some(ref gl) = self.graphics_context.gl {
-            match Renderer::new(gl.clone()) {
-                Ok(mut renderer) => {
-                    renderer.width = self.graphics_context.width;
-                    renderer.height = self.graphics_context.height;
-                    renderer.menu_state = MenuState::MainMenu;
-                    self.renderer = Some(renderer);
-                    info!(target: "render", "Renderer initialized successfully");
-                    Ok(())
-                }
-                Err(e) => {
-                    let msg = format!("Renderer initialization failed: {}", e);
+        // Для OpenGL контекста получаем glow::Context
+        match &mut self.graphics_context {
+            GraphicsContext::OpenGL(ref mut ctx) => {
+                if let Some(ref gl) = ctx.gl {
+                    match Renderer::new(gl.clone()) {
+                        Ok(mut renderer) => {
+                            renderer.width = ctx.width;
+                            renderer.height = ctx.height;
+                            renderer.menu_state = MenuState::MainMenu;
+                            self.renderer = Some(renderer);
+                            info!(target: "render", "Renderer initialized successfully");
+                            Ok(())
+                        }
+                        Err(e) => {
+                            let msg = format!("Renderer initialization failed: {}", e);
+                            error!(target: "render", "{}", msg);
+                            Err(msg)
+                        }
+                    }
+                } else {
+                    let msg = "GL context is None".to_string();
                     error!(target: "render", "{}", msg);
                     Err(msg)
                 }
             }
-        } else {
-            let msg = "GL context is None".to_string();
-            error!(target: "render", "{}", msg);
-            Err(msg)
+            GraphicsContext::DX11(_ctx) => {
+                info!(target: "render", "DX11 context ready, will render via DX11");
+                Ok(())
+            }
         }
     }
 
@@ -94,6 +103,14 @@ impl RenderManager {
             renderer.mouse_x = x;
             renderer.mouse_y = y;
         }
+    }
+
+    /// Забрать graphics_context обратно
+    pub fn take_context(&mut self) -> GraphicsContext {
+        std::mem::replace(
+            &mut self.graphics_context,
+            GraphicsContext::new_opengl(crate::graphics::GlContext::new_placeholder()),
+        )
     }
 
     /// Обновляет камеру на основе позиции вертолёта
@@ -124,8 +141,7 @@ impl RenderManager {
         rotation: nalgebra::UnitQuaternion<f32>,
     ) {
         if let Some(ref mut renderer) = self.renderer {
-            renderer.vehicle_position = Some(position);
-            renderer.vehicle_rotation = Some(rotation);
+            renderer.set_vehicle_transform(position, rotation);
         }
     }
 
@@ -136,8 +152,7 @@ impl RenderManager {
         horizon_color: nalgebra::Vector3<f32>,
     ) {
         if let Some(ref mut renderer) = self.renderer {
-            renderer.sky_top_color = top_color;
-            renderer.sky_horizon_color = horizon_color;
+            renderer.set_sky_color(top_color, horizon_color);
         }
     }
 
@@ -165,13 +180,14 @@ impl RenderManager {
 
     /// Начинает кадр (очистка буфера)
     pub fn begin_frame(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.graphics_context.begin_frame()?;
+        self.graphics_context.begin_frame();
         Ok(())
     }
 
     /// Рендерит кадр
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Рендерим через game модуль (main_menu)
+        info!(target: "render", "=== RenderManager: rendering frame ===");
+
         if let Some(ref mut renderer) = self.renderer {
             info!(target: "render", "=== RenderManager: rendering frame ===");
             renderer.render()?;
@@ -181,8 +197,7 @@ impl RenderManager {
             info!(target: "render", "=== RenderManager: frame complete ===");
         } else {
             warn!(target: "render", "Renderer is None in RenderManager::render()");
-            if let Some(ref gl) = self.graphics_context.gl {
-                // Fallback рендеринг
+            if let Some(ref gl) = self.graphics_context.get_glow() {
                 let view_matrix = Matrix4::identity();
                 let proj_matrix = self.graphics_context.get_projection_matrix(
                     std::f32::consts::PI / 4.0,
@@ -203,7 +218,8 @@ impl RenderManager {
 
     /// Завершает кадр (swap buffers)
     pub fn end_frame(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.graphics_context.end_frame()?;
+        info!(target: "render", ">>> end_frame() called <<<");
+        self.graphics_context.end_frame();
         Ok(())
     }
 
@@ -212,7 +228,7 @@ impl RenderManager {
         let width = width.max(1);
         let height = height.max(1);
 
-        self.graphics_context.resize(width, height)?;
+        self.graphics_context.resize(width, height);
 
         if let Some(ref mut renderer) = self.renderer {
             renderer.width = width;

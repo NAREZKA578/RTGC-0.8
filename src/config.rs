@@ -87,7 +87,7 @@ pub struct GraphicsConfig {
     pub max_anisotropy: f32,
     pub lod_bias: f32,
     pub texture_streaming_budget_mb: u32,
-    pub backend: String, // "vulkan", "dx12", "opengl"
+    pub backend: String, // "vulkan", "dx12", "opengl", "dx11"
     pub enable_validation: bool,
 }
 
@@ -152,7 +152,7 @@ impl GraphicsConfig {
         }
 
         // Validate backend
-        let valid_backends = ["vulkan", "dx12", "opengl"];
+        let valid_backends = ["vulkan", "dx12", "opengl", "dx11"];
         if !valid_backends.contains(&self.backend.to_lowercase().as_str()) {
             return Err(ConfigError::InvalidBackend(self.backend.clone()));
         }

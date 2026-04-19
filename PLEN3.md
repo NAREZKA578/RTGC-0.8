@@ -7,7 +7,7 @@
 
 # СОСТОЯНИЕ НА СЕЙЧАС
 
-**Движок (ГОТОВО):**
+**Движок :**
 - OpenWorld с chunk streaming, settlements, road_network
 - Физика Vehicle + Helicopter (BEMT)
 - Terrain с биомами, дороги влияют на surface_type
@@ -19,7 +19,7 @@
 - RHI (OpenGL + Vulkan/DX12 под одним интерфейсом)
 - Кооп: PlayerInput структуры готовы
 
-**Игра (НЕТ):**
+**Игра :**
 - Персонаж пешком
 - Создание персонажа (ВУЗ, навыки, UAZ Patriot 2017)
 - Система навыков (ранги 1–12)

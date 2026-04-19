@@ -20,9 +20,11 @@ use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::GlContext;
+use crate::graphics::GraphicsContext;
 use crate::physics::set_global_physics_world;
 use crate::ui::HudManager;
 use nalgebra::{UnitQuaternion, Vector3};
+use raw_window_handle::HasWindowHandle;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, info, warn};
@@ -32,8 +34,11 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 /// Основной класс движка
 pub struct Engine {
-    /// Графический контекст
-    pub graphics_context: GlContext,
+    /// Графический контекст (универсальный) - хранится в RenderManager
+    pub graphics_context: Option<GraphicsContext>,
+
+    /// Конфигурация движка
+    pub config: Config,
 
     /// Контейнер всех подсистем
     pub subsystems: EngineSubsystems,
@@ -78,14 +83,36 @@ pub struct Engine {
 impl Engine {
     /// Создаёт новый движок
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        // Загрузка конфигурации
-        let config = Config::load("config.json").unwrap_or_else(|_| {
-            tracing::warn!("Не удалось загрузить config.json, используются настройки по умолчанию");
+        // Try to load config - check multiple possible locations
+        let config_paths = [
+            std::path::Path::new("config.json"),
+            std::path::Path::new("..\\config.json"),
+            std::path::Path::new("..\\..\\config.json"),
+            std::path::Path::new("..\\..\\..\\config.json"),
+        ];
+
+        // Find first existing config file
+        let config_file = config_paths.iter().find(|p| p.exists());
+
+        let config = if let Some(p) = config_file {
+            tracing::info!(target: "engine", "Found config at: {:?}", p);
+            match Config::load(p) {
+                Ok(c) => {
+                    tracing::info!(target: "engine", "Config loaded! Backend: {}", c.graphics.backend);
+                    c
+                }
+                Err(e) => {
+                    tracing::warn!("Config parse error: {}, using default", e);
+                    Config::default()
+                }
+            }
+        } else {
+            tracing::warn!("config.json not found in any location, using default");
             Config::default()
-        });
+        };
 
         // Графический контекст будет создан в resumed()
-        let graphics_context = GlContext::new_placeholder();
+        let graphics_context: Option<GraphicsContext> = None;
 
         // Создание подсистем
         let physics_world = crate::physics::PhysicsWorld::new();
@@ -133,6 +160,7 @@ impl Engine {
 
         Ok(Self {
             graphics_context,
+            config,
             subsystems,
             physics_manager,
             world_manager,
@@ -189,47 +217,120 @@ impl ApplicationHandler for GameApp<'_> {
 
         info!(target: "engine", "=== RESUMED CALLED ===");
 
+        let backend = &self.engine.config.graphics.backend;
+        info!(target: "engine", "Requested graphics backend: {}", backend);
+
+        // For DX11/DX12: create our own window
+        // For OpenGL: let GlContext create its own window internally
         let window_attrs = WindowAttributes::default()
             .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0))
             .with_title("RTGC-0.8");
 
-        info!(target: "engine", "Creating GL context...");
-
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            GlContext::new(event_loop, window_attrs)
-        }));
-
-        let mut gl_context = match result {
-            Ok(Ok(ctx)) => ctx,
-            Ok(Err(e)) => {
-                error!(target: "engine", "GL context creation failed: {:?}", e);
-                event_loop.exit();
-                return;
+        // Create window only for DX backends
+        let window_arc = if backend.to_lowercase().as_str() == "dx11"
+            || backend.to_lowercase().as_str() == "dx12"
+        {
+            match event_loop.create_window(window_attrs) {
+                Ok(w) => Some(Arc::new(w)),
+                Err(e) => {
+                    error!(target: "engine", "Failed to create window: {:?}", e);
+                    event_loop.exit();
+                    return;
+                }
             }
-            Err(panic_info) => {
-                error!(target: "engine", "PANIC during GL context creation: {:?}", panic_info);
-                event_loop.exit();
-                return;
+        } else {
+            None
+        };
+
+        match backend.to_lowercase().as_str() {
+            "dx11" | "dx12" => {
+                // DX11/DX12: Use our window for DX context
+                use raw_window_handle::RawWindowHandle;
+                let hwnd = match window_arc.as_ref().unwrap().window_handle() {
+                    Ok(handle) => {
+                        let raw = handle.as_raw();
+                        match raw {
+                            RawWindowHandle::Win32(win32) => win32.hwnd.get() as isize,
+                            _ => {
+                                error!(target: "engine", "Unsupported window handle type");
+                                event_loop.exit();
+                                return;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!(target: "engine", "Failed to get window handle: {:?}", e);
+                        event_loop.exit();
+                        return;
+                    }
+                };
+
+                info!(target: "engine", "Creating DX{} context...", &backend[2..4]);
+                let width = window_arc.as_ref().unwrap().inner_size().width;
+                let height = window_arc.as_ref().unwrap().inner_size().height;
+                match crate::graphics::dx11_context::Dx11GraphicsContext::new(hwnd, width, height) {
+                    Ok(dx_ctx) => {
+                        self.engine.graphics_context = Some(GraphicsContext::DX11(dx_ctx));
+                        info!(target: "engine", "DX{} context created successfully", &backend[2..4]);
+                    }
+                    Err(e) => {
+                        error!(target: "engine", "Failed to create DX{} context: {}", &backend[2..4], e);
+                        event_loop.exit();
+                        return;
+                    }
+                }
+            }
+            _ => {
+                // OpenGL: Let GlContext create its own window with full GL setup
+                info!(target: "engine", "Creating GL context...");
+                let window_attrs = WindowAttributes::default()
+                    .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0))
+                    .with_title("RTGC-0.8");
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    crate::graphics::GlContext::new(event_loop, window_attrs)
+                }));
+
+                let mut gl_context = match result {
+                    Ok(Ok(ctx)) => ctx,
+                    Ok(Err(e)) => {
+                        error!(target: "engine", "GL context creation failed: {:?}", e);
+                        event_loop.exit();
+                        return;
+                    }
+                    Err(panic_info) => {
+                        error!(target: "engine", "PANIC during GL context creation: {:?}", panic_info);
+                        event_loop.exit();
+                        return;
+                    }
+                };
+
+                if !gl_context.is_initialized() {
+                    error!(target: "engine", "Graphics context not initialized after creation");
+                    event_loop.exit();
+                    return;
+                }
+
+                info!(target: "engine", "GL context is initialized!");
+                self.engine.graphics_context = Some(GraphicsContext::new_opengl(gl_context));
             }
         };
 
-        info!(target: "engine", "GL context created, checking init status...");
-
-        if !gl_context.is_initialized() {
-            error!(target: "engine", "Graphics context not initialized after creation");
-            event_loop.exit();
-            return;
-        }
-
-        info!(target: "engine", "GL context is initialized!");
+        info!(target: "engine", "Creating render manager...");
 
         let material_manager = self.engine.subsystems.graphics.material_manager.clone();
         let particle_system = self.engine.subsystems.graphics.particle_system.clone();
         let debug_renderer = self.engine.subsystems.graphics.debug_renderer.clone();
         let hud_manager = self.engine.subsystems.ui.hud_manager.clone();
 
+        // Забираем graphics_context из Engine
+        let gc = self
+            .engine
+            .graphics_context
+            .take()
+            .expect("graphics_context not initialized");
+
         let mut render_manager = RenderManager::new(
-            gl_context.clone(),
+            gc,
             material_manager,
             particle_system,
             debug_renderer,
@@ -242,16 +343,9 @@ impl ApplicationHandler for GameApp<'_> {
             return;
         }
 
-        let window = match gl_context.window.take() {
-            Some(w) => w,
-            None => {
-                error!(target: "engine", "GL context window is None after creation");
-                event_loop.exit();
-                return;
-            }
-        };
+        // Сохраняем контекст обратно в Engine
+        self.engine.graphics_context = Some(render_manager.take_context());
 
-        self.engine.graphics_context = gl_context;
         self.engine.render_manager = Some(render_manager);
 
         let world_init = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -270,9 +364,12 @@ impl ApplicationHandler for GameApp<'_> {
             }
         }
 
+        // For storing window - only for DX backends
+        let window_for_storing = window_arc.clone();
+
         self.last_frame_time = Instant::now();
         self.initialized = true;
-        self.window = Some(window);
+        self.window = window_for_storing;
 
         if let Some(ref w) = self.window {
             w.request_redraw();
