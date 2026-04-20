@@ -32,6 +32,18 @@ pub enum RhiBackend {
     OpenGL,
 }
 
+impl RhiBackend {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RhiBackend::Auto => "Auto",
+            RhiBackend::Dx11 => "DirectX 11",
+            RhiBackend::Dx12 => "DirectX 12",
+            RhiBackend::Vulkan => "Vulkan",
+            RhiBackend::OpenGL => "OpenGL",
+        }
+    }
+}
+
 /// RHI configuration
 #[derive(Debug, Clone)]
 pub struct RhiConfig {
@@ -39,15 +51,17 @@ pub struct RhiConfig {
     pub debug_enabled: bool,
     pub validation_enabled: bool,
     pub preferred_adapter_index: Option<usize>,
+    pub prefer_discrete_gpu: bool,
 }
 
 impl Default for RhiConfig {
     fn default() -> Self {
         Self {
             backend: RhiBackend::Auto,
-            debug_enabled: false,
-            validation_enabled: false,
+            debug_enabled: cfg!(debug_assertions), // Enable debug layer in debug builds
+            validation_enabled: cfg!(debug_assertions),
             preferred_adapter_index: None,
+            prefer_discrete_gpu: true,
         }
     }
 }
@@ -63,7 +77,8 @@ impl RhiFactory {
         tracing::info!(target: "rhi", "=== RHI Factory: Creating device ===");
         tracing::info!(target: "rhi", "Requested backend: {:?}", config.backend);
         tracing::info!(target: "rhi", "Selected backend: {:?}", selected_backend);
-        tracing::info!(target: "rhi", "Debug: {}, Validation: {}", config.debug_enabled, config.validation_enabled);
+        tracing::info!(target: "rhi", "Debug: {}, Validation: {}, PreferDiscreteGPU: {}", 
+            config.debug_enabled, config.validation_enabled, config.prefer_discrete_gpu);
 
         match selected_backend {
             #[cfg(feature = "dx11")]
