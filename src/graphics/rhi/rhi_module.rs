@@ -18,6 +18,7 @@ pub use super::vulkan::*;
 pub enum GraphicsBackend {
     Vulkan,
     DirectX12,
+    DirectX11,
     OpenGL,
     Metal,
 }
@@ -27,6 +28,7 @@ impl GraphicsBackend {
         match self {
             GraphicsBackend::Vulkan => "Vulkan",
             GraphicsBackend::DirectX12 => "DirectX 12",
+            GraphicsBackend::DirectX11 => "DirectX 11",
             GraphicsBackend::OpenGL => "OpenGL",
             GraphicsBackend::Metal => "Metal",
         }

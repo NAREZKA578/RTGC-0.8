@@ -1,5 +1,5 @@
 //! RHI (Render Hardware Interface) Module
-//! Provides abstraction over different graphics APIs (Vulkan, DX12, OpenGL)
+//! Provides abstraction over different graphics APIs (Vulkan, DX12, DX11, OpenGL)
 
 pub mod types;
 pub mod device;
@@ -17,5 +17,8 @@ pub mod dx11;
 #[cfg(feature = "vulkan")]
 pub mod vulkan;
 
+pub use types::*;
+pub use device::*;
+pub use factory::*;
 pub use rhi_module::*;
 pub use resource_manager::*;

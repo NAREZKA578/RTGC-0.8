@@ -18,6 +18,8 @@ pub mod dx11_context;
 pub mod graphics_context;
 pub mod render_command;
 pub mod render_queue;
+pub mod renderer_rhi;
+pub mod renderer_dx11;
 
 pub use renderer::Renderer;
 pub use camera::Camera;
@@ -30,3 +32,5 @@ pub use graphics_context::GraphicsContext;
 pub use render_command::{RenderCommand, Handle};
 pub use render_queue::{RenderQueue, RenderQueueStats};
 pub use material::{Material, MaterialManager, MaterialLayers, MaterialParams, TextureQuality, MaterialStats};
+pub use renderer_rhi::RendererRhi;
+pub use renderer_dx11::Dx11Renderer;

@@ -800,6 +800,12 @@ impl fmt::Display for RhiError {
 
 impl std::error::Error for RhiError {}
 
+impl From<String> for RhiError {
+    fn from(msg: String) -> Self {
+        RhiError::InitializationFailed(msg)
+    }
+}
+
 pub type RhiResult<T> = Result<T, RhiError>;
 
 // Type aliases for backwards compatibility

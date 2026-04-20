@@ -2,21 +2,39 @@
 //!
 //! Этот модуль управляет рендерингом сцены, UI и пост-обработкой,
 //! предоставляя контролируемый интерфейс для графических операций.
+//!
+//! Поддерживает несколько бэкендов:
+//! - OpenGL (через glow)
+//! - DirectX 11 (через RHI)
+//! - RHI-абстракция для кроссплатформенности
 
 use crate::game::MainMenu;
 use crate::graphics::debug_renderer::DebugRenderer;
 use crate::graphics::material::MaterialManager;
 use crate::graphics::particles::ParticleSystem;
 use crate::graphics::renderer::{MenuState, Renderer};
+use crate::graphics::renderer_dx11::Dx11Renderer;
+use crate::graphics::renderer_rhi::RendererRhi;
 use crate::graphics::GraphicsContext;
 use crate::ui::HudManager;
 use nalgebra::Matrix4;
-use tracing::{error, info, warn};
+use std::sync::Arc;
+use tracing::{debug, error, info, warn};
+
+/// Бэкенд рендерера
+pub enum RenderBackend {
+    /// OpenGL через glow
+    OpenGL(Renderer),
+    /// DirectX 11 нативный
+    DX11(Dx11Renderer),
+    /// RHI-абстракция (универсальный)
+    Rhi(RendererRhi),
+}
 
 /// Менеджер рендеринга
 pub struct RenderManager {
-    /// Рендерер сцены
-    renderer: Option<Renderer>,
+    /// Рендерер сцены (поддержка нескольких бэкендов)
+    renderer: Option<RenderBackend>,
     /// Графический контекст
     graphics_context: GraphicsContext,
     /// Менеджер материалов
@@ -35,6 +53,8 @@ pub struct RenderManager {
     mouse_y: f32,
     /// Режим отладки
     debug_mode: bool,
+    /// Предпочтение дискретной GPU
+    prefer_discrete_gpu: bool,
 }
 
 impl RenderManager {
@@ -46,6 +66,12 @@ impl RenderManager {
         debug_renderer: DebugRenderer,
         hud_manager: HudManager,
     ) -> Self {
+        // Определяем предпочтение дискретной GPU из контекста
+        let prefer_discrete_gpu = match &graphics_context {
+            GraphicsContext::DX11(ctx) => ctx.config.prefer_discrete_gpu,
+            _ => true,
+        };
+
         Self {
             renderer: None,
             graphics_context,
@@ -57,41 +83,79 @@ impl RenderManager {
             mouse_x: 0.0,
             mouse_y: 0.0,
             debug_mode: false,
+            prefer_discrete_gpu,
         }
     }
 
-    /// Инициализирует рендерер
+    /// Инициализирует рендерер с автоматическим выбором бэкенда
     pub fn initialize_renderer(&mut self) -> Result<(), String> {
-        // Для OpenGL контекста получаем glow::Context
-        match &mut self.graphics_context {
-            GraphicsContext::OpenGL(ref mut ctx) => {
+        info!(target: "render", "=== RenderManager::initialize_renderer START ===");
+        
+        match &self.graphics_context {
+            GraphicsContext::OpenGL(ref ctx) => {
+                info!(target: "render", "Initializing OpenGL backend");
+                
                 if let Some(ref gl) = ctx.gl {
                     match Renderer::new(gl.clone()) {
                         Ok(mut renderer) => {
                             renderer.width = ctx.width;
                             renderer.height = ctx.height;
                             renderer.menu_state = MenuState::MainMenu;
-                            self.renderer = Some(renderer);
-                            info!(target: "render", "Renderer initialized successfully");
-                            Ok(())
+                            self.renderer = Some(RenderBackend::OpenGL(renderer));
+                            info!(target: "render", "OpenGL renderer initialized successfully");
+                            info!(target: "render", "=== RenderManager::initialize_renderer END (OpenGL) ===");
+                            return Ok(());
                         }
                         Err(e) => {
-                            let msg = format!("Renderer initialization failed: {}", e);
+                            let msg = format!("OpenGL renderer initialization failed: {}", e);
                             error!(target: "render", "{}", msg);
-                            Err(msg)
+                            return Err(msg);
                         }
                     }
                 } else {
                     let msg = "GL context is None".to_string();
                     error!(target: "render", "{}", msg);
-                    Err(msg)
+                    return Err(msg);
                 }
             }
-            GraphicsContext::DX11(_ctx) => {
-                info!(target: "render", "DX11 context ready, will render via DX11");
-                Ok(())
+            
+            GraphicsContext::DX11(ref ctx) => {
+                info!(target: "render", "Initializing DirectX 11 backend");
+                
+                // Получаем HWND из контекста
+                let hwnd = ctx.get_hwnd() as isize;
+                let width = ctx.width;
+                let height = ctx.height;
+                
+                match Dx11Renderer::new(hwnd, width, height, self.prefer_discrete_gpu) {
+                    Ok(mut renderer) => {
+                        renderer.menu_state = MenuState::MainMenu;
+                        self.renderer = Some(RenderBackend::DX11(renderer));
+                        info!(target: "render", "DX11 renderer initialized successfully");
+                        info!(target: "render", "=== RenderManager::initialize_renderer END (DX11) ===");
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        let msg = format!("DX11 renderer initialization failed: {}", e);
+                        error!(target: "render", "{}", msg);
+                        warn!(target: "render", "Falling back to RHI abstraction");
+                        
+                        // Fallback на RHI-абстракцию
+                        return self.initialize_rhi_backend();
+                    }
+                }
             }
         }
+    }
+    
+    /// Инициализация через RHI-абстракцию (универсальный путь)
+    fn initialize_rhi_backend(&mut self) -> Result<(), String> {
+        info!(target: "render", "Initializing RHI backend");
+        
+        // В полной реализации здесь будет создание устройства через RhiFactory
+        // Пока заглушка для будущего расширения
+        warn!(target: "render", "RHI backend not fully implemented yet");
+        Err("RHI backend not available".to_string())
     }
 
     /// Обновляет позицию мыши
@@ -99,9 +163,19 @@ impl RenderManager {
         self.mouse_x = x;
         self.mouse_y = y;
 
-        if let Some(ref mut renderer) = self.renderer {
-            renderer.mouse_x = x;
-            renderer.mouse_y = y;
+        if let Some(ref mut backend) = self.renderer {
+            match backend {
+                RenderBackend::OpenGL(renderer) => {
+                    renderer.mouse_x = x;
+                    renderer.mouse_y = y;
+                }
+                RenderBackend::DX11(_) => {
+                    // DX11 renderer handles mouse internally
+                }
+                RenderBackend::Rhi(_) => {
+                    // RHI renderer handles mouse internally
+                }
+            }
         }
     }
 
@@ -115,8 +189,18 @@ impl RenderManager {
 
     /// Обновляет камеру на основе позиции вертолёта
     pub fn update_camera_from_helicopter(&mut self, position: nalgebra::Vector3<f32>) {
-        if let Some(ref mut renderer) = self.renderer {
-            renderer.camera.position = position;
+        if let Some(ref mut backend) = self.renderer {
+            match backend {
+                RenderBackend::OpenGL(renderer) => {
+                    renderer.camera.position = position;
+                }
+                RenderBackend::DX11(renderer) => {
+                    renderer.camera.position = position;
+                }
+                RenderBackend::Rhi(renderer) => {
+                    renderer.camera.position = position;
+                }
+            }
         }
     }
 
@@ -126,11 +210,22 @@ impl RenderManager {
         position: nalgebra::Vector3<f32>,
         rotation: nalgebra::Quaternion<f32>,
     ) {
-        if let Some(ref mut renderer) = self.renderer {
+        if let Some(ref mut backend) = self.renderer {
             let unit_rot = nalgebra::UnitQuaternion::new_unchecked(rotation);
             let offset = unit_rot * nalgebra::Vector3::new(0.0, 5.0, 10.0);
-            renderer.camera.position = position + offset;
-            renderer.camera.target = position;
+            
+            match backend {
+                RenderBackend::OpenGL(renderer) => {
+                    renderer.camera.position = position + offset;
+                    renderer.camera.target = position;
+                }
+                RenderBackend::DX11(renderer) => {
+                    renderer.set_vehicle_transform(position, unit_rot);
+                }
+                RenderBackend::Rhi(renderer) => {
+                    renderer.set_vehicle_transform(position, unit_rot);
+                }
+            }
         }
     }
 
@@ -140,8 +235,18 @@ impl RenderManager {
         position: nalgebra::Vector3<f32>,
         rotation: nalgebra::UnitQuaternion<f32>,
     ) {
-        if let Some(ref mut renderer) = self.renderer {
-            renderer.set_vehicle_transform(position, rotation);
+        if let Some(ref mut backend) = self.renderer {
+            match backend {
+                RenderBackend::OpenGL(renderer) => {
+                    renderer.set_vehicle_transform(position, rotation);
+                }
+                RenderBackend::DX11(renderer) => {
+                    renderer.set_vehicle_transform(position, rotation);
+                }
+                RenderBackend::Rhi(renderer) => {
+                    renderer.set_vehicle_transform(position, rotation);
+                }
+            }
         }
     }
 
@@ -151,8 +256,18 @@ impl RenderManager {
         top_color: nalgebra::Vector3<f32>,
         horizon_color: nalgebra::Vector3<f32>,
     ) {
-        if let Some(ref mut renderer) = self.renderer {
-            renderer.set_sky_color(top_color, horizon_color);
+        if let Some(ref mut backend) = self.renderer {
+            match backend {
+                RenderBackend::OpenGL(renderer) => {
+                    renderer.set_sky_color(top_color, horizon_color);
+                }
+                RenderBackend::DX11(renderer) => {
+                    renderer.set_sky_color(top_color, horizon_color);
+                }
+                RenderBackend::Rhi(renderer) => {
+                    renderer.set_sky_color(top_color, horizon_color);
+                }
+            }
         }
     }
 
