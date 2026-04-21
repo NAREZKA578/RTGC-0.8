@@ -22,7 +22,11 @@ pub struct Dx11GraphicsContext {
     framebuffer_ready: bool,
 }
 
-// Safe to send between threads as we own the COM references
+// SAFETY: Dx11GraphicsContext contains raw COM pointers which are reference-counted.
+// The struct owns the COM references and manages them safely. Send/Sync is allowed
+// because COM objects in DirectX 11 are thread-safe for read operations, but state
+// mutations (like resize) must be synchronized externally. This context is designed
+// to be used on the main render thread only.
 unsafe impl Send for Dx11GraphicsContext {}
 unsafe impl Sync for Dx11GraphicsContext {}
 

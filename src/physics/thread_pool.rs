@@ -139,7 +139,7 @@ impl Worker {
                     }
                 }
             })
-            .expect("Failed to spawn worker thread");
+            .map_err(|e| crate::error::EngineError::Physics(format!("Thread spawn failed: {}", e)))?;
 
         Worker {
             thread: Some(thread),

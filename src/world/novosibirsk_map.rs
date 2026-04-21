@@ -604,12 +604,12 @@ mod tests {
         assert!(!map.rivers.is_empty());
         
         // Проверка Новосибирска
-        let novosibirsk = map.cities.iter().find(|c| c.name == "Новосибирск").unwrap();
+        let novosibirsk = map.cities.iter().find(|c| c.name == "Новосибирск").ok_or("City not found")?;
         assert_eq!(novosibirsk.population, 1_625_000);
         assert_eq!(novosibirsk.city_type, CityType::MillionPlus);
         
         // Проверка аэропорта
-        let airport = map.landmarks.iter().find(|l| l.name == "Аэропорт Толмачёво").unwrap();
+        let airport = map.landmarks.iter().find(|l| l.name == "Аэропорт Толмачёво").ok_or("City not found")?;
         assert_eq!(airport.landmark_type, LandmarkType::Airport);
     }
 
@@ -617,7 +617,7 @@ mod tests {
     fn test_highway_surface() {
         let map = create_novosibirsk_map();
         
-        let federal = map.highways.iter().find(|h| h.route_type == RouteType::Federal).unwrap();
+        let federal = map.highways.iter().find(|h| h.route_type == RouteType::Federal).ok_or("City not found")?;
         assert_eq!(federal.surface, SurfaceType::AsphaltGood);
     }
 }

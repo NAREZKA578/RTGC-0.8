@@ -108,7 +108,7 @@ impl ParticleSystem {
                 // program может быть 0 если нет активного шейдерного программы, но это маловероятно в render
                 let native_program = glow::NativeProgram(std::num::NonZero::new(program as u32).unwrap_or_else(|| {
                     tracing::warn!("No active GL program during particle render");
-                    std::num::NonZero::new(1).expect("1 is non-zero")
+                    std::num::NonZero::new(1).unwrap()
                 }));
                 if let Some(loc) = gl.get_uniform_location(native_program, "u_view_proj") {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), false, view_proj.as_slice());

@@ -137,9 +137,9 @@ impl OctreeNode {
                 ));
             }
             // SAFETY: All 8 elements are initialized with Some above
-            [arr[0].take().expect("index 0"), arr[1].take().expect("index 1"), arr[2].take().expect("index 2"),
-             arr[3].take().expect("index 3"), arr[4].take().expect("index 4"), arr[5].take().expect("index 5"),
-             arr[6].take().expect("index 6"), arr[7].take().expect("index 7")]
+            [arr[0].take().ok_or("Spatial index error")?, arr[1].take().ok_or("Spatial index error")?, arr[2].take().ok_or("Spatial index error")?,
+             arr[3].take().ok_or("Spatial index error")?, arr[4].take().ok_or("Spatial index error")?, arr[5].take().ok_or("Spatial index error")?,
+             arr[6].take().ok_or("Spatial index error")?, arr[7].take().ok_or("Spatial index error")?]
         };
         
         let mut i = 0;

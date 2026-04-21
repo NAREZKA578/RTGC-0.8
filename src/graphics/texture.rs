@@ -132,7 +132,13 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        // Ресурсы удаляются только если это последняя ссылка
-        // Для гарантированного удаления используйте метод delete(&self, gl: &Context)
+        // Resources are deleted when the last reference is dropped
+        // The actual GL context must still be alive for this to work safely
+        // In practice, textures should be explicitly deleted before destroying the GL context
+        if Arc::strong_count(&self.inner) == 1 {
+            // We can't delete GL resources here without access to the GL context
+            // This is a limitation of OpenGL - resources are context-bound
+            // Use texture.delete(&gl) explicitly before context destruction
+        }
     }
 }

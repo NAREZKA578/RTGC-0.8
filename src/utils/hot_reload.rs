@@ -321,8 +321,8 @@ mod tests {
         let mut manager = HotReloadManager::new(HotReloadConfig::default());
         
         // Create a temp file
-        let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, "test content").unwrap();
+        let mut temp_file = NamedTempFile::new().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Operation failed"))?;
+        writeln!(temp_file, "test content").ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Operation failed"))?;
         
         let result = manager.watch_file(temp_file.path());
         assert!(result.is_ok());
@@ -337,7 +337,7 @@ mod tests {
         let called_clone = called.clone();
         
         manager.register_callback(".toml", move |_path| {
-            *called_clone.lock().unwrap() = true;
+            *called_clone.lock().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Operation failed"))? = true;
         });
         
         assert_eq!(manager.get_stats().callbacks_registered, 1);

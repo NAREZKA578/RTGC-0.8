@@ -16,20 +16,23 @@ impl MeshHandle {
     }
 }
 
+/// Vertex structure for mesh data.
+/// Aligned to 4 bytes for safe GPU access and bytemuck casting.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-#[repr(packed)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub tex_coords: [f32; 2],
+    pub tangent: [f32; 3],
+    pub _padding: f32, // Padding to ensure 48-byte alignment (12 floats)
 }
 
 unsafe impl bytemuck::Pod for Vertex {}
 unsafe impl bytemuck::Zeroable for Vertex {}
 
-unsafe impl Send for Mesh {}
-unsafe impl Sync for Mesh {}
+// Mesh is already thread-safe due to Arc and immutable GPU resources after creation
+// No need for unsafe Send/Sync impls
 
 pub struct MeshInner {
     vao: glow::VertexArray,
@@ -41,6 +44,17 @@ pub struct MeshInner {
 #[derive(Clone)]
 pub struct Mesh {
     inner: Arc<MeshInner>,
+}
+
+impl Drop for Mesh {
+    fn drop(&mut self) {
+        // Resources are shared via Arc, only delete when last reference is dropped
+        if Arc::strong_count(&self.inner) == 1 {
+            // We can't safely delete GL resources here without a GL context
+            // Resources are cleaned up when the GL context is destroyed
+            // This is a limitation of OpenGL - resources are context-bound
+        }
+    }
 }
 
 impl std::fmt::Debug for Mesh {
@@ -109,16 +123,18 @@ impl Mesh {
         vertices: &[f32],
         indices: &[u32],
     ) -> Result<Self, String> {
-        // vertices should be interleaved: pos_x, pos_y, pos_z, norm_x, norm_y, norm_z, tex_u, tex_v
+        // vertices should be interleaved: pos_x, pos_y, pos_z, norm_x, norm_y, norm_z, tex_u, tex_v, tan_x, tan_y, tan_z
         // Convert to Vertex structs
-        let vertex_count = vertices.len() / 8;
+        let vertex_count = vertices.len() / 12;
         let mut vertex_data = Vec::with_capacity(vertex_count);
         for i in 0..vertex_count {
-            let base = i * 8;
+            let base = i * 12;
             vertex_data.push(Vertex {
                 position: [vertices[base], vertices[base + 1], vertices[base + 2]],
                 normal: [vertices[base + 3], vertices[base + 4], vertices[base + 5]],
                 tex_coords: [vertices[base + 6], vertices[base + 7]],
+                tangent: [vertices[base + 8], vertices[base + 9], vertices[base + 10]],
+                _padding: 0.0,
             });
         }
         Self::new(gl, &vertex_data, indices)
@@ -126,6 +142,8 @@ impl Mesh {
 
     /// Create a placeholder mesh (for async loading)
     pub fn new_placeholder() -> Self {
+        // Placeholder meshes should only be used temporarily before real GPU resources are created
+        // They don't have valid GL handles and will be replaced during rendering
         use std::num::NonZero;
         Self {
             inner: Arc::new(MeshInner {
@@ -139,7 +157,18 @@ impl Mesh {
 
     /// Create an empty mesh (for error cases)
     pub fn empty(gl: &Context) -> Self {
-        Self::new_placeholder()
+        // Return a minimal valid mesh instead of placeholder
+        let vertices = [
+            Vertex {
+                position: [0.0, 0.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+                tex_coords: [0.0, 0.0],
+                tangent: [1.0, 0.0, 0.0],
+                _padding: 0.0,
+            },
+        ];
+        let indices = [0u32];
+        Self::new(gl, &vertices, &indices).unwrap_or_else(|_| Self::new_placeholder())
     }
 
     /// Generate a hash key for vertex/indice data for caching
@@ -148,17 +177,23 @@ impl Mesh {
         use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
+        // Hash the entire data for accurate caching (not just length and endpoints)
         vertices.len().hash(&mut hasher);
         indices.len().hash(&mut hasher);
-        // Hash first and last few elements as a quick fingerprint
-        if vertices.len() >= 8 {
-            vertices[0].to_bits().hash(&mut hasher);
-            vertices[vertices.len() - 1].to_bits().hash(&mut hasher);
+        
+        // Hash all vertices (sample every 4th float for performance on large meshes)
+        let sample_step = if vertices.len() > 1024 { 4 } else { 1 };
+        for (i, &v) in vertices.iter().enumerate() {
+            if i % sample_step == 0 {
+                v.to_bits().hash(&mut hasher);
+            }
         }
-        if indices.len() >= 2 {
-            indices[0].hash(&mut hasher);
-            indices[indices.len() - 1].hash(&mut hasher);
+        
+        // Hash all indices
+        for &idx in indices {
+            idx.hash(&mut hasher);
         }
+        
         hasher.finish()
     }
 
@@ -172,12 +207,22 @@ impl Mesh {
 
         let i: &[u32] = indices;
 
-        let flat_vertices: Vec<f32> = vertices
-            .iter()
-            .flat_map(|v| v.as_slice().to_vec())
-            .collect();
-
-        Self::generate_mesh_key(&flat_vertices, i)
+        // Avoid full copy - hash directly from Arc
+        let mut hasher = DefaultHasher::new();
+        vertices.len().hash(&mut hasher);
+        i.len().hash(&mut hasher);
+        
+        for v in vertices.iter() {
+            v.x.to_bits().hash(&mut hasher);
+            v.y.to_bits().hash(&mut hasher);
+            v.z.to_bits().hash(&mut hasher);
+        }
+        
+        for &idx in i {
+            idx.hash(&mut hasher);
+        }
+        
+        hasher.finish()
     }
 
     pub fn new_raw(gl: &Context, vertices: &[f32], indices: &[u32]) -> Result<Self, String> {
@@ -207,14 +252,18 @@ impl Mesh {
                 glow::STATIC_DRAW,
             );
 
+            // Assume vertex format: position(3), normal(3), tex_coords(2), tangent(3), padding(1) = 12 floats = 48 bytes
             gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 32, 0);
+            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 48, 0);
 
             gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 32, 12);
+            gl.vertex_attrib_pointer_f32(1, 3, glow::FLOAT, false, 48, 12);
 
             gl.enable_vertex_attrib_array(2);
-            gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, 32, 24);
+            gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, 48, 24);
+
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 3, glow::FLOAT, false, 48, 32);
 
             gl.bind_vertex_array(None);
             gl.bind_buffer(glow::ARRAY_BUFFER, None);
@@ -224,7 +273,7 @@ impl Mesh {
                     vao,
                     vbo,
                     ebo,
-                    indices_count: indices.len() as i32,
+                    indices_count: indices.len().try_into().unwrap_or(i32::MAX),
                 }),
             })
         }
@@ -294,7 +343,7 @@ impl Mesh {
                     vao,
                     vbo,
                     ebo,
-                    indices_count: indices.len() as i32,
+                    indices_count: indices.len().try_into().unwrap_or(i32::MAX),
                 }),
             })
         }

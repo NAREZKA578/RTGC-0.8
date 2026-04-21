@@ -134,6 +134,12 @@ pub enum RenderCommand {
         height: i32,
         sort_key: u64,
     },
+    /// Mesh deformation for damage visualization
+    MeshDeformation {
+        mesh: Handle<Mesh>,
+        vertex_displacements: Vec<(usize, Vector3<f32>)>,
+        sort_key: u64,
+    },
 }
 
 impl RenderCommand {
@@ -152,6 +158,7 @@ impl RenderCommand {
             RenderCommand::Vehicle { sort_key, .. } => *sort_key,
             RenderCommand::Clear { sort_key, .. } => *sort_key,
             RenderCommand::Viewport { sort_key, .. } => *sort_key,
+            RenderCommand::MeshDeformation { sort_key, .. } => *sort_key,
         }
     }
 
@@ -170,6 +177,7 @@ impl RenderCommand {
             RenderCommand::Vehicle { sort_key, .. } => *sort_key = key,
             RenderCommand::Clear { sort_key, .. } => *sort_key = key,
             RenderCommand::Viewport { sort_key, .. } => *sort_key = key,
+            RenderCommand::MeshDeformation { sort_key, .. } => *sort_key = key,
         }
     }
 

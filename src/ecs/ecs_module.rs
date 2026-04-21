@@ -474,9 +474,13 @@ impl EcsManager {
             .as_any_mut()
             .downcast_mut::<ConcreteComponentStorage<T>>()?;
 
-        // SAFETY: Мы получаем сырой указатель и возвращаем ссылку с временем жизни self
-        // Это корректно так как storages является частью self
-        // Используем std::mem::transmute для обхода проверки времени жизни
+        // SAFETY: We obtain a raw pointer from the storage and return a reference with
+        // the lifetime of self. This is safe because:
+        // 1. The storage is part of self and will outlive the returned reference
+        // 2. The entity_index was validated to be within bounds
+        // 3. We have exclusive mutable access to self, ensuring no aliasing
+        // The transmute is used only to bypass Rust's lifetime checker which cannot
+        // verify that the reference is tied to self's lifetime through the index lookup.
         let ptr = concrete_storage.get_mut(entity_index)?;
         Some(unsafe { std::mem::transmute::<&mut T, &mut T>(ptr) })
     }

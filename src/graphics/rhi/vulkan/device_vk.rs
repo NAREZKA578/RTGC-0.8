@@ -923,7 +923,7 @@ impl IDevice for VkDevice {
             let mut resource_manager = self
                 .resource_manager
                 .lock()
-                .expect("Lock should not be poisoned");
+                .unwrap_or_else(|e| e.into_inner());
             let buffer_data = resource_manager
                 .get_buffer(buffer)
                 .ok_or_else(|| RhiError::ResourceNotFound("Buffer not found".to_string()))?;
@@ -955,7 +955,7 @@ impl IDevice for VkDevice {
             let mut resource_manager = self
                 .resource_manager
                 .lock()
-                .expect("Lock should not be poisoned");
+                .unwrap_or_else(|e| e.into_inner());
             let buffer_data = resource_manager
                 .get_buffer(buffer)
                 .ok_or_else(|| RhiError::ResourceNotFound("Buffer not found".to_string()))?;
@@ -987,7 +987,7 @@ impl IDevice for VkDevice {
             let mut resource_manager = self
                 .resource_manager
                 .lock()
-                .expect("Lock should not be poisoned");
+                .unwrap_or_else(|e| e.into_inner());
             if let Some(buffer_data) = resource_manager.get_buffer_mut(buffer) {
                 if let Some(mapped_ptr) = buffer_data.mapped_ptr.take() {
                     if let Some(vulkan_buffer) = buffer_data.vulkan_buffer {
@@ -1012,7 +1012,7 @@ impl IDevice for VkDevice {
             let mut resource_manager = self
                 .resource_manager
                 .lock()
-                .expect("Lock should not be poisoned");
+                .unwrap_or_else(|e| e.into_inner());
             let texture_data = resource_manager
                 .get_texture(texture)
                 .ok_or_else(|| RhiError::ResourceNotFound("Texture not found".to_string()))?;
@@ -1048,7 +1048,7 @@ impl IDevice for VkDevice {
             let mut resource_manager = self
                 .resource_manager
                 .lock()
-                .expect("Lock should not be poisoned");
+                .unwrap_or_else(|e| e.into_inner());
 
             // Remove from ResourceManager - this will drop the resource data
             // The actual Vulkan destruction happens in Drop impl of VulkanBuffer/VulkanImage
@@ -1094,7 +1094,7 @@ impl IDevice for VkDevice {
             let resource_manager = self
                 .resource_manager
                 .lock()
-                .expect("Lock should not be poisoned");
+                .unwrap_or_else(|e| e.into_inner());
             let allocated_bytes = resource_manager.get_allocated_bytes();
 
             memory_stats.total_gpu_memory = mem_properties.memory_heaps[0].size as u64;
@@ -1123,5 +1123,5 @@ pub fn create_vulkan_device(enable_validation: bool) -> RhiResult<Box<dyn IDevic
 fn cstr(s: &'static str) -> &'static std::ffi::CStr {
     use std::ffi::CStr;
     // Safe unwrap - string literals always end with \0 when we add it manually
-    CStr::from_bytes_with_nul(concat!(s, "\0").as_bytes()).expect("cstr: invalid C string")
+    CStr::from_bytes_with_nul(concat!(s, "\0").as_bytes()).ok_or("CStr conversion failed")?
 }

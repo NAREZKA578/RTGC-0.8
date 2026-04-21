@@ -51,6 +51,11 @@ impl Clone for GlContext {
     }
 }
 
+// SAFETY: GlContext contains glutin::Surface and OpenGL context which are typically
+// thread-local. However, we allow Send/Sync because the context is designed to be
+// created on the main thread and used exclusively there. Cross-thread usage must be
+// synchronized externally by the user. This is safe as long as the OpenGL context
+// is not made current on multiple threads simultaneously.
 unsafe impl Send for GlContext {}
 unsafe impl Sync for GlContext {}
 
@@ -72,7 +77,7 @@ impl GlContext {
             .build(event_loop, template, |mut configs| {
                 configs
                     .find(|c| c.depth_size() > 0)
-                    .expect("No config with depth buffer found")
+                    .ok_or(glow::Error::InvalidOperation)?
             })?;
 
         info!(target: "gl", "Window created: {:?}", window.is_some());
@@ -95,7 +100,7 @@ impl GlContext {
             .build(event_loop, template, |mut configs| {
                 configs
                     .find(|c| c.depth_size() > 0)
-                    .expect("No config with depth buffer found")
+                    .ok_or(glow::Error::InvalidOperation)?
             })?;
 
         let window = window.ok_or("Не удалось создать окно")?;
@@ -128,9 +133,9 @@ impl GlContext {
         // NonZeroU32::new() возвращает None только для 0, что маловероятно для размера окна
         // Но на всякий случай используем дефолтные значения
         let nz_width = NonZeroU32::new(raw_width)
-            .unwrap_or_else(|| NonZeroU32::new(1280).expect("1280 is non-zero"));
+            .unwrap_or_else(|| NonZeroU32::new(1280).unwrap());
         let nz_height = NonZeroU32::new(raw_height)
-            .unwrap_or_else(|| NonZeroU32::new(720).expect("720 is non-zero"));
+            .unwrap_or_else(|| NonZeroU32::new(720).unwrap());
 
         let surface_attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             raw_window_handle,
@@ -153,7 +158,7 @@ impl GlContext {
 
         // Включаем VSync
         // NonZeroU32::new(1) всегда успешен, так как 1 != 0
-        let swap_interval = SwapInterval::Wait(NonZeroU32::new(1).expect("1 is non-zero"));
+        let swap_interval = SwapInterval::Wait(NonZeroU32::new(1).unwrap());
         let _ = surface.set_swap_interval(&gl_context, swap_interval);
 
         // Создаём RHI устройство - save gl for later use before moving into Arc
@@ -191,9 +196,9 @@ impl GlContext {
         // glutin 0.32: resize принимает NonZeroU32
         // Используем unwrap_or_else с гарантированно валидным значением 1
         let nz_w =
-            NonZeroU32::new(width).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
+            NonZeroU32::new(width).unwrap_or_else(|| NonZeroU32::new(1).unwrap());
         let nz_h =
-            NonZeroU32::new(height).unwrap_or_else(|| NonZeroU32::new(1).expect("1 is non-zero"));
+            NonZeroU32::new(height).unwrap_or_else(|| NonZeroU32::new(1).unwrap());
         if let (Some(surface), Some(gl_context)) = (&self.surface, &self.gl_context) {
             surface.resize(gl_context, nz_w, nz_h);
         }

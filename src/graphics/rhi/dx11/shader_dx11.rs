@@ -102,7 +102,7 @@ impl D3DCompiler {
                 let module = GetModuleHandleW(widestring(name).as_ptr());
                 if !module.is_err() {
                     let func_name = format!("D3DCompile\0");
-                    let proc = GetProcAddress(module.unwrap(), PCSTR(func_name.as_ptr()));
+                    let proc = GetProcAddress(module.ok_or("Shader compilation failed")?, PCSTR(func_name.as_ptr()));
                     if !proc.is_null() {
                         info!(target: "dx11.shader", "Loaded {} successfully", name);
                         return Some(Self {
@@ -134,9 +134,9 @@ impl D3DCompiler {
         let flags1 = if debug { 1u32 } else { 0u32 }; // D3DCOMPILE_DEBUG = 1
         let flags2 = 0u32;
         
-        let entry_cstr = std::ffi::CString::new(entry_point).unwrap();
-        let target_cstr = std::ffi::CString::new(target).unwrap();
-        let source_name = std::ffi::CString::new("shader.hlsl").unwrap();
+        let entry_cstr = std::ffi::CString::new(entry_point).ok_or("Shader compilation failed")?;
+        let target_cstr = std::ffi::CString::new(target).ok_or("Shader compilation failed")?;
+        let source_name = std::ffi::CString::new("shader.hlsl").ok_or("Shader compilation failed")?;
         
         unsafe {
             let hr = (self.compile_func)(
@@ -489,7 +489,7 @@ impl Dx11Shader {
                 let semantic_index = 0u32;
                 
                 D3D11_INPUT_ELEMENT_DESC {
-                    SemanticName: std::ffi::CString::new(semantic_name.as_str()).unwrap().into_raw() as *const i8,
+                    SemanticName: std::ffi::CString::new(semantic_name.as_str()).ok_or("Shader compilation failed")?.into_raw() as *const i8,
                     SemanticIndex: semantic_index,
                     Format: format,
                     InputSlot: 0,

@@ -563,10 +563,10 @@ mod tests {
     fn test_vehicle_serialization() {
         let vehicle = VehicleAsset::load_preset(VehiclePreset::KamazTruck);
         let json = serde_json::to_string_pretty(&vehicle)
-            .expect("Failed to serialize vehicle"); // Тест: паника допустима при ошибке сериализации
+            .map_err(|e| RhiError::InternalError(format!("Serialization failed: {}", e)))?; // Тест: паника допустима при ошибке сериализации
         let loaded: Result<VehicleAsset, _> = serde_json::from_str(&json);
         assert!(loaded.is_ok());
-        let loaded = loaded.expect("Failed to deserialize vehicle"); // Тест: явная ошибка вместо unwrap
+        let loaded = loaded.map_err(|e| RhiError::InternalError(format!("Deserialization failed: {}", e)))?; // Тест: явная ошибка вместо unwrap
         assert_eq!(vehicle.id, loaded.id);
         assert_eq!(vehicle.name, loaded.name);
     }
@@ -578,10 +578,10 @@ mod tests {
         obj.collider = Some(Collider::default());
         
         let json = serde_json::to_string_pretty(&obj)
-            .expect("Failed to serialize game object"); // Тест: паника допустима при ошибке сериализации
+            .map_err(|e| RhiError::InternalError(format!("Serialization failed: {}", e)))?; // Тест: паника допустима при ошибке сериализации
         let loaded: Result<GameObjectAsset, _> = serde_json::from_str(&json);
         assert!(loaded.is_ok());
-        let loaded = loaded.expect("Failed to deserialize game object"); // Тест: явная ошибка вместо unwrap
+        let loaded = loaded.map_err(|e| RhiError::InternalError(format!("Deserialization failed: {}", e)))?; // Тест: явная ошибка вместо unwrap
         assert_eq!(obj.id, loaded.id);
         assert_eq!(obj.transform.position, loaded.transform.position);
     }

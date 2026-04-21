@@ -291,7 +291,7 @@ impl Dx11Buffer {
         unsafe {
             let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
             let hr = context.Map(
-                self.buffer.as_ref().unwrap(),
+                self.buffer.as_ref().ok_or("Buffer access failed")?,
                 0,
                 D3D11_MAP_WRITE_DISCARD,
                 0,
