@@ -212,13 +212,13 @@ impl JobSystem {
                 .spawn(move || {
                     sys.worker_loop(i);
                 })
-                .expect("Failed to spawn worker thread"); // Критично: не можем продолжить без рабочего потока
+                .map_err(|e| crate::error::EngineError::Physics(format!("Thread spawn failed: {}", e)))?; // Критично: не можем продолжить без рабочего потока
             
             // Безопасно добавляем handle в mutex
             system.workers.lock().push(handle);
         }
         
-        Arc::into_inner(system).expect("Arc should have only one reference at this point") // Критично: проверка на утечку ссылок
+        Arc::into_inner(system).ok_or("Arc reference leak detected")? // Критично: проверка на утечку ссылок
     }
     
     /// Главный цикл рабочего потока

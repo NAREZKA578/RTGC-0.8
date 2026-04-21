@@ -582,9 +582,27 @@ impl VehiclePartsSystem {
     ) {
         let deformations = self.deform_mesh(impact_point, damage);
 
-        // В реальной реализации применить деформацию к мешу
-        // Здесь заглушка для демонстрации интеграции
-        tracing::debug!(target: "vehicle", "Applying {} deformations to mesh", deformations.len());
+        // Применяем деформации к RenderCommand для передачи в рендерер
+        if !deformations.is_empty() {
+            // Добавляем информацию о деформациях в команду рендеринга
+            // Рендерер использует эти данные для модификации вершин меша
+            for (vertex_idx, offset) in deformations.iter() {
+                command.add_vertex_displacement(*vertex_idx, *offset);
+            }
+            tracing::debug!(
+                target: "vehicle",
+                "Applied {} deformations to mesh at impact point '{}'",
+                deformations.len(),
+                impact_point
+            );
+        } else {
+            tracing::trace!(
+                target: "vehicle",
+                "No deformations generated for impact point '{}' with damage {}",
+                impact_point,
+                damage
+            );
+        }
     }
 
     /// Get total repair cost for all damaged parts

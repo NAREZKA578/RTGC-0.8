@@ -222,13 +222,13 @@ impl Dx11Texture {
         let mut dsv = None;
         
         if desc.usage.contains(TextureUsage::SHADER_READ) {
-            srv = Self::create_srv(device, texture.as_ref().unwrap(), desc.format)?;
+            srv = Self::create_srv(device, texture.as_ref().ok_or("Texture access failed")?, desc.format)?;
         }
         if desc.usage.contains(TextureUsage::RENDER_TARGET) {
-            rtv = Self::create_rtv(device, texture.as_ref().unwrap(), desc.format)?;
+            rtv = Self::create_rtv(device, texture.as_ref().ok_or("Texture access failed")?, desc.format)?;
         }
         if desc.usage.contains(TextureUsage::DEPTH_STENCIL) {
-            dsv = Self::create_dsv(device, texture.as_ref().unwrap(), desc.format)?;
+            dsv = Self::create_dsv(device, texture.as_ref().ok_or("Texture access failed")?, desc.format)?;
         }
         
         let name = format!("DX11Texture({}x{}, {:?})", desc.width, desc.height, desc.format);

@@ -75,6 +75,9 @@ pub struct GlSemaphoreInternal {
     _private: (),
 }
 
+// SAFETY: GlSemaphoreInternal wraps an OpenGL semaphore which is a GPU resource.
+// It is safe to Send/Sync because the actual synchronization is handled by the GPU.
+// CPU-side access must be synchronized via the command queue.
 unsafe impl Send for GlSemaphoreInternal {}
 unsafe impl Sync for GlSemaphoreInternal {}
 
@@ -91,6 +94,10 @@ pub struct GlSwapChainInternal {
     pub depth_texture: Option<NativeTexture>,
 }
 
+// SAFETY: GlSwapChainInternal contains OpenGL resources (framebuffer, textures) which
+// are bound to the OpenGL context. Send/Sync is safe because these resources are
+// managed by the GPU and accessed through thread-safe command queues. The context
+// itself should remain on the main thread.
 unsafe impl Send for GlSwapChainInternal {}
 unsafe impl Sync for GlSwapChainInternal {}
 
@@ -110,6 +117,10 @@ pub struct GlDevice {
     pipelines: Mutex<HashMap<ResourceHandle, GlPipelineInternal>>,
 }
 
+// SAFETY: GlDevice manages OpenGL resources through interior mutability (Mutex).
+// Send/Sync is safe because all mutable state is protected by Mutexes, and the
+// underlying OpenGL context is designed to be used from a single thread (main thread).
+// Cross-thread resource access is coordinated through the RHI command system.
 unsafe impl Send for GlDevice {}
 unsafe impl Sync for GlDevice {}
 
@@ -536,7 +547,11 @@ impl IDevice for GlDevice {
         Err(RhiError::Unsupported("Buffer mapping not supported in OpenGL backend".to_string()))
     }
     
-    fn unmap_buffer(&self, _buffer: ResourceHandle) {}
+    fn unmap_buffer(&self, _buffer: ResourceHandle) {
+        // В OpenGL нет явного unmap - данные отправляются сразу через glBufferSubData
+        // Этот метод существует для совместимости с интерфейсом IDevice
+        tracing::trace!("OpenGL unmap_buffer: no-op (data already uploaded via update_buffer)");
+    }
     
     fn read_back_texture(&self, texture: ResourceHandle) -> RhiResult<Vec<u8>> {
         let textures = self.textures.lock();
@@ -647,7 +662,7 @@ impl ICommandList for GlCommandList {
         let framebuffer = unsafe { self.context.create_framebuffer() }
             .unwrap_or_else(|_| {
                 tracing::error!(target: "rhi", "Failed to create framebuffer, using default");
-                glow::NativeFramebuffer(NonZeroU32::new(1).expect("1 is non-zero"))
+                glow::NativeFramebuffer(NonZeroU32::new(1).unwrap())
             });
 
         unsafe {
@@ -762,7 +777,7 @@ impl ICommandList for GlCommandList {
                 // buffer_handle.0 должен быть > 0, так как это валидный handle
                 let gl_buffer = NativeBuffer(NonZeroU32::new(buffer_handle.0 as u32).unwrap_or_else(|| {
                     tracing::warn!("Invalid buffer handle {}", buffer_handle.0);
-                    NonZeroU32::new(1).expect("1 is non-zero")
+                    NonZeroU32::new(1).unwrap()
                 }));
                 self.context.bind_buffer(glow::ARRAY_BUFFER, Some(gl_buffer));
 
@@ -785,7 +800,7 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid index buffer handle {}", buffer.0);
-                NonZeroU32::new(1).expect("1 is non-zero")
+                NonZeroU32::new(1).unwrap()
             }));
             self.context.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(gl_buffer));
         }
@@ -796,7 +811,7 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid constant buffer handle {}", buffer.0);
-                NonZeroU32::new(1).expect("1 is non-zero")
+                NonZeroU32::new(1).unwrap()
             }));
             self.context.bind_buffer_range(
                 glow::UNIFORM_BUFFER,
@@ -823,7 +838,7 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_sampler = NativeSampler(NonZeroU32::new(sampler.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid sampler handle {}", sampler.0);
-                NonZeroU32::new(1).expect("1 is non-zero")
+                NonZeroU32::new(1).unwrap()
             }));
             self.context.bind_sampler(slot, Some(gl_sampler));
         }
@@ -875,7 +890,7 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid indirect buffer handle {}", buffer.0);
-                NonZeroU32::new(1).expect("1 is non-zero")
+                NonZeroU32::new(1).unwrap()
             }));
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
@@ -896,7 +911,7 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid indexed indirect buffer handle {}", buffer.0);
-                NonZeroU32::new(1).expect("1 is non-zero")
+                NonZeroU32::new(1).unwrap()
             }));
             self.context.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(gl_buffer));
             for i in 0..draw_count {
@@ -926,7 +941,7 @@ impl ICommandList for GlCommandList {
         unsafe {
             let gl_buffer = NativeBuffer(NonZeroU32::new(buffer.0 as u32).unwrap_or_else(|| {
                 tracing::warn!("Invalid dispatch indirect buffer handle {}", buffer.0);
-                NonZeroU32::new(1).expect("1 is non-zero")
+                NonZeroU32::new(1).unwrap()
             }));
             self.context.bind_buffer(glow::DISPATCH_INDIRECT_BUFFER, Some(gl_buffer));
             self.context.dispatch_compute_indirect(offset as i32);

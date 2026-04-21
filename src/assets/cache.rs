@@ -298,7 +298,7 @@ mod tests {
         
         let data = cache.get("test");
         assert!(data.is_some());
-        assert_eq!(*data.unwrap(), "data");
+        assert_eq!(*data.ok_or("Test assertion failed")?, "data");
     }
     
     #[test]

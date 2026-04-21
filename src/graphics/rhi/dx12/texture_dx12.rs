@@ -143,6 +143,9 @@ impl Dx12Texture {
             .map_err(|e| RhiError::ResourceCreationFailed(format!("Failed to create command list: {:?}", e)))?;
         
         // Transition texture to COPY_DEST
+        // SAFETY: D3D12_RESOURCE_TRANSITION_BARRIER is a POD (plain old data) struct
+        // with no padding or special alignment requirements. Transmuting to the
+        // anonymous union member is safe and is the standard pattern for DirectX 12 FFI.
         let barrier = D3D12_RESOURCE_BARRIER {
             Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
             Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -169,6 +172,7 @@ impl Dx12Texture {
             );
             
             // Transition back to appropriate state
+            // SAFETY: Same as above - transmuting POD struct to union member is safe.
             let barrier_back = D3D12_RESOURCE_BARRIER {
                 Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                 Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -186,7 +190,7 @@ impl Dx12Texture {
             command_list.Close()?;
             
             // Execute and wait for completion
-            command_queue.ExecuteCommandLists(&[command_list.cast().expect("Failed to cast to ID3D12CommandList")]);
+            command_queue.ExecuteCommandLists(&[command_list.cast().map_err(|_| RhiError::InitializationFailed("Failed to cast to ID3D12CommandList"))?]);
         }
         
         Ok(texture)

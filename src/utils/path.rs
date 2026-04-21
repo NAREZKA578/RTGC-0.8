@@ -163,7 +163,7 @@ mod tests {
     fn test_create_safe_save_path() {
         let result = create_safe_save_path("saves", "game1/slot1");
         assert!(result.is_ok());
-        let path = result.unwrap();
+        let path = result.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Path operation failed"))?;
         assert!(path.starts_with("saves"));
         assert!(path.to_string_lossy().contains("game1/slot1"));
     }

@@ -203,6 +203,8 @@ impl ICommandList for Dx12CommandList {
             // 4.39: Transition resources to RENDER_TARGET state
             let mut barriers = Vec::new();
             for color_attachment in &desc.color_attachments {
+                // SAFETY: Transmuting D3D12_RESOURCE_TRANSITION_BARRIER to union member.
+                // This is a POD struct with no padding, standard DirectX 12 FFI pattern.
                 let barrier = D3D12_RESOURCE_BARRIER {
                     Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                     Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -878,7 +880,7 @@ impl ICommandQueue for Dx12CommandQueue {
                             dx12_cmd
                                 .command_list
                                 .cast()
-                                .expect("Failed to cast to ID3D12CommandList"),
+                                .map_err(|_| RhiError::InitializationFailed("Failed to cast to ID3D12CommandList"))?,
                         );
                     }
                 }
@@ -1064,11 +1066,11 @@ impl Dx12CommandQueue {
                     return true;
                 }
 
-                let event = CreateEventW(None, FALSE, FALSE, None).expect("Failed to create event");
+                let event = CreateEventW(None, FALSE, FALSE, None).map_err(|_| RhiError::InitializationFailed("Failed to create event"))?;
 
                 fence
                     .set_event_on_completion(value, event)
-                    .expect("Failed to set event on completion");
+                    .map_err(|_| RhiError::InitializationFailed("Failed to set event on completion"))?;
 
                 let result = WaitForSingleObject(event, timeout_ms);
                 let _ = CloseHandle(event);
@@ -1331,7 +1333,7 @@ impl Dx12CommandList {
                 ))
             })?;
 
-        Ok(root_signature.expect("Root signature creation failed"))
+        Ok(root_signature.ok_or(RhiError::InitializationFailed("Root signature creation failed"))?)
     }
 
     /// 4.55: Upload buffer data via upload heap

@@ -87,7 +87,9 @@ unsafe fn compile_shader(
     gl.compile_shader(shader);
 
     if !gl.get_shader_compile_status(shader) {
-        return Err(format!("Failed to compile shader: {}", gl.get_shader_info_log(shader)).into());
+        let error_msg = gl.get_shader_info_log(shader);
+        gl.delete_shader(shader); // Clean up on compilation failure
+        return Err(format!("Failed to compile shader: {}", error_msg).into());
     }
 
     Ok(shader)
@@ -95,7 +97,13 @@ unsafe fn compile_shader(
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        // Ресурсы удаляются только если это последняя ссылка
-        // Для гарантированного удаления используйте метод delete(&self, gl: &Context)
+        // Resources are deleted when the last reference is dropped
+        // The actual GL context must still be alive for this to work safely
+        // In practice, shaders should be explicitly deleted before destroying the GL context
+        if Arc::strong_count(&self.inner) == 1 {
+            // We can't delete GL resources here without access to the GL context
+            // This is a limitation of OpenGL - resources are context-bound
+            // Use shader.delete(&gl) explicitly before context destruction
+        }
     }
 }

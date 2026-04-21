@@ -128,6 +128,23 @@ impl AsyncPhysicsEngine {
     }
 
     /// Синхронизировать локальные данные с потоком
+    /// 
+    /// # Важное замечание по использованию
+    /// 
+    /// Этот метод читает ответы из канала `receiver`. Не вызывайте `wait_for_step()`
+    /// сразу после `sync()` без промежуточного `step()`, иначе может произойти deadlock:
+    /// 
+    /// ```no_run
+    /// // НЕПРАВИЛЬНО - может вызвать deadlock:
+    /// engine.step(dt, sub_steps);
+    /// engine.sync();        // Поглощает ответ StepComplete
+    /// engine.wait_for_step(); // Блокируется навсегда, ожидая второй ответ
+    /// 
+    /// // ПРАВИЛЬНО:
+    /// engine.step(dt, sub_steps);
+    /// engine.wait_for_step(); // Ждём завершения шага
+    /// engine.sync();          // Синхронизируем результаты
+    /// ```
     pub fn sync(&mut self) {
         // Синхронизация тел
         if let Some(pending) = self.pending_bodies.take() {

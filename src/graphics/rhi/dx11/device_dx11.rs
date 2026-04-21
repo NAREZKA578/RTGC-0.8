@@ -126,8 +126,8 @@ impl Dx11Device {
                 )));
             }
 
-            let device = device.unwrap();
-            let context = context.unwrap();
+            let device = device.ok_or("Device initialization failed")?;
+            let context = context.ok_or("Device initialization failed")?;
 
             info!(target: "dx11", "DX11 Device created successfully!");
             info!(target: "dx11", "Feature level: {:?}, Driver type: {:?}", 

@@ -792,12 +792,20 @@ impl IDevice for Dx12Device {
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn unmap_buffer(&self, _buffer: ResourceHandle) {}
+    fn unmap_buffer(&self, _buffer: ResourceHandle) {
+        // DX12 доступен только на Windows, этот метод существует для совместимости интерфейса
+        tracing::warn!("DX12 unmap_buffer: called on non-Windows platform (no-op)");
+    }
 
     #[cfg(target_os = "windows")]
-    fn read_back_texture(&self, _texture: ResourceHandle) -> RhiResult<Vec<u8>> {
+    fn read_back_texture(&self, texture: ResourceHandle) -> RhiResult<Vec<u8>> {
+        // TODO: Реализовать чтение текстуры через ID3D12Resource::Map и копирование в staging buffer
+        tracing::warn!(
+            "DX12 read_back_texture: called but not yet implemented. Texture handle: {:?}",
+            texture
+        );
         Err(RhiError::Unsupported(
-            "Texture readback not yet implemented".to_string(),
+            "Texture readback requires staging resource and GPU-CPU sync - not yet implemented".to_string(),
         ))
     }
 
