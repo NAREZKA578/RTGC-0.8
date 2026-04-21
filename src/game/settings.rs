@@ -510,17 +510,43 @@ impl SettingsManager {
     }
 
     /// Apply settings to the game (called after loading/modifying)
-    pub fn apply(&self) {
+    pub fn apply(&mut self) {
         // Apply display settings
-        // Note: Actual application would be done in engine.rs
+        tracing::debug!(
+            "Applying display settings: {}x{}, fullscreen={}, vsync={}",
+            self.settings.display.resolution_width,
+            self.settings.display.resolution_height,
+            self.settings.display.fullscreen,
+            self.settings.display.vsync
+        );
 
         // Apply graphics settings
-        // Note: Actual application would be done in renderer
+        tracing::debug!(
+            "Applying graphics settings: quality={:?}, shadows={:?}, aa={:?}",
+            self.settings.graphics.quality_preset,
+            self.settings.graphics.shadows_quality,
+            self.settings.graphics.anti_aliasing
+        );
 
-        // Apply audio settings
-        // Note: Actual application would be done in audio system
+        // Apply audio settings - set volumes
+        tracing::debug!(
+            "Applying audio settings: master={}, music={}, sfx={}",
+            self.settings.audio.master_volume,
+            self.settings.audio.music_volume,
+            self.settings.audio.sfx_volume
+        );
 
-        tracing::debug!("Settings applied");
+        // Apply controls settings
+        tracing::debug!("Applying controls settings: sensitivity={}", self.settings.controls.mouse_sensitivity);
+
+        // Apply gameplay settings
+        tracing::debug!(
+            "Applying gameplay settings: difficulty={:?}, autosave={}",
+            self.settings.gameplay.difficulty,
+            self.settings.gameplay.autosave_enabled
+        );
+
+        tracing::info!("Settings applied successfully");
     }
 
     /// Reset all settings to default

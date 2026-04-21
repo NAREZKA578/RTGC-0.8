@@ -856,7 +856,10 @@ impl PhysicsWorld {
                     .map(|n| n.get())
                     .unwrap_or(4),
             )
-            .expect("Failed to create thread pool"),
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to create thread pool: {}. Using single-threaded fallback.", e);
+                ThreadPool::new(1).expect("Failed to create fallback thread pool")
+            }),
             sleeping_threshold: 0.01, // Bodies with velocity < 0.01 m/s can sleep
             deactivation_time: 1.0,   // Sleep after 1 second of inactivity
             // Contact events (B6)

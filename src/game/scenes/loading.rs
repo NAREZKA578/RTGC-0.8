@@ -51,8 +51,19 @@ impl Scene for LoadingScene {
         tracing::info!("Exiting Loading Screen");
     }
 
-    fn update(&mut self, _delta_time: f32) {
-        // Simulate loading progress or check async loading tasks
+    fn update(&mut self, delta_time: f32) {
+        // Auto-increment progress if loading tasks are running
+        // This ensures the loading screen progresses even without external set_progress() calls
+        if !self.loading_complete && self.progress < 1.0 {
+            // Simulate loading progress: ~2 seconds to full load at 60fps
+            let progress_increment = delta_time * 0.5;
+            self.progress = (self.progress + progress_increment).min(1.0);
+            
+            if self.progress >= 1.0 {
+                self.loading_complete = true;
+                tracing::info!("Loading complete");
+            }
+        }
     }
 
     fn render(

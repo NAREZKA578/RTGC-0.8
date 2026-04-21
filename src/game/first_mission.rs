@@ -23,6 +23,8 @@ pub enum FirstMissionState {
     },
     /// Delivered successfully
     Completed,
+    /// Reward claimed
+    Claimed,
     /// Failed (timeout or cargo lost)
     Failed,
 }
@@ -255,10 +257,11 @@ impl FirstMissionManager {
     }
 
     /// Get mission reward if completed
-    pub fn claim_reward(&mut self) -> Option<f64> {
+    pub fn claim_reward(&mut self, game_state: &mut crate::game::GameState) -> Option<f64> {
         if self.mission.state == FirstMissionState::Completed {
             let reward = self.mission.reward_rub;
-            self.mission.state = FirstMissionState::Completed; // Keep state
+            self.mission.state = FirstMissionState::Claimed;
+            game_state.player_wallet.add_money(reward);
             Some(reward)
         } else {
             None
