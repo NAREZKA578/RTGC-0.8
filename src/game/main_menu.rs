@@ -213,9 +213,9 @@ impl MainMenu {
     }
 
     /// Render UI elements directly through renderer
-    pub fn render_ui(&self, renderer: &mut crate::graphics::renderer::Renderer) {
-        let w = renderer.width as f32;
-        let h = renderer.height as f32;
+    pub fn render_ui(&self, renderer: &mut dyn crate::graphics::renderer::RendererTrait) {
+        let w = renderer.width() as f32;
+        let h = renderer.height() as f32;
 
         // ТЕСТ: Рисуем красный прямоугольник на весь экран для проверки
         tracing::info!("[MainMenu] render_ui called: {}x{}", w, h);
@@ -244,8 +244,8 @@ impl MainMenu {
                 let button_width = 240.0;
                 let button_height = 40.0;
                 let center_x = w / 2.0;
-                let mouse_x = renderer.mouse_x;
-                let mouse_y = renderer.mouse_y;
+                let mouse_x = renderer.mouse_x();
+                let mouse_y = renderer.mouse_y();
 
                 // Функция для проверки hover
                 let is_hovered = |mouse_x: f32, mouse_y: f32, y: f32| -> bool {

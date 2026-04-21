@@ -719,9 +719,9 @@ impl CharacterCreationManager {
     }
 
     /// Render character creation UI
-    pub fn render_ui(&self, renderer: &mut crate::graphics::renderer::Renderer) {
-        let w = renderer.width as f32;
-        let h = renderer.height as f32;
+    pub fn render_ui(&self, renderer: &mut dyn crate::graphics::renderer::RendererTrait) {
+        let w = renderer.width() as f32;
+        let h = renderer.height() as f32;
 
         unsafe {
             // Background

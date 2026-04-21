@@ -896,3 +896,84 @@ float4 main(PSInput input) : SV_TARGET {
         };
     }
 }
+
+// Implement RendererTrait for Dx11Renderer to work with MainMenu::render_ui
+impl crate::graphics::renderer::RendererTrait for Dx11Renderer {
+    fn submit(&mut self, _command: crate::graphics::render_command::RenderCommand) {
+        // DX11 renderer uses immediate rendering, not command queue
+        warn!(target: "dx11", "submit() not implemented for DX11 - immediate rendering used");
+    }
+
+    fn flush_render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // DX11 renders immediately, no flush needed
+        Ok(())
+    }
+
+    fn set_viewport(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        let viewport = crate::graphics::rhi::Viewport {
+            x,
+            y,
+            width,
+            height,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        };
+        // Note: This would need to be implemented in the context
+        debug!(target: "dx11", "set_viewport: {}x{} at ({},{})", width, height, x, y);
+    }
+
+    fn clear(&mut self, color: Option<[f32; 4]>, depth: bool, _stencil: bool) {
+        if let Some(col) = color {
+            self.swap_chain.clear_color(col);
+            info!(target: "dx11", "Clear color: [{:.2}, {:.2}, {:.2}, {:.2}]", col[0], col[1], col[2], col[3]);
+        }
+        if depth {
+            self.swap_chain.clear_depth(1.0);
+            info!(target: "dx11", "Clear depth: 1.0");
+        }
+    }
+
+    fn camera(&self) -> &Camera {
+        &self.camera
+    }
+
+    fn camera_mut(&mut self) -> &mut Camera {
+        &mut self.camera
+    }
+
+    fn width(&self) -> u32 {
+        self.width
+    }
+
+    fn height(&self) -> u32 {
+        self.height
+    }
+
+    fn mouse_x(&self) -> f32 {
+        0.0 // DX11 handles mouse internally
+    }
+
+    fn mouse_y(&self) -> f32 {
+        0.0 // DX11 handles mouse internally
+    }
+
+    fn set_mouse_position(&mut self, _x: f32, _y: f32) {
+        // DX11 handles mouse internally
+    }
+
+    unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
+        // Simple fullscreen quad-based rect drawing for UI
+        // This is a basic implementation - proper UI would use a dedicated batcher
+        info!(target: "dx11", "draw_rect: x={} y={} w={} h={} color={:?}", x, y, width, height, color);
+        
+        // For now, just log - proper implementation would draw a textured quad
+        // using the HUD pipeline and font texture
+    }
+
+    unsafe fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        info!(target: "dx11", "draw_text: '{}' at ({},{}) size={} color={:?}", text, x, y, size, color);
+        
+        // For now, just log - proper implementation would use bitmap font texture
+        // and draw quads for each character
+    }
+}

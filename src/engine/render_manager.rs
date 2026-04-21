@@ -31,6 +31,112 @@ pub enum RenderBackend {
     Rhi(RendererRhi),
 }
 
+impl crate::graphics::renderer::RendererTrait for RenderBackend {
+    fn submit(&mut self, command: crate::graphics::render_command::RenderCommand) {
+        match self {
+            RenderBackend::OpenGL(r) => r.submit(command),
+            RenderBackend::DX11(r) => r.submit(command),
+            RenderBackend::Rhi(r) => r.submit(command),
+        }
+    }
+
+    fn flush_render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        match self {
+            RenderBackend::OpenGL(r) => r.flush_render(),
+            RenderBackend::DX11(r) => r.flush_render(),
+            RenderBackend::Rhi(r) => r.flush_render(),
+        }
+    }
+
+    fn set_viewport(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        match self {
+            RenderBackend::OpenGL(r) => r.set_viewport(x, y, width, height),
+            RenderBackend::DX11(r) => r.set_viewport(x, y, width, height),
+            RenderBackend::Rhi(r) => r.set_viewport(x, y, width, height),
+        }
+    }
+
+    fn clear(&mut self, color: Option<[f32; 4]>, depth: bool, stencil: bool) {
+        match self {
+            RenderBackend::OpenGL(r) => r.clear(color, depth, stencil),
+            RenderBackend::DX11(r) => r.clear(color, depth, stencil),
+            RenderBackend::Rhi(r) => r.clear(color, depth, stencil),
+        }
+    }
+
+    fn camera(&self) -> &crate::graphics::camera::Camera {
+        match self {
+            RenderBackend::OpenGL(r) => r.camera(),
+            RenderBackend::DX11(r) => r.camera(),
+            RenderBackend::Rhi(r) => r.camera(),
+        }
+    }
+
+    fn camera_mut(&mut self) -> &mut crate::graphics::camera::Camera {
+        match self {
+            RenderBackend::OpenGL(r) => r.camera_mut(),
+            RenderBackend::DX11(r) => r.camera_mut(),
+            RenderBackend::Rhi(r) => r.camera_mut(),
+        }
+    }
+
+    fn width(&self) -> u32 {
+        match self {
+            RenderBackend::OpenGL(r) => r.width(),
+            RenderBackend::DX11(r) => r.width(),
+            RenderBackend::Rhi(r) => r.width(),
+        }
+    }
+
+    fn height(&self) -> u32 {
+        match self {
+            RenderBackend::OpenGL(r) => r.height(),
+            RenderBackend::DX11(r) => r.height(),
+            RenderBackend::Rhi(r) => r.height(),
+        }
+    }
+
+    fn mouse_x(&self) -> f32 {
+        match self {
+            RenderBackend::OpenGL(r) => r.mouse_x(),
+            RenderBackend::DX11(r) => r.mouse_x(),
+            RenderBackend::Rhi(r) => r.mouse_x(),
+        }
+    }
+
+    fn mouse_y(&self) -> f32 {
+        match self {
+            RenderBackend::OpenGL(r) => r.mouse_y(),
+            RenderBackend::DX11(r) => r.mouse_y(),
+            RenderBackend::Rhi(r) => r.mouse_y(),
+        }
+    }
+
+    fn set_mouse_position(&mut self, x: f32, y: f32) {
+        match self {
+            RenderBackend::OpenGL(r) => r.set_mouse_position(x, y),
+            RenderBackend::DX11(r) => r.set_mouse_position(x, y),
+            RenderBackend::Rhi(r) => r.set_mouse_position(x, y),
+        }
+    }
+
+    unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
+        match self {
+            RenderBackend::OpenGL(r) => r.draw_rect(x, y, width, height, color),
+            RenderBackend::DX11(r) => r.draw_rect(x, y, width, height, color),
+            RenderBackend::Rhi(r) => r.draw_rect(x, y, width, height, color),
+        }
+    }
+
+    unsafe fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        match self {
+            RenderBackend::OpenGL(r) => r.draw_text(text, x, y, size, color),
+            RenderBackend::DX11(r) => r.draw_text(text, x, y, size, color),
+            RenderBackend::Rhi(r) => r.draw_text(text, x, y, size, color),
+        }
+    }
+}
+
 /// Менеджер рендеринга
 pub struct RenderManager {
     /// Рендерер сцены (поддержка нескольких бэкендов)
@@ -305,7 +411,13 @@ impl RenderManager {
 
         if let Some(ref mut renderer) = self.renderer {
             info!(target: "render", "=== RenderManager: rendering frame ===");
-            renderer.render()?;
+            
+            // Вызываем render() в зависимости от бэкенда
+            match renderer {
+                RenderBackend::OpenGL(r) => r.render()?,
+                RenderBackend::DX11(r) => r.render().map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+                RenderBackend::Rhi(r) => r.render().map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+            }
 
             info!(target: "render", "=== RenderManager: calling main_menu.render_ui() ===");
             self.main_menu.render_ui(renderer);

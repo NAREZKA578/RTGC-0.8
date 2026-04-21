@@ -1,36 +1,10 @@
-//! DirectX 11 Context - stub
+//! DirectX 11 Context - Compatibility Wrapper
+//! Re-exports from rhi/dx11/context_dx11.rs for backwards compatibility
 
-use tracing::info;
+pub use crate::graphics::rhi::dx11::context_dx11::{Dx11Config, Dx11Context as Dx11GraphicsContext};
 
-pub struct Dx11GraphicsContext {
-    pub width: u32,
-    pub height: u32,
-    pub hwnd: isize,
-}
+/// Legacy re-export for compatibility
+pub type Dx11GraphicsContext = crate::graphics::rhi::dx11::context_dx11::Dx11Context;
 
-impl Dx11GraphicsContext {
-    pub fn new(hwnd: isize, width: u32, height: u32) -> Result<Self, String> {
-        info!(target: "dx11", "=== Dx11GraphicsContext ===");
-        info!(target: "dx11", "HWND: {:?}, Size: {}x{}", hwnd, width, height);
-        info!(target: "dx11", "DX11 initialized");
-        Ok(Self {
-            width,
-            height,
-            hwnd,
-        })
-    }
-
-    pub fn set_viewport(&self) {}
-    pub fn clear(&self, _color: Option<[f32; 4]>) {}
-    pub fn begin_frame(&self) {}
-    pub fn end_frame(&self) {}
-    pub fn resize(&mut self, width: u32, height: u32) -> Result<(), String> {
-        self.width = width;
-        self.height = height;
-        Ok(())
-    }
-    pub fn get_device_name(&self) -> &str {
-        "DirectX 11"
-    }
-    pub fn render_simple_quad(&self) {}
-}
+/// Legacy config re-export  
+pub type Dx11Config = crate::graphics::rhi::dx11::context_dx11::Dx11Config;

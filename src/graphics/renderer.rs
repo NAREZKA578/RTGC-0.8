@@ -40,6 +40,27 @@ pub trait RendererTrait {
 
     /// Get mutable camera reference
     fn camera_mut(&mut self) -> &mut Camera;
+
+    /// Get window width
+    fn width(&self) -> u32;
+
+    /// Get window height
+    fn height(&self) -> u32;
+
+    /// Get mouse X position
+    fn mouse_x(&self) -> f32;
+
+    /// Get mouse Y position
+    fn mouse_y(&self) -> f32;
+
+    /// Set mouse position
+    fn set_mouse_position(&mut self, x: f32, y: f32);
+
+    /// Draw a 2D rectangle (UI element)
+    unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]);
+
+    /// Draw text using bitmap font
+    unsafe fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
 }
 
 #[derive(Debug, Clone)]
@@ -2768,5 +2789,34 @@ impl RendererTrait for Renderer {
 
     fn camera_mut(&mut self) -> &mut Camera {
         &mut self.camera
+    }
+
+    fn width(&self) -> u32 {
+        self.width
+    }
+
+    fn height(&self) -> u32 {
+        self.height
+    }
+
+    fn mouse_x(&self) -> f32 {
+        self.mouse_x
+    }
+
+    fn mouse_y(&self) -> f32 {
+        self.mouse_y
+    }
+
+    fn set_mouse_position(&mut self, x: f32, y: f32) {
+        self.mouse_x = x;
+        self.mouse_y = y;
+    }
+
+    unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
+        self.draw_rect(x, y, width, height, color)
+    }
+
+    unsafe fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        self.draw_text(text, x, y, size, color)
     }
 }

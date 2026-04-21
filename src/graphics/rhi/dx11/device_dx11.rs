@@ -343,19 +343,25 @@ impl Dx11Device {
         &self.device
     }
 
-    #[cfg(target_os = "windows")]
-    pub fn get_context(&self) -> &windows::Win32::Graphics::Direct3D11::ID3D11DeviceContext {
-        &self.context
-    }
-
+    /// Get the DXGI factory (public for swapchain creation)
     #[cfg(target_os = "windows")]
     pub fn get_factory(&self) -> &IDXGIFactory1 {
         &self.factory
     }
 
     #[cfg(target_os = "windows")]
-    pub fn get_adapter(&self) -> &Option<IDXGIAdapter1> {
-        &self.adapter
+    pub fn get_context(&self) -> &windows::Win32::Graphics::Direct3D11::ID3D11DeviceContext {
+        &self.context
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn get_device(&self) -> &() {
+        &()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn get_factory(&self) -> &() {
+        &()
     }
 }
 

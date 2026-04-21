@@ -56,6 +56,9 @@ pub struct RendererRhi {
     current_city_index: usize,
     pub lod_manager: LodManager,
     pub texture_streaming: TextureStreamingSystem,
+    
+    // Menu state
+    pub menu_state: crate::graphics::renderer::MenuState,
 
     // Vehicle state
     vehicle_transform: Option<(Vector3<f32>, UnitQuaternion<f32>)>,
@@ -77,6 +80,9 @@ pub struct RendererRhi {
     // Font for HUD text
     font_texture: Option<ResourceHandle>,
     font_chars: HashMap<char, [f32; 4]>,
+    
+    // Debug state
+    pub debug_mode: bool,
 }
 
 impl RendererRhi {
@@ -115,6 +121,7 @@ impl RendererRhi {
             current_city_index: 0,
             lod_manager: LodManager::new(),
             texture_streaming: TextureStreamingSystem::new(128, 10.0, 5),
+            menu_state: crate::graphics::renderer::MenuState::Loading,
             vehicle_transform: None,
             vehicle_lights_enabled: false,
             width,
@@ -126,6 +133,7 @@ impl RendererRhi {
             ambient_intensity: 0.5,
             font_texture: Some(font_texture),
             font_chars,
+            debug_mode: false,
         })
     }
 
@@ -229,6 +237,8 @@ impl RendererRhi {
     }
 
     pub fn render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::graphics::renderer::MenuState;
+        
         // Begin frame - create command list for RHI rendering
         let cmd_list = self
             .device
@@ -245,17 +255,19 @@ impl RendererRhi {
             tracing::trace!("Command list ready for recording");
         }
 
-        // Clear screen via OpenGL (fallback for now)
-        // Render pass would be implemented here in full RHI backend
-
-        // Render 3D scene - menu rendering should be handled separately
-        self.render_sky()?;
-        self.render_terrain()?;
-        self.render_vehicle()?;
-
-        // Render HUD if vehicle is loaded
-        if self.hud_data.is_some() {
-            self.render_hud()?;
+        // Render based on menu state
+        match self.menu_state {
+            MenuState::Loading => self.render_loading_screen()?,
+            MenuState::MainMenu => self.render_main_menu()?,
+            MenuState::CitySelection => self.render_city_selection()?,
+            MenuState::InGame => self.render_game()?,
+            MenuState::Paused => {
+                self.render_game()?;
+                self.render_pause_overlay()?;
+            }
+            MenuState::Settings => self.render_settings()?,
+            MenuState::CharacterCreation => self.render_character_creation()?,
+            MenuState::WorldCreation => self.render_world_creation()?,
         }
 
         Ok(())
@@ -347,5 +359,64 @@ impl RendererRhi {
         } else {
             self.current_city_index - 1
         };
+    }
+}
+
+// Implement RendererTrait for RendererRhi to work with MainMenu::render_ui
+impl crate::graphics::renderer::RendererTrait for RendererRhi {
+    fn submit(&mut self, _command: crate::graphics::render_command::RenderCommand) {
+        // RHI renderer uses immediate rendering, not command queue
+        tracing::warn!(target: "rhi", "submit() not implemented for RHI - immediate rendering used");
+    }
+
+    fn flush_render(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // RHI renders immediately, no flush needed
+        Ok(())
+    }
+
+    fn set_viewport(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        tracing::debug!(target: "rhi", "set_viewport: {}x{} at ({},{})", width, height, x, y);
+    }
+
+    fn clear(&mut self, color: Option<[f32; 4]>, _depth: bool, _stencil: bool) {
+        if let Some(col) = color {
+            tracing::info!(target: "rhi", "Clear color: [{:.2}, {:.2}, {:.2}, {:.2}]", col[0], col[1], col[2], col[3]);
+        }
+    }
+
+    fn camera(&self) -> &Camera {
+        &self.camera
+    }
+
+    fn camera_mut(&mut self) -> &mut Camera {
+        &mut self.camera
+    }
+
+    fn width(&self) -> u32 {
+        self.width
+    }
+
+    fn height(&self) -> u32 {
+        self.height
+    }
+
+    fn mouse_x(&self) -> f32 {
+        0.0
+    }
+
+    fn mouse_y(&self) -> f32 {
+        0.0
+    }
+
+    fn set_mouse_position(&mut self, _x: f32, _y: f32) {
+        // Handled internally
+    }
+
+    unsafe fn draw_rect(&mut self, x: f32, y: f32, width: f32, height: f32, color: [f32; 4]) {
+        tracing::info!(target: "rhi", "draw_rect: x={} y={} w={} h={} color={:?}", x, y, width, height, color);
+    }
+
+    unsafe fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        tracing::info!(target: "rhi", "draw_text: '{}' at ({},{}) size={} color={:?}", text, x, y, size, color);
     }
 }
