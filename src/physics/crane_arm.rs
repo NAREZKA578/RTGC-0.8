@@ -601,7 +601,7 @@ mod tests {
         // Прицепить груз
         crane
             .attach_load(5_000.0, Vector3::new(10.0, -5.0, 0.0))
-            .unwrap();
+            .expect("Failed to attach load in test");
 
         // Должен быть стабилен с нормальным грузом
         assert!(crane.check_stability());

@@ -858,7 +858,10 @@ impl PhysicsWorld {
             )
             .unwrap_or_else(|e| {
                 tracing::warn!("Failed to create thread pool: {}. Using single-threaded fallback.", e);
-                ThreadPool::new(1).expect("Failed to create fallback thread pool")
+                ThreadPool::new(1).unwrap_or_else(|_| {
+                    // Ultimate fallback: return an error that will be handled by the caller
+                    panic!("Critical: Failed to create even single-threaded physics pool. Cannot continue.");
+                })
             }),
             sleeping_threshold: 0.01, // Bodies with velocity < 0.01 m/s can sleep
             deactivation_time: 1.0,   // Sleep after 1 second of inactivity

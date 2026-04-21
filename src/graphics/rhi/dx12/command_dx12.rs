@@ -649,6 +649,8 @@ impl ICommandList for Dx12CommandList {
                             let state_before_dx = self.convert_resource_state(*state_before);
                             let state_after_dx = self.convert_resource_state(*state_after);
 
+                            // SAFETY: Transmuting D3D12_RESOURCE_TRANSITION_BARRIER to union member.
+                            // This is a POD struct with no padding, standard DirectX 12 FFI pattern.
                             D3D12_RESOURCE_BARRIER {
                                 Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                                 Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -1272,6 +1274,8 @@ impl Dx12CommandList {
 
         // Constant buffers
         for i in 0..num_constant_buffers {
+            // SAFETY: Transmuting D3D12_ROOT_DESCRIPTOR to union member.
+            // This is a POD struct with no padding, standard DirectX 12 FFI pattern.
             root_params.push(D3D12_ROOT_PARAMETER {
                 ParameterType: D3D12_ROOT_PARAMETER_TYPE_CBV,
                 Anonymous: D3D12_ROOT_PARAMETER_0 {
@@ -1286,6 +1290,8 @@ impl Dx12CommandList {
 
         // Samplers
         for i in 0..num_samplers {
+            // SAFETY: Transmuting D3D12_ROOT_DESCRIPTOR to union member.
+            // This is a POD struct with no padding, standard DirectX 12 FFI pattern.
             root_params.push(D3D12_ROOT_PARAMETER {
                 ParameterType: D3D12_ROOT_PARAMETER_TYPE_SAMPLER,
                 Anonymous: D3D12_ROOT_PARAMETER_0 {

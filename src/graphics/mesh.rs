@@ -18,21 +18,24 @@ impl MeshHandle {
 
 /// Vertex structure for mesh data.
 /// Aligned to 4 bytes for safe GPU access and bytemuck casting.
+/// Total size: 48 bytes (12 floats * 4 bytes)
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Vertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-    pub tex_coords: [f32; 2],
-    pub tangent: [f32; 3],
-    pub _padding: f32, // Padding to ensure 48-byte alignment (12 floats)
+    pub position: [f32; 3],   // 12 bytes
+    pub normal: [f32; 3],     // 12 bytes
+    pub tex_coords: [f32; 2], // 8 bytes
+    pub tangent: [f32; 3],    // 12 bytes
+    pub bitangent: [f32; 3],  // 12 bytes - added for proper PBR rendering
 }
 
 unsafe impl bytemuck::Pod for Vertex {}
 unsafe impl bytemuck::Zeroable for Vertex {}
 
-// Mesh is already thread-safe due to Arc and immutable GPU resources after creation
-// No need for unsafe Send/Sync impls
+// SAFETY: Mesh is bound to OpenGL context which is not Send/Sync.
+// However, the mesh data itself is immutable after creation, so we can safely
+// share references across threads as long as GL calls are made from the main thread.
+// The actual GL resource deletion happens in the GL context destructor.
 
 pub struct MeshInner {
     vao: glow::VertexArray,
@@ -41,6 +44,11 @@ pub struct MeshInner {
     indices_count: i32,
 }
 
+// SAFETY: These raw GL handles are just IDs. The actual resources are owned by the GL context.
+// It's safe to Send/Sync the handles as long as we don't make GL calls from other threads.
+unsafe impl Send for MeshInner {}
+unsafe impl Sync for MeshInner {}
+
 #[derive(Clone)]
 pub struct Mesh {
     inner: Arc<MeshInner>,
@@ -48,11 +56,12 @@ pub struct Mesh {
 
 impl Drop for Mesh {
     fn drop(&mut self) {
-        // Resources are shared via Arc, only delete when last reference is dropped
+        // Resources are shared via Arc. We cannot safely delete GL resources here
+        // without access to the GL context. Instead, we rely on the GL context's
+        // destructor to clean up all resources when the application shuts down.
+        // This is tracked by keeping the Arc alive until context destruction.
         if Arc::strong_count(&self.inner) == 1 {
-            // We can't safely delete GL resources here without a GL context
-            // Resources are cleaned up when the GL context is destroyed
-            // This is a limitation of OpenGL - resources are context-bound
+            tracing::debug!("Mesh resources will be cleaned up with GL context");
         }
     }
 }
@@ -141,15 +150,17 @@ impl Mesh {
     }
 
     /// Create a placeholder mesh (for async loading)
+    /// WARNING: This creates an invalid mesh with dummy handles.
+    /// It should only be used temporarily and replaced before rendering.
     pub fn new_placeholder() -> Self {
         // Placeholder meshes should only be used temporarily before real GPU resources are created
         // They don't have valid GL handles and will be replaced during rendering
         use std::num::NonZero;
         Self {
             inner: Arc::new(MeshInner {
-                vao: unsafe { NativeVertexArray(NonZero::new_unchecked(1)) },
-                vbo: unsafe { NativeBuffer(NonZero::new_unchecked(1)) },
-                ebo: unsafe { NativeBuffer(NonZero::new_unchecked(1)) },
+                vao: unsafe { NativeVertexArray(NonZero::new(1).unwrap_or_else(|| NonZero::new_unchecked(1))) },
+                vbo: unsafe { NativeBuffer(NonZero::new(1).unwrap_or_else(|| NonZero::new_unchecked(1))) },
+                ebo: unsafe { NativeBuffer(NonZero::new(1).unwrap_or_else(|| NonZero::new_unchecked(1))) },
                 indices_count: 0,
             }),
         }

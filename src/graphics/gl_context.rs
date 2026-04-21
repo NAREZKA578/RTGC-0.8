@@ -56,6 +56,10 @@ impl Clone for GlContext {
 // created on the main thread and used exclusively there. Cross-thread usage must be
 // synchronized externally by the user. This is safe as long as the OpenGL context
 // is not made current on multiple threads simultaneously.
+// 
+// NOTE: The underlying glutin/winit types do not implement Send/Sync, so this is
+// an explicit contract that users must respect - only use GlContext from a single
+// thread (typically the main render thread).
 unsafe impl Send for GlContext {}
 unsafe impl Sync for GlContext {}
 
