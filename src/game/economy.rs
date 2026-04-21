@@ -432,6 +432,8 @@ pub struct EconomySystem {
     pub market_prices: HashMap<String, MarketPrice>,
     pub shops: HashMap<String, Shop>,
     pub job_board: JobBoard,
+    /// Last processed game day for deadline tracking
+    last_processed_day: u32,
 }
 
 impl Default for EconomySystem {
@@ -447,6 +449,7 @@ impl EconomySystem {
             market_prices: HashMap::new(),
             shops: HashMap::new(),
             job_board: JobBoard::default(),
+            last_processed_day: 0,
         };
 
         // Initialize market prices for common resources
@@ -532,6 +535,65 @@ impl EconomySystem {
         let final_reward = base_reward * bonus_multiplier;
         self.wallet.add_rub(final_reward);
         final_reward
+    }
+
+    /// Update economy system - process deadlines and market changes
+    pub fn update(&mut self, delta_hours: f32, current_game_day: u32) {
+        // Process buy order deadlines in shops
+        for shop in self.shops.values_mut() {
+            shop.buy_orders.retain(|order| {
+                if order.deadline_hours <= 0.0 {
+                    // Order expired - remove it
+                    tracing::debug!("Buy order for {} expired", order.resource_type);
+                    false
+                } else {
+                    order.deadline_hours -= delta_hours;
+                    true
+                }
+            });
+        }
+
+        // Process contract job deadlines - decrement only when day changes
+        let days_passed = if current_game_day > self.last_processed_day {
+            current_game_day - self.last_processed_day
+        } else {
+            0
+        };
+        
+        if days_passed > 0 {
+            self.job_board.available_jobs.retain(|job| {
+                if job.deadline_game_days == 0 {
+                    // Job already expired
+                    tracing::debug!("Contract job '{}' expired", job.title);
+                    false
+                } else if days_passed >= job.deadline_game_days {
+                    // Job expires now
+                    tracing::debug!("Contract job '{}' expired after {} days", job.title, days_passed);
+                    false
+                } else {
+                    // Decrement deadline by days passed
+                    // Note: We don't modify the job here since retain expects immutable reference
+                    // The actual decrement happens below
+                    true
+                }
+            });
+            
+            // Decrement deadlines for remaining jobs
+            for job in self.job_board.available_jobs.iter_mut() {
+                if job.deadline_game_days > 0 {
+                    job.deadline_game_days = job.deadline_game_days.saturating_sub(days_passed);
+                }
+            }
+            
+            self.last_processed_day = current_game_day;
+        }
+
+        // Update market prices based on supply/demand fluctuations
+        for price in self.market_prices.values_mut() {
+            // Small random fluctuation (±2% per hour)
+            let fluctuation = (delta_hours * 0.02).min(0.1);
+            price.supply_level = (price.supply_level + (fluctuation * 0.1)).max(0.5).min(2.0);
+        }
     }
 }
 

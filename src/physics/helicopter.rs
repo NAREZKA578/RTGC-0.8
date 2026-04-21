@@ -797,7 +797,14 @@ impl Helicopter {
 
     /// Создание физического тела для вертолёта
     pub fn create_physics_body(&self) -> crate::physics::RigidBody {
-        crate::physics::RigidBody::new_box(self.position, self.mass, Vector3::new(2.5, 1.0, 5.0))
+        // Размеры коллайдера зависят от типа вертолёта
+        let collider_size = match self.main_rotor_radius {
+            r if r < 4.0 => Vector3::new(2.5, 1.0, 5.0),   // Лёгкий вертолёт
+            r if r < 8.0 => Vector3::new(3.5, 1.5, 7.0),   // Средний вертолёт
+            r if r < 12.0 => Vector3::new(4.5, 2.0, 9.0),  // Тяжёлый вертолёт
+            _ => Vector3::new(6.0, 2.5, 12.0),             // Грузовой вертолёт
+        };
+        crate::physics::RigidBody::new_box(self.position, self.mass, collider_size)
     }
 
     /// Установить ID тела в физическом мире
