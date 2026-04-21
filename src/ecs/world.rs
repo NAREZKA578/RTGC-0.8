@@ -261,6 +261,12 @@ struct ArchetypeStorage {
     data: (*mut u8, TypeId),
 }
 
+// SAFETY: ArchetypeStorage contains a raw pointer to heap-allocated Archetype<T>.
+// The storage is owned by EcsManager and accessed through interior mutability with
+// proper synchronization. Send/Sync is safe because:
+// 1. The data is only mutated through exclusive references from EcsManager
+// 2. Component types T: Component are assumed to be thread-safe
+// 3. Access is controlled by the ECS architecture (entity IDs, component masks)
 unsafe impl Send for ArchetypeStorage {}
 unsafe impl Sync for ArchetypeStorage {}
 

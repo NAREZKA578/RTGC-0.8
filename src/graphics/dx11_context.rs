@@ -27,6 +27,9 @@ pub struct Dx11GraphicsContext {
 // because COM objects in DirectX 11 are thread-safe for read operations, but state
 // mutations (like resize) must be synchronized externally. This context is designed
 // to be used on the main render thread only.
+//
+// NOTE: The underlying Windows COM interfaces require careful thread management.
+// This implementation assumes Single-Threaded Apartment (STA) model on the main thread.
 unsafe impl Send for Dx11GraphicsContext {}
 unsafe impl Sync for Dx11GraphicsContext {}
 

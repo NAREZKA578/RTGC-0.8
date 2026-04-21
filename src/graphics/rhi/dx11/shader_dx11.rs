@@ -105,6 +105,9 @@ impl D3DCompiler {
                     let proc = GetProcAddress(module.ok_or("Shader compilation failed")?, PCSTR(func_name.as_ptr()));
                     if !proc.is_null() {
                         info!(target: "dx11.shader", "Loaded {} successfully", name);
+                        // SAFETY: Transmuting a function pointer obtained from GetProcAddress.
+                        // The signature of D3DCompile is well-defined and stable across Windows versions.
+                        // This is the standard pattern for dynamically loading DirectX functions.
                         return Some(Self {
                             compile_func: std::mem::transmute(proc),
                         });

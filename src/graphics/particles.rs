@@ -106,10 +106,13 @@ impl ParticleSystem {
                 // Pass view_proj to shader as u_view_proj uniform
                 let program = gl.get_parameter_i32(glow::CURRENT_PROGRAM);
                 // program может быть 0 если нет активного шейдерного программы, но это маловероятно в render
-                let native_program = glow::NativeProgram(std::num::NonZero::new(program as u32).unwrap_or_else(|| {
-                    tracing::warn!("No active GL program during particle render");
-                    std::num::NonZero::new(1).unwrap()
-                }));
+                let native_program = glow::NativeProgram(
+                    std::num::NonZero::new(program as u32)
+                        .unwrap_or_else(|| {
+                            tracing::warn!("No active GL program during particle render, using fallback");
+                            std::num::NonZero::new(1).unwrap_or_else(|| unsafe { std::num::NonZero::new_unchecked(1) })
+                        })
+                );
                 if let Some(loc) = gl.get_uniform_location(native_program, "u_view_proj") {
                     gl.uniform_matrix_4_f32_slice(Some(&loc), false, view_proj.as_slice());
                 }
@@ -289,12 +292,20 @@ impl Drop for ParticleSystem {
     }
 }
 
-// Простая псевдо-случайная функция (заглушка до подключения rand)
+// Простая псевдо-случайная функция с использованием thread_local RNG
+// Используем простой LCG генератор для производительности и детерминизма
 fn rand_float() -> f32 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos() as f32)
-        .unwrap_or(0.0);
-    (nanos / 1_000_000_000.0).fract()
+    use std::cell::Cell;
+    
+    thread_local! {
+        static RNG_STATE: Cell<u32> = const { Cell::new(0x853c49e6) };
+    }
+    
+    RNG_STATE.with(|state| {
+        let mut x = state.get();
+        // LCG parameters from Numerical Recipes
+        x = x.wrapping_mul(1664525).wrapping_add(1013904223);
+        state.set(x);
+        (x as f32) / (u32::MAX as f32)
+    })
 }

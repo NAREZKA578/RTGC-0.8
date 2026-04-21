@@ -5,6 +5,11 @@ pub struct TextureInner {
     texture: glow::Texture,
 }
 
+// SAFETY: Texture handle is just an ID. The actual resource is owned by GL context.
+// Safe to Send/Sync as long as GL calls are made from the main thread only.
+unsafe impl Send for TextureInner {}
+unsafe impl Sync for TextureInner {}
+
 #[derive(Clone)]
 pub struct Texture {
     inner: Arc<TextureInner>,
@@ -58,13 +63,16 @@ impl Texture {
     }
 
     /// Create a placeholder texture (for async loading)
-    /// SAFETY: Uses NonZero with value 1 as dummy handle - caller must replace with real texture
+    /// Uses a temporary dummy handle that must be replaced before rendering.
     #[deprecated(note = "Placeholder texture will be replaced by async loader")]
     pub fn new_placeholder() -> Result<Self, String> {
         use std::num::NonZero;
+        // SAFETY: This creates a placeholder with ID 1, which is invalid but safe.
+        // It will be replaced with a real texture before any rendering occurs.
+        let dummy_id = NonZero::new(1).ok_or("Failed to create non-zero ID")?;
         Ok(Self {
             inner: Arc::new(TextureInner {
-                texture: glow::NativeTexture(unsafe { NonZero::new_unchecked(1) }),
+                texture: glow::NativeTexture(dummy_id),
             }),
         })
     }
@@ -119,10 +127,9 @@ impl Texture {
         }
     }
 
-    /// Явное удаление GPU-ресурса. Вызывать вручную перед уничтожением GL контекста.
+    /// Explicit GPU resource deletion. Call manually before destroying GL context.
     pub fn delete(&self, gl: &Context) {
         unsafe {
-            // Проверяем, есть ли другие ссылки на эту текстуру
             if Arc::strong_count(&self.inner) == 1 {
                 gl.delete_texture(self.inner.texture);
             }
@@ -132,13 +139,11 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        // Resources are deleted when the last reference is dropped
-        // The actual GL context must still be alive for this to work safely
-        // In practice, textures should be explicitly deleted before destroying the GL context
+        // Cannot delete GL resources here without context access.
+        // Resources are cleaned up when GL context is destroyed.
+        // Use explicit texture.delete(&gl) before context destruction if needed.
         if Arc::strong_count(&self.inner) == 1 {
-            // We can't delete GL resources here without access to the GL context
-            // This is a limitation of OpenGL - resources are context-bound
-            // Use texture.delete(&gl) explicitly before context destruction
+            tracing::debug!("Texture will be cleaned up with GL context");
         }
     }
 }

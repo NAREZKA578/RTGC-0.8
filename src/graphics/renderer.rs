@@ -124,6 +124,10 @@ pub struct Renderer {
     pub debug_mode: bool,
     // Кэш для LOD мешей чтобы не создавать их каждый кадр
     lod_mesh_cache: HashMap<u64, Mesh>,
+    // Переиспользуемые буферы для примитивов (линии, круги, треугольники)
+    primitive_vao: Option<glow::VertexArray>,
+    primitive_vbo: Option<glow::Buffer>,
+    primitive_ibo: Option<glow::Buffer>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -377,7 +381,55 @@ impl Renderer {
             particle_system: ParticleSystem::new(1000),
             debug_mode: false,
             lod_mesh_cache: HashMap::new(),
+            // Инициализация переиспользуемых буферов для примитивов
+            primitive_vao: None,
+            primitive_vbo: None,
+            primitive_ibo: None,
         })
+    }
+
+    /// Инициализация переиспользуемых буферов для примитивов
+    fn init_primitive_buffers(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.primitive_vao.is_some() {
+            return Ok(()); // Уже инициализировано
+        }
+
+        let gl = &self.gl;
+        let (vao, vbo, ibo) = unsafe {
+            let vao = gl.create_vertex_array().ok();
+            let vbo = gl.create_buffer().ok();
+            let ibo = gl.create_buffer().ok();
+
+            if let (Some(vao), Some(vbo)) = (vao, vbo) {
+                gl.bind_vertex_array(Some(vao));
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+                
+                // Выделяем буфер достаточного размера для примитивов
+                gl.buffer_data::<glow::NativeVertex>(
+                    glow::ARRAY_BUFFER,
+                    (std::mem::size_of::<f32>() * 64) as isize,
+                    glow::DYNAMIC_DRAW,
+                );
+
+                // Описание вершины (позиция + цвет)
+                let stride = 7 * 4; // 7 f32 = 28 байт
+                gl.enable_vertex_attrib_array(0);
+                gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride as i32, 0);
+                gl.enable_vertex_attrib_array(1);
+                gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride as i32, 12);
+
+                gl.bind_vertex_array(None);
+                gl.bind_buffer(glow::ARRAY_BUFFER, None);
+            }
+
+            (vao, vbo, ibo)
+        };
+
+        self.primitive_vao = vao;
+        self.primitive_vbo = vbo;
+        self.primitive_ibo = ibo;
+
+        Ok(())
     }
 
     /// Submit a render command to the queue
@@ -750,6 +802,12 @@ impl Renderer {
         thickness: f32,
         color: [f32; 4],
     ) {
+        // Инициализируем переиспользуемые буферы если еще не созданы
+        if let Err(e) = self.init_primitive_buffers() {
+            tracing::warn!("Failed to init primitive buffers: {}", e);
+            return;
+        }
+
         // Рисуем линию как тонкий прямоугольник
         let dx = x2 - x1;
         let dy = y2 - y1;
@@ -775,24 +833,18 @@ impl Renderer {
         ];
         let indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
 
-        let vao = match self.gl.create_vertex_array() {
-            Ok(v) => v,
-            Err(_) => return,
+        // Используем переиспользуемые буферы вместо создания новых каждый кадр
+        let vao = match self.primitive_vao {
+            Some(v) => v,
+            None => return,
         };
-        let vbo = match self.gl.create_buffer() {
-            Ok(v) => v,
-            Err(_) => {
-                self.gl.delete_vertex_array(vao);
-                return;
-            }
+        let vbo = match self.primitive_vbo {
+            Some(v) => v,
+            None => return,
         };
-        let ebo = match self.gl.create_buffer() {
-            Ok(v) => v,
-            Err(_) => {
-                self.gl.delete_vertex_array(vao);
-                self.gl.delete_buffer(vbo);
-                return;
-            }
+        let _ibo = match self.primitive_ibo {
+            Some(v) => v,
+            None => return,
         };
 
         self.gl.bind_vertex_array(Some(vao));
@@ -802,7 +854,7 @@ impl Renderer {
             bytemuck::cast_slice(&vertices),
             glow::STREAM_DRAW,
         );
-        self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+        self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(_ibo));
         self.gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
             bytemuck::cast_slice(&indices),
@@ -850,6 +902,12 @@ impl Renderer {
         radius: f32,
         color: [f32; 4],
     ) {
+        // Инициализируем переиспользуемые буферы если еще не созданы
+        if let Err(e) = self.init_primitive_buffers() {
+            tracing::warn!("Failed to init primitive buffers: {}", e);
+            return;
+        }
+
         const SEGMENTS: u32 = 32;
         let mut vertices: Vec<f32> = Vec::with_capacity(((SEGMENTS + 2) * 2) as usize);
         let mut indices: Vec<u32> = Vec::with_capacity((SEGMENTS * 3) as usize);
@@ -874,24 +932,18 @@ impl Renderer {
             indices.push(i + 2);
         }
 
-        let vao = match self.gl.create_vertex_array() {
-            Ok(v) => v,
-            Err(_) => return,
+        // Используем переиспользуемые буферы вместо создания новых каждый кадр
+        let vao = match self.primitive_vao {
+            Some(v) => v,
+            None => return,
         };
-        let vbo = match self.gl.create_buffer() {
-            Ok(v) => v,
-            Err(_) => {
-                self.gl.delete_vertex_array(vao);
-                return;
-            }
+        let vbo = match self.primitive_vbo {
+            Some(v) => v,
+            None => return,
         };
-        let ebo = match self.gl.create_buffer() {
-            Ok(v) => v,
-            Err(_) => {
-                self.gl.delete_vertex_array(vao);
-                self.gl.delete_buffer(vbo);
-                return;
-            }
+        let ibo = match self.primitive_ibo {
+            Some(v) => v,
+            None => return,
         };
 
         self.gl.bind_vertex_array(Some(vao));
@@ -901,7 +953,7 @@ impl Renderer {
             bytemuck::cast_slice(&vertices),
             glow::STREAM_DRAW,
         );
-        self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
+        self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
         self.gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
             bytemuck::cast_slice(&indices),
@@ -936,9 +988,7 @@ impl Renderer {
             self.gl.uniform_1_i32(Some(&u), 0);
         }
 
-        self.gl.delete_vertex_array(vao);
-        self.gl.delete_buffer(vbo);
-        self.gl.delete_buffer(ebo);
+        // Не удаляем буферы - они переиспользуются
     }
 
     /// Draw a 2D triangle - публичная версия для HUD
@@ -952,21 +1002,25 @@ impl Renderer {
         y3: f32,
         color: [f32; 4],
     ) {
+        // Инициализируем переиспользуемые буферы если еще не созданы
+        if let Err(e) = self.init_primitive_buffers() {
+            tracing::warn!("Failed to init primitive buffers: {}", e);
+            return;
+        }
+
         let ortho =
             Matrix4::new_orthographic(0.0, self.width as f32, 0.0, self.height as f32, -1.0, 1.0);
 
         let vertices: [f32; 6] = [x1, y1, x2, y2, x3, y3];
 
-        let vao = match self.gl.create_vertex_array() {
-            Ok(v) => v,
-            Err(_) => return,
+        // Используем переиспользуемые буферы вместо создания новых каждый кадр
+        let vao = match self.primitive_vao {
+            Some(v) => v,
+            None => return,
         };
-        let vbo = match self.gl.create_buffer() {
-            Ok(v) => v,
-            Err(_) => {
-                self.gl.delete_vertex_array(vao);
-                return;
-            }
+        let vbo = match self.primitive_vbo {
+            Some(v) => v,
+            None => return,
         };
 
         self.gl.bind_vertex_array(Some(vao));
@@ -1010,8 +1064,7 @@ impl Renderer {
             self.gl.uniform_1_i32(Some(&u), 0);
         }
 
-        self.gl.delete_vertex_array(vao);
-        self.gl.delete_buffer(vbo);
+        // Не удаляем буферы - они переиспользуются
     }
 
     // Старое приватное определение draw_triangle_internal удалено
@@ -2767,5 +2820,29 @@ impl RendererTrait for Renderer {
 
     fn camera_mut(&mut self) -> &mut Camera {
         &mut self.camera
+    }
+}
+
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        // Освобождаем переиспользуемые буферы для примитивов
+        if let Some(vao) = self.primitive_vao {
+            unsafe {
+                self.gl.delete_vertex_array(vao);
+            }
+        }
+        if let Some(vbo) = self.primitive_vbo {
+            unsafe {
+                self.gl.delete_buffer(vbo);
+            }
+        }
+        if let Some(ibo) = self.primitive_ibo {
+            unsafe {
+                self.gl.delete_buffer(ibo);
+            }
+        }
+
+        // Примечание: остальные ресурсы (шейдеры, текстуры, меши)
+        // освобождаются через их собственные реализации Drop
     }
 }
