@@ -52,26 +52,29 @@ pub struct VehicleHudData {
 
     // === Ф1.5: Компас ===
     pub heading_degrees: f32, // 0-360°, направление игрока/машины
-    pub active_waypoint: Option<Waypoint>, // Активная цель миссии
+    pub active_waypoint: Option<CompassWaypoint>, // Активная цель миссии
 }
 
 /// Waypoint для компаса — цель миссии
 #[derive(Debug, Clone)]
-pub struct Waypoint {
+pub struct CompassWaypoint {
     pub name: String,         // Название цели (например, "Бердск")
     pub heading_degrees: f32, // Направление к цели (0-360°)
     pub distance_meters: f32, // Дистанция до цели в метрах
 }
 
-impl Default for Waypoint {
+impl Default for CompassWaypoint {
     fn default() -> Self {
-        Waypoint {
+        CompassWaypoint {
             name: String::new(),
             heading_degrees: 0.0,
             distance_meters: 0.0,
         }
     }
 }
+
+/// Waypoint для карты/мини-карты
+pub type Waypoint = crate::game::ui::MapWaypoint;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum GearState {

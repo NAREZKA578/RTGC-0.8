@@ -123,12 +123,13 @@ impl RhiFactory {
                 Ok(Arc::new(device))
             }
 
-            // OpenGL fallback - always available
+            // OpenGL fallback - always available via GlContext
             RhiBackend::OpenGL => {
                 // OpenGL device requires an active GL context from glutin/winit
-                // This is handled by GlContext which creates GlDevice internally
+                // The GlContext creates the GlDevice internally when the window is created
+                // Return a descriptive error to guide users to the correct API
                 Err(crate::graphics::rhi::types::RhiError::InitializationFailed(
-                    "OpenGL device must be created via GlContext with active GL context. Use GlContext::new() to create a window and context, then access GlContext.rhi_device.".to_string(),
+                    "OpenGL backend requires window creation via GlContext. Call GlContext::new() to create a window, then use gl_context.rhi_device() to access the device.".to_string(),
                 ))
             }
 

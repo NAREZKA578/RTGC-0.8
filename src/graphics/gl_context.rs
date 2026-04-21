@@ -315,5 +315,5 @@ impl GlContext {
 fn create_dummy_window() -> winit::window::Window {
     // Создаём dummy окно через headless режим
     // В реальности это не должно вызываться, так как окно создаётся в GlContext::new
-    unimplemented!("Dummy window creation not supported - use GlContext::new instead")
+    panic!("Dummy window creation not supported - use GlContext::new instead")
 }

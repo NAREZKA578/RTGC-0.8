@@ -1,7 +1,7 @@
 //! Physics - Vehicle physics simulation
 
 use crate::physics::physics_module::RigidBody;
-use crate::world::SurfaceType;
+use crate::physics::SurfaceType;
 use nalgebra::{Matrix3, Quaternion, UnitQuaternion, Vector3};
 
 /// Vehicle configuration

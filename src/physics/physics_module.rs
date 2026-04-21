@@ -22,6 +22,10 @@ pub const LAYER_VEHICLE: u32 = 0b0010;
 pub const LAYER_CARGO: u32 = 0b0100;
 pub const LAYER_TRIGGER: u32 = 0b1000;
 pub const LAYER_PLAYER: u32 = 0b10000;
+// Interactable object layers (aliases for LAYER_CARGO and LAYER_VEHICLE)
+pub const LAYER_INTERACTABLE_DOOR: u32 = LAYER_WORLD;
+pub const LAYER_INTERACTABLE_VEHICLE: u32 = LAYER_VEHICLE;
+pub const LAYER_INTERACTABLE_OBJECT: u32 = LAYER_CARGO;
 
 /// Contact event for sound and effects (B6)
 #[derive(Debug, Clone)]

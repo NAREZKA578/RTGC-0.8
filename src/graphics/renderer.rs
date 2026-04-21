@@ -77,8 +77,7 @@ pub struct Renderer {
     // Terrain & Vehicle rendering
     terrain_mesh: Option<Mesh>,
     vehicle_box_mesh: Option<Mesh>,
-    vehicle_transform: Option<(Vector3<f32>, UnitQuaternion<f32>)>,
-    // Позиция и вращение транспорта для рендеринга
+    // Позиция и вращение транспорта для рендеринга (используем единое представление)
     pub vehicle_position: Option<Vector3<f32>>,
     pub vehicle_rotation: Option<UnitQuaternion<f32>>,
     // Window dimensions for HUD rendering
@@ -334,7 +333,6 @@ impl Renderer {
             // Terrain & vehicle mesh placeholders (initialized on demand)
             terrain_mesh: None,
             vehicle_box_mesh: None,
-            vehicle_transform: None,
             // Позиция и вращение транспорта для рендеринга
             vehicle_position: None,
             vehicle_rotation: None,
@@ -1094,7 +1092,8 @@ impl Renderer {
 
     /// Set vehicle transform and HUD data
     pub fn set_vehicle_transform(&mut self, pos: Vector3<f32>, rot: UnitQuaternion<f32>) {
-        self.vehicle_transform = Some((pos, rot));
+        self.vehicle_position = Some(pos);
+        self.vehicle_rotation = Some(rot);
     }
 
     /// Set HUD data for rendering
@@ -1836,7 +1835,7 @@ impl Renderer {
         }
 
         // === SPRINT 1: Render vehicle as box ===
-        if let Some((pos, rot)) = self.vehicle_transform {
+        if let (Some(pos), Some(rot)) = (self.vehicle_position, self.vehicle_rotation) {
             let model_matrix = rot.to_homogeneous().prepend_translation(&pos);
 
             // Задача 2: Использовать vehicle_shader если доступен
@@ -2002,8 +2001,8 @@ impl Renderer {
             .clone()
             .unwrap_or_else(|| crate::ui::hud::VehicleHudData {
                 speed_kmh: self
-                    .vehicle_transform
-                    .map(|(_, _)| 65.0) // placeholder if no data
+                    .vehicle_position
+                    .map(|_| 65.0) // placeholder if no data
                     .unwrap_or(0.0),
                 engine_rpm: 2200.0,
                 engine_rpm_max: 3200.0,

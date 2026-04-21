@@ -137,6 +137,20 @@ impl GlDevice {
             pipelines: Mutex::new(HashMap::new()),
         }
     }
+    
+    /// Create a new OpenGL device with debug mode support
+    pub fn create(debug_enabled: bool) -> Result<Self, crate::graphics::rhi::types::RhiError> {
+        // Note: This method requires an active OpenGL context
+        // In practice, this should be called after glutin/winit creates a window
+        if debug_enabled {
+            tracing::debug!("OpenGL device created (debug mode: {})", debug_enabled);
+        }
+        // The actual context will be provided by the graphics system
+        // This is a placeholder for RHI factory integration
+        Err(crate::graphics::rhi::types::RhiError::InitializationFailed(
+            "OpenGL context must be provided by windowing system. Use GlDevice::new() with a valid Context.".to_string(),
+        ))
+    }
 
     fn generate_handle(&self) -> ResourceHandle {
         ResourceHandle(self.resource_counter.fetch_add(1, Ordering::Relaxed))

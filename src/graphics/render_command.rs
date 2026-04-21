@@ -76,6 +76,15 @@ pub enum RenderCommand {
         depth: f32,
         sort_key: u64,
     },
+    /// UI text rendering
+    UIText {
+        text: String,
+        position: [f32; 2],
+        font_size: f32,
+        color: [f32; 4],
+        depth: f32,
+        sort_key: u64,
+    },
     /// Debug line drawing
     DebugLine {
         start: Vector3<f32>,
@@ -135,6 +144,7 @@ impl RenderCommand {
             RenderCommand::ParticleSystem { sort_key, .. } => *sort_key,
             RenderCommand::UIDraw { sort_key, .. } => *sort_key,
             RenderCommand::UIElement { sort_key, .. } => *sort_key,
+            RenderCommand::UIText { sort_key, .. } => *sort_key,
             RenderCommand::DebugLine { sort_key, .. } => *sort_key,
             RenderCommand::DebugLines { sort_key, .. } => *sort_key,
             RenderCommand::Skybox { sort_key, .. } => *sort_key,
@@ -152,6 +162,7 @@ impl RenderCommand {
             RenderCommand::ParticleSystem { sort_key, .. } => *sort_key = key,
             RenderCommand::UIDraw { sort_key, .. } => *sort_key = key,
             RenderCommand::UIElement { sort_key, .. } => *sort_key = key,
+            RenderCommand::UIText { sort_key, .. } => *sort_key = key,
             RenderCommand::DebugLine { sort_key, .. } => *sort_key = key,
             RenderCommand::DebugLines { sort_key, .. } => *sort_key = key,
             RenderCommand::Skybox { sort_key, .. } => *sort_key = key,

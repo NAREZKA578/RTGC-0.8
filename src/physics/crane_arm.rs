@@ -40,7 +40,7 @@ impl CraneType {
     }
 
     /// Максимальная длина стрелы (м)
-    pub fn maxBoomLength(&self) -> f32 {
+    pub fn max_boom_length(&self) -> f32 {
         match self {
             CraneType::TruckCrane_25t => 31.0,
             CraneType::TruckCrane_50t => 45.0,
@@ -51,7 +51,7 @@ impl CraneType {
     }
 
     /// Минимальная длина стрелы (м)
-    pub fn minBoomLength(&self) -> f32 {
+    pub fn min_boom_length(&self) -> f32 {
         match self {
             CraneType::TruckCrane_25t => 10.0,
             CraneType::TruckCrane_50t => 12.0,
@@ -207,7 +207,7 @@ impl CraneArm {
             mass: crane_type.empty_mass(),
             base_orientation: UnitQuaternion::identity(),
             boom: BoomState {
-                length: crane_type.minBoomLength(),
+                length: crane_type.min_boom_length(),
                 ..Default::default()
             },
             controls: CraneControls::default(),
@@ -376,7 +376,7 @@ impl CraneArm {
             self.boom.length = self
                 .boom
                 .length
-                .clamp(crane_type.minBoomLength(), crane_type.maxBoomLength());
+                .clamp(crane_type.min_boom_length(), crane_type.max_boom_length());
         }
 
         // Подъём/опускание груза
@@ -499,7 +499,7 @@ impl CraneArm {
 
     /// Получить максимальный радиус работы
     pub fn get_max_reach(&self) -> f32 {
-        self.config.crane_type.maxBoomLength()
+        self.config.crane_type.max_boom_length()
     }
 
     /// Получить состояние для рендеринга

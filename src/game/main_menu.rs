@@ -4,6 +4,7 @@
 use crate::game::character_creation::CharacterCreationManager;
 use crate::game::save::{SaveMetadata, SaveSystem};
 use chrono::Local;
+use serde_json;
 use std::path::PathBuf;
 
 /// Main menu states
@@ -54,29 +55,28 @@ impl MainMenu {
 
     /// Load save metadata for "Continue" button
     fn load_saves(&mut self) {
-        // Will be implemented with actual save system integration
         self.saves.clear();
-        // Placeholder: check if saves exist
+        
         let save_dir = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
             .join("saves");
 
         if save_dir.exists() {
+            // Read metadata files (.meta) instead of save files
             if let Ok(entries) = std::fs::read_dir(&save_dir) {
-                for entry in entries.flatten() {
-                    if entry.path().extension().map_or(false, |ext| ext == "json") {
-                        // Parse metadata from save file
-                        // For now, just count them
-                        self.saves.push(SaveMetadata {
-                            slot: self.saves.len() as u8,
-                            player_name: "Player".to_string(),
-                            game_time_hours: 0.0,
-                            timestamp: 0,
-                            location_name: "Unknown".to_string(),
-                            position: [0.0; 3], // E0117 fix: use [f32; 3] instead of Vector3
-                            money_rub: 0.0,
-                            playtime_hours: 0.0,
-                        });
+                let mut meta_files: Vec<_> = entries
+                    .flatten()
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "meta"))
+                    .collect();
+                
+                // Sort by filename to get consistent slot ordering
+                meta_files.sort_by_key(|e| e.path());
+                
+                for entry in meta_files {
+                    if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                        if let Ok(meta) = serde_json::from_str::<SaveMetadata>(&content) {
+                            self.saves.push(meta);
+                        }
                     }
                 }
             }
