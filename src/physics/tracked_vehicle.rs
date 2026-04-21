@@ -12,7 +12,7 @@ use std::f32::consts::PI;
 
 use super::deformable_terrain::{DeformableTerrainComponent, DeformationType};
 use super::physics_module::{Ray, RaycastHit, RigidBody, LAYER_WORLD};
-use crate::world::SurfaceType;
+use super::SurfaceType;
 
 /// Типы гусеничной техники
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

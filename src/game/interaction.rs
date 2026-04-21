@@ -4,17 +4,15 @@
 use crate::game::events::{publish_event, GameEvent};
 use crate::physics::physics_module::raycast_world;
 use crate::physics::{Ray, RaycastHit};
+use crate::physics::{LAYER_INTERACTABLE_DOOR, LAYER_INTERACTABLE_OBJECT, LAYER_INTERACTABLE_VEHICLE};
 use nalgebra::Vector3;
 
 // Type alias for backwards compatibility
 type Vec3 = Vector3<f32>;
 
-/// Interaction layers bitmask
-pub const LAYER_INTERACTABLE_DOOR: u32 = 0b00001;
-pub const LAYER_INTERACTABLE_VEHICLE: u32 = 0b00010;
-pub const LAYER_INTERACTABLE_OBJECT: u32 = 0b00100;
+/// Interaction layers bitmask (re-exported from physics module)
 pub const LAYER_INTERACTABLE_NPC: u32 = 0b01000;
-pub const LAYER_INTERACTABLE_ALL: u32 = 0b01111;
+pub const LAYER_INTERACTABLE_ALL: u32 = LAYER_INTERACTABLE_DOOR | LAYER_INTERACTABLE_VEHICLE | LAYER_INTERACTABLE_OBJECT | LAYER_INTERACTABLE_NPC;
 
 /// Maximum interaction distance (meters)
 pub const MAX_INTERACTION_DISTANCE: f32 = 3.0;
@@ -112,6 +110,8 @@ pub struct InteractionSystem {
     highlighted: Option<(InteractableType, f32)>,
     /// Interaction cooldown (prevent spam)
     interaction_cooldown: f32,
+    /// Reference to player inventory for pickup operations
+    inventory: Option<std::sync::Arc<std::sync::Mutex<crate::game::inventory::Inventory>>>,
 }
 
 impl InteractionSystem {
@@ -119,7 +119,13 @@ impl InteractionSystem {
         Self {
             highlighted: None,
             interaction_cooldown: 0.0,
+            inventory: None,
         }
+    }
+
+    /// Set inventory reference for pickup operations
+    pub fn set_inventory(&mut self, inv: std::sync::Arc<std::sync::Mutex<crate::game::inventory::Inventory>>) {
+        self.inventory = Some(inv);
     }
 
     /// Update interaction system - raycast from player to find interactables
@@ -374,7 +380,18 @@ impl InteractionSystem {
     ) -> InteractionResult {
         // Check inventory capacity (60kg limit from player.rs)
         let current_inventory_weight = match player_state {
-            crate::game::player::PlayerState::OnFoot => 0.0, // Would need actual inventory tracking
+            crate::game::player::PlayerState::OnFoot => {
+                // Try to get actual inventory weight if available
+                if let Some(ref inv_arc) = self.inventory {
+                    if let Ok(inv) = inv_arc.lock() {
+                        inv.get_total_weight()
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                }
+            }
             crate::game::player::PlayerState::InVehicle { .. } => 0.0,
             crate::game::player::PlayerState::InHelicopter { .. } => 0.0,
             crate::game::player::PlayerState::InCrane => 0.0,
@@ -386,6 +403,24 @@ impl InteractionSystem {
                 message: "Inventory too heavy!".to_string(),
                 interactable: None,
             };
+        }
+
+        // Add item to inventory if available
+        if let Some(ref inv_arc) = self.inventory {
+            if let Ok(mut inv) = inv_arc.lock() {
+                // Create a generic pickup item
+                let item_type = crate::game::inventory::ItemType::Resource {
+                    resource_type: crate::game::inventory::ResourceType::Wood,
+                    amount: 1,
+                };
+                if let Err(e) = inv.add_item(item_type, 1) {
+                    return InteractionResult {
+                        success: false,
+                        message: format!("Failed to add item: {}", e),
+                        interactable: None,
+                    };
+                }
+            }
         }
 
         publish_event(GameEvent::InteractionTriggered {

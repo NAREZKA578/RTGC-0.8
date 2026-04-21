@@ -148,7 +148,7 @@ pub struct MinimapData {
     /// Zoom level (1.0 = max zoom)
     pub zoom: f32,
     /// Marked waypoints
-    pub waypoints: Vec<Waypoint>,
+    pub waypoints: Vec<MapWaypoint>,
     /// Visible vehicles
     pub vehicles: Vec<VehicleMarker>,
     /// Visible NPCs
@@ -156,7 +156,7 @@ pub struct MinimapData {
 }
 
 #[derive(Debug, Clone)]
-pub struct Waypoint {
+pub struct MapWaypoint {
     pub name: String,
     pub position: Vector2<f32>,
     pub waypoint_type: WaypointType,
@@ -384,7 +384,7 @@ impl UIManager {
     }
 
     /// Проблема 3: Submit UI commands to render queue
-    /// Отрисовка уведомлений и HUD через RenderCommand::UIElement
+    /// Отрисовка уведомлений и HUD через RenderCommand::UIElement и RenderCommand::UIText
     pub fn submit_ui_commands(
         &self,
         render_queue: &mut RenderQueue,
@@ -405,12 +405,23 @@ impl UIManager {
                     NotificationType::Achievement => [1.0, 0.8, 0.5, alpha],
                 };
 
+                // Фон уведомления
                 render_queue.submit(RenderCommand::UIElement {
                     rect: [10.0, screen_height - y_offset - 30.0, 300.0, 25.0],
                     texture: None,
-                    color,
+                    color: [0.0, 0.0, 0.0, 0.7 * alpha],
                     depth: UI_DEPTH_NOTIFICATIONS,
                     sort_key: 0,
+                });
+                
+                // Текст уведомления
+                render_queue.submit(RenderCommand::UIText {
+                    text: notification.message.clone(),
+                    position: [20.0, screen_height - y_offset - 25.0],
+                    font_size: 14.0,
+                    color: [1.0, 1.0, 1.0, alpha],
+                    depth: UI_DEPTH_NOTIFICATIONS,
+                    sort_key: 1,
                 });
                 y_offset += 35.0;
             }
@@ -428,9 +439,18 @@ impl UIManager {
                             30.0,
                         ],
                         texture: None,
-                        color: [1.0, 1.0, 1.0, 1.0],
+                        color: [0.0, 0.0, 0.0, 0.7],
                         depth: UI_DEPTH_PROMPT,
                         sort_key: 0,
+                    });
+                    
+                    render_queue.submit(RenderCommand::UIText {
+                        text: prompt.text.clone(),
+                        position: [screen_width / 2.0 - 90.0, screen_height / 2.0 + 55.0],
+                        font_size: 16.0,
+                        color: [1.0, 1.0, 1.0, 1.0],
+                        depth: UI_DEPTH_PROMPT,
+                        sort_key: 1,
                     });
                 }
             }
@@ -447,6 +467,32 @@ impl UIManager {
                     depth: UI_DEPTH_HUD,
                     sort_key: 0,
                 });
+                
+                // Speed text
+                render_queue.submit(RenderCommand::UIText {
+                    text: format!("{:.0} км/ч", self.hud_data.speed_kmh),
+                    position: [screen_width - 200.0, 20.0],
+                    font_size: 32.0,
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    depth: UI_DEPTH_HUD,
+                    sort_key: 1,
+                });
+                
+                // Gear and RPM
+                render_queue.submit(RenderCommand::UIText {
+                    text: format!("{} {:.0}", 
+                        if self.hud_data.gear > 0 { 
+                            self.hud_data.gear.to_string() 
+                        } else { 
+                            "N".to_string() 
+                        },
+                        self.hud_data.rpm),
+                    position: [screen_width - 200.0, 55.0],
+                    font_size: 18.0,
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    depth: UI_DEPTH_HUD,
+                    sort_key: 1,
+                });
             }
 
             // Fuel gauge background
@@ -457,6 +503,34 @@ impl UIManager {
                     color: [0.0, 0.0, 0.0, 0.5],
                     depth: UI_DEPTH_HUD,
                     sort_key: 0,
+                });
+                
+                // Fuel level bar
+                let fuel_width = 180.0 * self.hud_data.fuel;
+                let fuel_color = if self.hud_data.fuel < 0.2 {
+                    [1.0, 0.2, 0.2, 1.0]
+                } else if self.hud_data.fuel < 0.5 {
+                    [1.0, 0.8, 0.0, 1.0]
+                } else {
+                    [0.2, 0.8, 0.2, 1.0]
+                };
+                
+                render_queue.submit(RenderCommand::UIElement {
+                    rect: [screen_width - 200.0, 105.0, fuel_width, 20.0],
+                    texture: None,
+                    color: fuel_color,
+                    depth: UI_DEPTH_HUD,
+                    sort_key: 0,
+                });
+                
+                // Fuel percentage text
+                render_queue.submit(RenderCommand::UIText {
+                    text: format!("{:.0}%", self.hud_data.fuel * 100.0),
+                    position: [screen_width - 200.0, 107.0],
+                    font_size: 14.0,
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    depth: UI_DEPTH_HUD,
+                    sort_key: 1,
                 });
             }
 
@@ -469,6 +543,36 @@ impl UIManager {
                     depth: UI_DEPTH_HUD,
                     sort_key: 0,
                 });
+                
+                // Compass heading
+                let heading_dir = match (self.hud_data.heading / 22.5) as i32 % 16 {
+                    0 | 16 => "С",
+                    1 => "ССВ",
+                    2 => "СВ",
+                    3 => "ВСВ",
+                    4 => "В",
+                    5 => "ВЮВ",
+                    6 => "ЮВ",
+                    7 => "ЮЮВ",
+                    8 => "Ю",
+                    9 => "ЮЮЗ",
+                    10 => "ЮЗ",
+                    11 => "ЗЮЗ",
+                    12 => "З",
+                    13 => "ЗСЗ",
+                    14 => "СЗ",
+                    15 => "ССЗ",
+                    _ => "?",
+                };
+                
+                render_queue.submit(RenderCommand::UIText {
+                    text: format!("{} {:.0}°", heading_dir, self.hud_data.heading),
+                    position: [screen_width / 2.0 - 60.0, 15.0],
+                    font_size: 18.0,
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    depth: UI_DEPTH_HUD,
+                    sort_key: 1,
+                });
             }
 
             // Clock
@@ -480,7 +584,39 @@ impl UIManager {
                     depth: UI_DEPTH_HUD,
                     sort_key: 0,
                 });
+                
+                // Time text
+                let hours = self.hud_data.time_hours as i32;
+                let minutes = ((self.hud_data.time_hours - hours as f32) * 60.0) as i32;
+                render_queue.submit(RenderCommand::UIText {
+                    text: format!("{:02}:{:02}", hours, minutes),
+                    position: [screen_width - 90.0, screen_height - 35.0],
+                    font_size: 16.0,
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    depth: UI_DEPTH_HUD,
+                    sort_key: 1,
+                });
             }
+            
+            // Money display
+            render_queue.submit(RenderCommand::UIText {
+                text: format!("{} ₽", self.hud_data.money),
+                position: [10.0, screen_height - 35.0],
+                font_size: 18.0,
+                color: [0.2, 1.0, 0.2, 1.0],
+                depth: UI_DEPTH_HUD,
+                sort_key: 1,
+            });
+            
+            // Weather display
+            render_queue.submit(RenderCommand::UIText {
+                text: self.hud_data.weather.clone(),
+                position: [10.0, screen_height - 60.0],
+                font_size: 14.0,
+                color: [1.0, 1.0, 1.0, 1.0],
+                depth: UI_DEPTH_HUD,
+                sort_key: 1,
+            });
         }
     }
 }

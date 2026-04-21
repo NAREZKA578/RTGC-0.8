@@ -6,6 +6,7 @@ use crate::game::player::{CameraMode, Player, PlayerState};
 use crate::game::skills::PlayerSkills;
 use crate::game::InventoryItem;
 use serde::{Deserialize, Serialize};
+use serde_json;
 
 /// Maximum number of save slots
 pub const MAX_SAVE_SLOTS: usize = 10;
@@ -380,6 +381,12 @@ impl SaveSystem {
         // Write save file
         std::fs::write(self.get_save_path(slot), save_bytes)
             .map_err(|e| format!("Failed to write save file: {}", e))?;
+
+        // Write metadata file (JSON for human readability)
+        let meta_json = serde_json::to_string_pretty(&save_data.metadata)
+            .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
+        std::fs::write(self.get_metadata_path(slot), meta_json)
+            .map_err(|e| format!("Failed to write metadata file: {}", e))?;
 
         // Update metadata
         self.saves[slot as usize] = Some(save_data.metadata.clone());

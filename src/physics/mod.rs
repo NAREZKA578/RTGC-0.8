@@ -26,6 +26,7 @@ pub use fracture_component::FractureComponent;
 pub use helicopter::{Helicopter, HelicopterConfig, HelicopterControls, HelicopterState};
 pub use physics_module::{Aabb, PhysicsStats, PhysicsWorld, Ray, RaycastHit, RigidBody, Shape};
 pub use physics_module::{LAYER_CARGO, LAYER_PLAYER, LAYER_TRIGGER, LAYER_VEHICLE, LAYER_WORLD};
+pub use physics_module::{LAYER_INTERACTABLE_DOOR, LAYER_INTERACTABLE_OBJECT, LAYER_INTERACTABLE_VEHICLE};
 pub use physics_module::set_global_physics_world;
 pub use spatial_hash::SpatialHash;
 pub use thread_pool::ThreadPool;
@@ -33,5 +34,6 @@ pub use tracked_vehicle::{
     TrackedControls, TrackedVehicle, TrackedVehicleState, TrackedVehicleType,
 };
 pub use vehicle::{Vehicle, VehicleConfig, VehicleControls};
-// Re-export SurfaceType for engine.rs compatibility
-pub use crate::world::terrain_generator::SurfaceType;
+// Re-export SurfaceType from world module for backward compatibility
+// Note: This creates a dependency on world module, but is necessary for engine.rs
+pub use crate::world::SurfaceType;

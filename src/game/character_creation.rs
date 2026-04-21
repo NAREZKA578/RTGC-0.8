@@ -729,7 +729,7 @@ impl CharacterCreationManager {
 
             // Title
             let step_num = self.get_step_number();
-            let total_steps = 10;
+            let total_steps = self.get_total_steps();
             let title = format!("СОЗДАНИЕ ПЕРСОНАЖА - ШАГ {}/{}", step_num, total_steps);
             renderer.draw_text(&title, w / 2.0 - 200.0, 50.0, 1.2, [1.0, 1.0, 1.0, 1.0]);
 
